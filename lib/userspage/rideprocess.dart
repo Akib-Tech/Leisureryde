@@ -21,7 +21,7 @@ class _RideProcessState extends State<RideProcess>{
   @override
   void initState(){
     super.initState();
-   // setDefault();
+    setDefault();
     //connectRoad(pickUpLocation!, destinationLoc!);
 
     BitmapDescriptor.asset(
@@ -51,11 +51,12 @@ class _RideProcessState extends State<RideProcess>{
 
    LatLng? pickUpLocation;
    LatLng? destinationLoc;
-/*
-Future<String> setDefault() async{
+
+Future<void> setDefault() async{
     final String check = await SharedPref().getBookStatus();
 
-    if(check != "")  {
+    print(check);
+   /* if(check != "")  {
       Map<String,dynamic>? currentBook = await cMethods.checkMapState();
 
       driverFound = true;
@@ -83,10 +84,12 @@ Future<String> setDefault() async{
     }else{
       driverFound = false;
     }
-        return check;
+
+
+    */
 }
 
-*/
+
 
   void setPrediction(value) async{
       predictions = await MapRecord().autoCompleteSearch(value);
@@ -638,7 +641,6 @@ Future<String> setDefault() async{
 
     ]);
   }
-
 
 
 }

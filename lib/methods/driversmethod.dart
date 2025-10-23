@@ -1,5 +1,7 @@
 import 'package:firebase_database/firebase_database.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:leisureryde/methods/commonMethods.dart';
+import 'package:leisureryde/methods/maprecord.dart';
 import 'package:leisureryde/methods/sharedpref.dart';
 
 class Drivers{
@@ -29,13 +31,98 @@ class Drivers{
 
       for (var child in event.children) {
         Map<String, dynamic>? data = Map<String, dynamic>.from(child.value as Map);
-        result.add({
-          "lat" : data['lat'],
-          "lng" : data['lng'],
-          'driver' : data['driverId']
-        });
+        if(data['status'] == 'online') {
+          result.add({
+            "lat": data['lat'],
+            "lng": data['lng'],
+            'driver': data['driverId']
+          });
+        }
       }
       return result;
+  }
+
+  changeDriver(reqId,id,lat,lng) async{
+
+    DatabaseReference fetchData = cMethods.dBase.ref().child("driverlocation");
+
+    final event = await fetchData.get();
+
+    late List<Map<String, dynamic>? > result =[];
+
+    for (var child in event.children) {
+      Map<String, dynamic>? data = Map<String, dynamic>.from(child.value as Map);
+      if(data['status'] == 'online' && data['driverId'] != id) {
+        result.add({
+          "lat": data['lat'],
+          "lng": data['lng'],
+          'driver': data['driverId']
+        });
+      }
+    }
+
+    LatLng dis = LatLng(lat, lng);
+
+   Map<String,dynamic>? changedD = await MapRecord().findDrivers(dis, result);
+
+
+    DatabaseReference rideRef = CommonMethods().dBase.ref().child("rideRequests").child(reqId);
+
+    print(changedD);
+    rideRef.update({
+      "driverId" : changedD?['driverInfo'],
+      "status" : "waiting...",
+      "timestamp" :  DateTime.now().toIso8601String()
+    });
+
+
+
+/*
+
+
+   LatLng picklocation = changedD?['location'];
+
+    var pickup = {
+      "lat" : dis.latitude,
+      "lng" : dis.longitude
+    };
+
+    var destination = {
+      "lat" : picklocation.latitude,
+      "lng" : picklocation.longitude
+    };
+
+    DatabaseReference rideRef = CommonMethods().dBase.ref().child("rideRequests").child(reqId);
+
+    var pickup = {
+      "lat" : dis.latitude,
+      "lng" : dis.longitude
+    };
+
+    var destination = {
+      "lat" : changedD
+      "lng" : destinationLoc?.longitude
+    };
+
+
+
+    rideRef.update({
+      "driverId" : id,
+      "requestId" : reqId,
+      "pickup" : ,
+      "destination" : destination,
+      "status" : "waiting...",
+      "timestamp" :  DateTime.now().toIso8601String()
+    });
+
+
+
+
+
+*/
+   //return changedD;
+
+
   }
 
 
@@ -98,11 +185,22 @@ class Drivers{
       final fetchData = await rideRef.get();
       Map<String,dynamic>? rideData = Map<String,dynamic>.from(fetchData.value as Map);
 
-      print(rideData);
-
         return rideData;
 
       }
+
+
+      void setOffline(id) async{
+        DatabaseReference locationRef =    cMethods.dBase.ref().child("driverlocation");
+        await locationRef.child(id).update({
+          "driverId" : id,
+          "lat" : null,
+          "lng" : null,
+          "status" : "offline"
+        });
+
+      }
+
 
     }
 

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:leisureryde/driver/driverlogin.dart';
 import 'package:leisureryde/driver/ride_requests.dart';
 import 'package:leisureryde/methods/commonmethods.dart';
+import 'package:leisureryde/methods/driversmethod.dart';
 import 'package:leisureryde/methods/maprecord.dart';
 import 'package:leisureryde/methods/sharedpref.dart';
 
@@ -22,21 +23,23 @@ class _DriverDashboardState extends State<DriverDashboard> {
   final Color gold = const Color(0xFFD4AF37);
   final Color black = const Color(0xFF000000);
 
-  setAvailability(isOnline){
-    cMethods.setDriverStatus(isOnline);
-  }
 
   @override @override
   void initState() {
     super.initState();
-    setDriverLocation();
+    // setDriverLocation();
   }
 
-  void setDriverLocation() async{
+  void setStatus(isOnline)async{
     String? id = await SharedPref().getUserId();
-
-    MapRecord().checkLocationPermissions(id);
+    if(isOnline){
+     MapRecord().checkLocationPermissions(id!);
+    } else{
+      Drivers().setOffline(id);
+    }
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -105,10 +108,12 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     value: isOnline,
                     activeThumbColor: gold,
                     onChanged: (val) {
-                      setAvailability(val);
+
                       setState(() {
                         isOnline = val;
+                        setStatus(isOnline);
                       });
+
                     },
                   ),
                 ],

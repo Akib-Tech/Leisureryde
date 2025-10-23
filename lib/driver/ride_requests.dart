@@ -9,6 +9,7 @@ import 'package:leisureryde/methods/driversmethod.dart';
 import 'package:leisureryde/methods/maprecord.dart';
 import 'package:leisureryde/methods/rideconnect.dart';
 import 'package:leisureryde/methods/sharedpref.dart';
+import 'package:leisureryde/userspage/chat.dart';
 import 'package:leisureryde/widgets/requestlist.dart';
 
 import '../methods/commonMethods.dart' show CommonMethods;
@@ -31,6 +32,7 @@ class _DriverRequestState extends State<DriverRequest> {
   final FirebaseDatabase dBase = FirebaseDatabase.instance;
    late final DatabaseReference rideRequestRef = dBase.ref("rideRequests");
   final bool isOnline = false;
+  final bool status = false;
   var request = [];
 
   String? id = "";
@@ -46,15 +48,21 @@ class _DriverRequestState extends State<DriverRequest> {
     final String rideId = data['riderId'];
     final String driverId = data['driverId'];
     final String status = data['status'];
+    final String reqId = data['requestId'] ?? "HEloo";
     double distance =  MapRecord().calculateDistance(data['pickup']['lat'], data['pickup']['lng'], data['destination']['lat'], data['destination']['lng']);
+    double lat = data['pickup']['lat'];
+    double lng = data['pickup']['lng'];
 
     return {
       "riderId" : rideId,
       "driverId" : driverId,
       "distance" : distance,
+      "requestId" : reqId,
       "status" : status,
       "pickup" : pickup,
-      "destination" : destination
+      "destination" : destination,
+      "lat" : lat,
+      "lng" : lng
     };
   }
 
@@ -117,7 +125,7 @@ class _DriverRequestState extends State<DriverRequest> {
 }
 
 Widget listRequest(){
-    return StreamBuilder<Map<String,dynamic>?>(
+    return StreamBuilder<List<Map<String,dynamic>?>>(
         stream: ConnectRide().notifyDriver(),
         builder: (context,snapshot){
 
@@ -127,134 +135,193 @@ Widget listRequest(){
             );
           }else if (snapshot.hasData && snapshot.data != null){
             final data = snapshot.data!;
+            return ListView.builder(
+                itemCount: data.length,
+                itemBuilder: (context, index) {
+                  final result = data[index];
+                  return FutureBuilder<Map<String, dynamic>?>(
+                      future: getListValue(result),
+                      builder: (context, snapshot) {
+                        final response =  snapshot.data;
+                        final driverId = response?['driverId'];
+                        final lat = response?['lat'];
+                        final lng = response?['lng'];
+                        final reqId = response?['requestId'];
 
-        return FutureBuilder<Map<String,dynamic>?>(
-                future: getListValue(data),
-                builder: (context,snapshot){
+                          return Card(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            elevation: 4,
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "RequestID: ${response?['requestId']}",
+                                    style: Theme
+                                        .of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment
+                                        .spaceBetween,
+                                    children: [
+                                      const Text('Pickup:'),
+                                      Expanded(
+                                        child: Text(
+                                          "${response?['pickup']}",
+                                          textAlign: TextAlign.right,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment
+                                        .spaceBetween,
+                                    children: [
+                                      const Text('Destination:'),
+                                      Expanded(
+                                        child: Text(
+                                          "${response?['destination']}",
+                                          textAlign: TextAlign.right,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment
+                                        .spaceBetween,
+                                    children: [
+                                      Text('Distance:'),
+                                      Text("${response?['distance']} km",
+                                        textAlign: TextAlign.right,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w600),
+                                      ),
 
-                  final response = snapshot.data;
-                    return Card(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      elevation: 4,
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Ride Request',
-                              style: Theme
-                                  .of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(
-                                fontWeight: FontWeight.bold,
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment
+                                        .spaceBetween,
+                                    children: [
+                                      const Text('Price:'),
+                                      Text('#'),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment
+                                        .spaceBetween,
+                                    children: [
+                                      const Text('Availability:'),
+                                      Text("${response?['status']}"),
+                                    ],
+                                  ),
+                                  const Divider(height: 20),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment
+                                        .spaceBetween,
+                                    children: [
+                                   status?   ElevatedButton.icon(
+                                        onPressed: () =>
+                                        {
+
+                                          Drivers().acceptRide(
+                                              "${response?['requestId']}"),
+                                         /* Navigator.push(context,
+                                              MaterialPageRoute(
+                                                  builder: (c) =>
+                                                      RideMovement()))*/
+                                        },
+                                        icon: const Icon(
+                                            Icons.check_circle,
+                                            color: Colors.white),
+                                        label: const Text('Accept'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                                8),
+                                          ),
+                                        ),
+                                      ) : ElevatedButton.icon(
+                                     onPressed: () =>
+                                     {
+                                      Navigator.push(context,MaterialPageRoute(builder: (c) =>
+
+                                          ChatScreen(
+                                            receiverName: "Ibraheem",
+                                            receiverId: "${response?['riderId']}",
+
+                                          )
+                                      )),
+
+                                       Drivers().acceptRide(
+                                           "${response?['requestId']}"),
+                                       /* Navigator.push(context,
+                                              MaterialPageRoute(
+                                                  builder: (c) =>
+                                                      RideMovement()))*/
+                                     },
+                                     icon: const Icon(
+                                         Icons.check_circle,
+                                         color: Colors.white),
+                                     label: const Text('Accept'),
+                                     style: ElevatedButton.styleFrom(
+                                       backgroundColor: Colors.green,
+                                       shape: RoundedRectangleBorder(
+                                         borderRadius: BorderRadius.circular(
+                                             8),
+                                       ),
+                                     ),
+                                   )  ,
+                                      OutlinedButton.icon(
+                                        onPressed: () =>
+                                        {
+                                          //Drivers().rejectRide( "${response?['requestId']}"),
+
+                                          Drivers().changeDriver(reqId,driverId,lat,lng)
+                                        },
+                                        icon: const Icon(
+                                            Icons.cancel, color: Colors.red),
+                                        label: const Text('Decline'),
+                                        style: OutlinedButton.styleFrom(
+                                          side: const BorderSide(
+                                              color: Colors.red),
+                                          foregroundColor: Colors.red,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                                8),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 10),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Pickup:'),
-                                Expanded(
-                                  child: Text(
-                                    "${response?['pickup']}",
-                                    textAlign: TextAlign.right,
-                                    style: const TextStyle(fontWeight: FontWeight.w600),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Destination:'),
-                                Expanded(
-                                  child: Text(
-                                    "${response?['destination']}",
-                                    textAlign: TextAlign.right,
-                                    style: const TextStyle(fontWeight: FontWeight.w600),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                 Text('Distance:'),
-                                Text("${response?['distance']} km",textAlign: TextAlign.right,
-                                  style: const TextStyle(fontWeight: FontWeight.w600),
-                                ),
-
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Price:'),
-                                Text('#'),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Availability:'),
-                                Text( "${response?['status']}"),
-                              ],
-                            ),
-                            const Divider(height: 20),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                ElevatedButton.icon(
-                                  onPressed: () => {
-
-                                    Drivers().acceptRide("${response?['driverId']}"),
-                                    Navigator.push(context,MaterialPageRoute(builder: (c) => RideMovement() ))
-                                  },
-                                  icon: const Icon(
-                                      Icons.check_circle, color: Colors.white),
-                                  label: const Text('Accept'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                ),
-                                OutlinedButton.icon(
-                                  onPressed: () => {
-                                    Drivers().rejectRide("${response?['driverId']}")
-                                  },
-                                  icon: const Icon(Icons.cancel, color: Colors.red),
-                                  label: const Text('Decline'),
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: Colors.red),
-                                    foregroundColor: Colors.red,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
+                          );
 
 
-                }
-            );
-
-
+                      }
+                  );
+                });
           }else{
             return Center(child: Text('No driver information available.'));
 

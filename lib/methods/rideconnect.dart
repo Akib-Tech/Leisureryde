@@ -14,6 +14,7 @@ class ConnectRide{
     rideRef.set({
       "riderId": riderId,
       "driverId" : driverId,
+      "requestId" : reqId,
       "pickup" : pickup,
       "destination" : destination,
       "status" : "waiting...",
@@ -21,7 +22,7 @@ class ConnectRide{
     });
   }
 
-  Stream<Map<String,dynamic>?> notifyDriver() async*{
+  Stream<List<Map<String,dynamic>?>> notifyDriver() async*{
     final id = await SharedPref().getUserId();
     Map<String,dynamic>? result = {};
 
@@ -31,13 +32,19 @@ class ConnectRide{
           .orderByChild("driverId")
           .equalTo(id);
 
-
-    await for (final event in driverRef.onChildAdded) {
+    await for (final event in driverRef.onValue) {
       if (event.snapshot.value != null) {
-        final rideData = Map<String, dynamic>.from(event.snapshot.value as Map);
-        yield rideData;
+        // event.snapshot.value will contain ALL matching children
+        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+
+        // You can yield each ride one by one if you prefer:
+        for (var ride in data.values) {
+          final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+          final rides = data.values.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          yield rides;
+        }
       } else {
-        yield null; // No data yet
+        yield []; // no requests
       }
     }
 

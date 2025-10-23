@@ -20,7 +20,7 @@ class FileManager{
 
       downloadUrl = await fileRef.getDownloadURL();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Uploaded! URL: $downloadUrl')),
+        SnackBar(content: Text('Licence uploaded successfully')),
       );
         return downloadUrl;
 

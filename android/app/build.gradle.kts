@@ -14,7 +14,7 @@ dependencies {
 
     android {
     namespace = "com.example.leisureryde"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

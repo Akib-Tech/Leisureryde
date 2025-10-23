@@ -28,31 +28,32 @@ class MapRecord{
   LatLng? _currentLocation;
   StreamSubscription<Position>? _positionStream;
 
-  void setMyLocation(String id){
+  void setMyLocation(String id) async {
 
     const LocationSettings locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
       distanceFilter: 100,
     );
 
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
 
-    _positionStream = Geolocator.getPositionStream(locationSettings: locationSettings)
-        .listen((Position? position) {
-      if (position == null) return;
-        _currentLocation = LatLng(position.latitude, position.longitude);
+      DatabaseReference locationRef =    cMethods.dBase.ref().child("driverlocation");
+      await locationRef.child(id).update({
+        "driverId" : id,
+        "lat" : position.latitude,
+        "lng" : position.longitude,
+        "status" : "online"
+      });
 
+    } catch (e) {
+      print("Error getting location: $e");
+      return null;
+    }
 
-    DatabaseReference locationRef =    cMethods.dBase.ref().child("driverlocation").child(id);
-        locationRef.set({
-          "lat" : _currentLocation?.latitude,
-          "lng" : _currentLocation?.longitude,
-          "driverId" : id,
-        });
-
-    });
-   }
-
-
+  }
 
   void checkLocationPermissions(id) async {
     await _positionStream?.cancel();
@@ -60,17 +61,13 @@ class MapRecord{
     LocationPermission permission = await Geolocator.checkPermission();
 
     if (permission == LocationPermission.denied) {
-      print("Permission denied");
       permission = await Geolocator.requestPermission();
     } else if (permission == LocationPermission.whileInUse
         || permission == LocationPermission.always) {
-        setMyLocation(id);
-        print("Position set");
+       setMyLocation(id);
     } else {
         print("❌ Location permissions not granted.");
     }
-
-
   }
 
 
@@ -151,10 +148,12 @@ class MapRecord{
             "location": closest
           };
         }
+
       }
-      return result;
 
       await Future.delayed(const Duration(seconds: 3));
+      return result;
+
 
     }
 
@@ -171,7 +170,7 @@ class MapRecord{
       DatabaseReference userLocDb =  cMethods.dBase.ref().child("driverlocation").child(id!);
       final fetchLoc = await userLocDb.get();
       Map<String,dynamic>? result = Map<String,dynamic>.from(fetchLoc.value as Map);
-     return {
+      return {
         "lat" : result['lat'],
         "lng" : result['lng']
       };
@@ -184,7 +183,6 @@ class MapRecord{
       desiredAccuracy: LocationAccuracy.high,
     );
 
-    // Build and return the result
     return {
       "lat": position.latitude,
       "lng": position.longitude,
@@ -250,10 +248,5 @@ class MapRecord{
 
     return null;
   }
-
-
-
-
-
 
 }

@@ -85,9 +85,11 @@ class _DriverRegisterState extends State<DriverRegister>
     final result = await FilePicker.platform.pickFiles();
     if (result != null && result.files.single.path != null) {
        file =  File(result.files.single.path!);
-      //fileLink =  await FileManager().uploadFile(file,context);
 
-      choose = true;
+      setState(()async {
+        choose = true;
+      });
+
     }
   }
 
@@ -117,6 +119,7 @@ class _DriverRegisterState extends State<DriverRegister>
       cMethods.displaySnackBar("Phone number cannot be less than 11", context);
     } else {
      String id =  randomAlphaNumeric(10);
+     fileLink =  await FileManager().uploadFile(file,context);
      if(fileLink != null) {
        cMethods.registerNewDriver(
          id,
@@ -134,6 +137,9 @@ class _DriverRegisterState extends State<DriverRegister>
        await pref.saveUsername(userNameController.text);
        await pref.savePhone(phoneController.text);
        await pref.saveStatus("yes");
+     }else{
+       cMethods.displaySnackBar("Upload a valid licence Information", context);
+
      }
     }
   }

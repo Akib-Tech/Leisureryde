@@ -226,6 +226,7 @@ class CommonMethods {
           "phone": phone.trim(),
           "status" : "on",
           "driving" : "yes",
+          "licence": profileLink,
           "createdAt": DateTime.now().toIso8601String(),
           "blockStatus": "no",
         };
@@ -413,7 +414,6 @@ Future<Map<String, String?>> driverRideNotice(BuildContext context,)  {
 
   Future<Map<String,dynamic>?> checkMapState() async{
       String booked = await SharedPref().getBookStatus();
-      print("BOOk status: $booked");
       if(booked != "") {
         DatabaseReference mapStatus = dBase.ref().child("rideRequests").child(
             booked);
