@@ -75,7 +75,7 @@ class SharedPref{
 
   Future<String?> getDriver() async{
     SharedPreferences pref = await SharedPreferences.getInstance();
-    return pref.getString(driverId) ?? "unavailable";
+    return pref.getString(driverId) ?? "";
   }
 
   Future<bool> storeReject(rejectList) async{

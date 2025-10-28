@@ -4,7 +4,9 @@ import 'package:google_place/google_place.dart';
 import 'package:leisureryde/methods/maprecord.dart';
 import 'package:leisureryde/methods/rideconnect.dart';
 import 'package:leisureryde/methods/sharedpref.dart';
+import 'package:leisureryde/payment.dart';
 import 'package:leisureryde/userspage/chat.dart';
+import 'package:leisureryde/userspage/home.dart';
 import 'package:leisureryde/widgets/requestlist.dart';
 import 'package:random_string/random_string.dart';
 
@@ -30,7 +32,6 @@ class _RideProcessState extends State<RideProcess>{
     ).then((driver) => driverIcon = driver);
   }
 
-
   BitmapDescriptor pickupIcon =
   BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
   BitmapDescriptor destinationIcon = BitmapDescriptor.defaultMarker;
@@ -43,6 +44,7 @@ class _RideProcessState extends State<RideProcess>{
   final Color gold = const Color(0xFFd4af37);
   final Color black = Colors.black;
   bool driverFound = false;
+  String? driverId = "";
   Set<Marker> markers = {};
   Set<Polyline> polylines = {};
 
@@ -54,15 +56,15 @@ class _RideProcessState extends State<RideProcess>{
 
 Future<void> setDefault() async{
     final String check = await SharedPref().getBookStatus();
+     driverId = await SharedPref().getDriver();
 
-    print(check);
-   /* if(check != "")  {
+ if(check != "")  {
       Map<String,dynamic>? currentBook = await cMethods.checkMapState();
 
       driverFound = true;
-        pickUpLocation = LatLng(currentBook?['pickup']['lat'], currentBook?['pickup']['lng']);
-        destinationLoc = LatLng(currentBook?['destination']['lat'], currentBook?['destination']['lng']);
-        availableDrivers  = await MapRecord().findAvailableDrivers();
+      pickUpLocation = LatLng(currentBook?['pickup']['lat'], currentBook?['pickup']['lng']);
+      destinationLoc = LatLng(currentBook?['destination']['lat'], currentBook?['destination']['lng']);
+      availableDrivers  = await MapRecord().findAvailableDrivers();
 
         markers.removeWhere((m) => m.markerId.value == "Pickup");
         markers.add(Marker(
@@ -86,7 +88,7 @@ Future<void> setDefault() async{
     }
 
 
-    */
+
 }
 
 
@@ -133,28 +135,71 @@ Future<void> setDefault() async{
 
   LatLng  closestDriver = LatLng(0.0, 0.0);
 
-  void bookRide(BuildContext context) async{
+   String journeyDist = "";
+   String journeyprice = "";
 
+
+  void bookRide(BuildContext context) async {
     showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => CircularProgressIndicator()
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
     );
 
     await Future.delayed(const Duration(seconds: 3));
+
     Navigator.pop(context);
-    availableDrivers  = await MapRecord().findAvailableDrivers();
 
-    setState(() {
-      driverFound = true;
-    });
+    try {
+      final distance = await MapRecord().getRouteDetails(
+        pickUpLocation!.latitude,
+        pickUpLocation!.longitude,
+        destinationLoc!.latitude,
+        destinationLoc!.longitude,
+      );
 
- }
+      if (distance != null && distance['distance_value'] != null) {
+        final distanceInMeters = distance['distance_value']; // e.g. 12000
+        final distanceInMiles = distanceInMeters / 1609.34;
+
+        final roundedMiles = distanceInMiles.toStringAsFixed(2);
+        final price = distanceInMiles * 2000; // ✅ multiply the double value
+        // Stripe expects amount in cents (integer)
+        final int priceInCents = (price * 100).toInt();
+
+// convert to string for makePayment()
+        final String priceString = priceInCents.toString();
+
+       final bool payment = await Payment().makePayment(priceString, "usd");
+
+       if(payment == true){
+        journeyDist = roundedMiles;
+        journeyprice = priceString;
+      availableDrivers = await MapRecord().findAvailableDrivers();
+
+
+         setState(() {
+           driverFound = true;
+         });
+
+       }
+      }
+
+
+    } catch (e) {
+      print('Error booking ride: $e');
+    }
+  }
+
+
+
   @override
   Widget build(BuildContext context) {
    return Scaffold(
               backgroundColor: Colors.white,
-              body: driverFound ? _buildDriverInfo() : _mapStatic(),
+              body: driverFound ?  _buildDriverInfo() : _mapStatic(),
             );
 
   }
@@ -270,10 +315,13 @@ Future<void> setDefault() async{
                 setState(() {
                   req = true;
                 });
+
+
+
                 bookRide(context);
 
-                pickupController.text = "";
-                destinationController.text = "";
+                //pickupController.text = "";
+                //destinationController.text = "";
               } else {
                 showDialog(
                   context: context,
@@ -328,14 +376,15 @@ Future<void> setDefault() async{
           if(req) {
             String reqId = randomAlphaNumeric(10);
             ConnectRide().connectADriver(reqId,
-                data['driverInfo'], pickup, destination);
+                data['driverInfo'], pickup, destination,journeyprice,journeyDist);
               req = false;
             }
-
             return _mapMoving(data['driverInfo']);
 
           } else {
-          return  CircularProgressIndicator();
+          return  Center(
+            child: CircularProgressIndicator()
+          );
           }
         }
     );
@@ -417,12 +466,12 @@ Future<void> setDefault() async{
                     // 🟢 Start Journey Button
                     ElevatedButton.icon(
                       onPressed: () {
-                        // start journey logic
+
                       },
                       icon: const Icon(Icons.play_arrow),
-                      label: const Text("Start Journey"),
+                      label: const Text("Driver Arrived"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
+                        backgroundColor: gold,
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -442,11 +491,12 @@ Future<void> setDefault() async{
                     ElevatedButton.icon(
                       onPressed: () {
                         SharedPref().bookState("");
+                        Navigator.push(context, MaterialPageRoute(builder: (c) => HomePage()));
                       },
                       icon: const Icon(Icons.stop),
-                      label: const Text("End Journey"),
+                      label: const Text("Cancel Ride"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
+                        backgroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),

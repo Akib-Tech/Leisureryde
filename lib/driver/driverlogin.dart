@@ -149,6 +149,7 @@ class _DriverLoginState extends State<DriverLogin> {
                   Icons.email,
                   emailController,
                   textColor: black,
+                    keyboardType: TextInputType.emailAddress
                 ),
 
                 const SizedBox(height: 20),

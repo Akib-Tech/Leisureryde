@@ -138,7 +138,7 @@ class CommonMethods {
         displaySnackBar("Incorrect login details.", context);
       }
     } catch (error) {
-      //Navigator.pop(context);
+      Navigator.pop(context);
       displaySnackBar(error.toString(), context);
     }
   }
@@ -280,7 +280,7 @@ class CommonMethods {
         displaySnackBar("Incorrect login details.", context);
       }
     } catch (error) {
-      //Navigator.pop(context);
+      Navigator.pop(context);
       displaySnackBar(error.toString(), context);
     }
   }

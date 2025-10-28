@@ -6,8 +6,9 @@ class ConnectRide{
 
   CommonMethods cMethod = CommonMethods();
 
-  void connectADriver(reqId, driverId, pickup,  destination) async{
+  void connectADriver(reqId, driverId, pickup,  destination,price,distance) async{
     await SharedPref().bookState(reqId);
+    await SharedPref().setDriver(driverId);
     String? riderId = await SharedPref().getUserId();
     DatabaseReference rideRef = cMethod.dBase.ref().child("rideRequests").child(reqId);
 
@@ -18,6 +19,9 @@ class ConnectRide{
       "pickup" : pickup,
       "destination" : destination,
       "status" : "waiting...",
+      "payment_status" : "Paid",
+      "price" : price,
+      "distance" : distance,
       "timestamp" :  DateTime.now().toIso8601String()
     });
   }

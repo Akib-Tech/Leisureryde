@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:leisureryde/userspage/ridehistory.dart';
 import 'package:leisureryde/userspage/rideprocess.dart';
 import 'package:leisureryde/userspage/home.dart';
 import 'package:leisureryde/userspage/profile.dart';
-import 'package:leisureryde/userspage/riderequest.dart';
 
 class ButtomNav extends StatefulWidget {
   const ButtomNav({super.key});
@@ -19,7 +19,7 @@ class _ButtomNavState extends State<ButtomNav> {
     const HomePage(),
     const RideProcess(), // Booking Page
     const ProfilePage(),
-    const Center(child: Text("Wallet Page", style: TextStyle(fontSize: 20))),
+    const History(),
   ];
 
   void _onItemTapped(int index) {
@@ -45,9 +45,8 @@ class _ButtomNavState extends State<ButtomNav> {
           BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
           BottomNavigationBarItem(icon: Icon(Icons.local_taxi), label: "Booking"),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
-          BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet), label: "Wallet"),
+          BottomNavigationBarItem(icon: Icon(Icons.history), label: "History"),
         ],
-
     );
   }
 }
