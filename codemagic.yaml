@@ -1,35 +1,69 @@
 workflows:
-  build_for_test:
-    name: Build Android and iOS for testing
+  build_and_test:
+    name: Build Android & iOS for Testing
     environment:
       flutter: stable
       xcode: latest
       cocoapods: default
       vars:
         APP_NAME: "LeisureRyde"
-        BUNDLE_ID: "com.leisureryde.ride"
+        BUNDLE_ID: "com.leisureryde.app"
         APPLE_ID: "Ibraheemakin201@gmail.com"
         APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
         APP_STORE_CONNECT_KEY_IDENTIFIER: $APP_STORE_CONNECT_KEY_IDENTIFIER
         APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
 
     scripts:
-      - flutter clean
-      - flutter pub get
-      - flutter build apk --release
-      - flutter build ios --release --no-codesign
-      - |
-        xcode-project build-ipa \
-          --workspace ios/Runner.xcworkspace \
-          --scheme Runner \
-          --archive-path build/Runner.xcarchive \
-          --export-options-plist ios/exportOptions.plist
+      - name: Clean and get packages
+        script: |
+          flutter clean
+          flutter pub get
+
+      - name: Build Android APK (Release)
+        script: |
+          flutter build apk --release
+
+      - name: Build iOS IPA (Automatic Signing)
+        script: |
+          mkdir -p ios
+          cat > ios/exportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
+              <key>uploadBitcode</key>
+              <false/>
+              <key>uploadSymbols</key>
+              <true/>
+              <key>compileBitcode</key>
+              <false/>
+              <key>teamID</key>
+              <string></string>
+              <key>signingStyle</key>
+              <string>automatic</string>
+              <key>destination</key>
+              <string>export</string>
+          </dict>
+          </plist>
+          EOF
+
+          flutter build ios --release --no-codesign
+          xcode-project build-ipa \
+            --workspace ios/Runner.xcworkspace \
+            --scheme Runner \
+            --archive-path build/Runner.xcarchive \
+            --export-options-plist ios/exportOptions.plist
 
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
       - build/ios/ipa/*.ipa
 
     publishing:
+      email:
+        recipients:
+          - "Ibraheemakin201@gmail.com"
       app_store_connect:
         apple_id: "Ibraheemakin201@gmail.com"
         submit_to_testflight: true
