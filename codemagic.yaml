@@ -3,7 +3,7 @@ workflows:
     name: Build Android & iOS for Testing
     environment:
       groups:
-        - apple       # 👈 Add this group in Codemagic (contains APPLE_ID + APP_SPECIFIC_PASSWORD)
+        - appstore_credentials    # 👈 Add this group with your App Store Connect API details
       flutter: stable
       xcode: latest
       cocoapods: default
@@ -18,19 +18,19 @@ workflows:
           flutter clean || true
           flutter pub get || true
 
-      - name: Analyze code (ignore warnings/errors)
+      - name: Analyze code (ignore errors)
         script: |
-          echo "🔍 Analyzing code..."
+          echo "🔍 Running static analysis (will ignore errors)..."
           flutter analyze || true
 
       - name: Build Android APK (ignore build errors)
         script: |
-          echo "🤖 Building Android APK..."
+          echo "🤖 Building Android release APK..."
           flutter build apk --release || true
 
       - name: Build iOS IPA (automatic signing, ignore errors)
         script: |
-          echo "🍎 Building iOS IPA..."
+          echo "🍎 Building iOS release IPA..."
           mkdir -p ios
           cat > ios/exportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -69,6 +69,7 @@ workflows:
         recipients:
           - "Ibraheemakin201@gmail.com"
       app_store_connect:
-        apple_id: $APPLE_ID
-        password: $APP_SPECIFIC_PASSWORD
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
