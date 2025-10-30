@@ -15,7 +15,7 @@ class _DriverEarningsScreenState extends State<DriverEarningsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(  UPGD76465
+      appBar: AppBar(
         title: const Text("Driver Earnings"),
         centerTitle: true,
         backgroundColor: Colors.blueAccent,
