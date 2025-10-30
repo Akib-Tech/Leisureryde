@@ -1,0 +1,55 @@
+workflows:
+  flutter-testflight-build:
+    name: Flutter TestFlight Build (Android + iOS)
+    max_build_duration: 60
+    instance_type: mac_mini_m1
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      java: 17
+      groups:
+        - app_store_credentials  # Group with your Apple API key vars
+
+    cache:
+      cache_paths:
+        - ~/.pub-cache
+        - build
+
+    scripts:
+      - name: Install dependencies
+        script: flutter pub get
+
+      - name: Analyze code
+        script: flutter analyze
+
+      - name: Run tests
+        script: flutter test
+
+      - name: Build Android APK (release)
+        script: flutter build apk --release
+
+      - name: Build and sign iOS IPA (release)
+        script: |
+          flutter build ipa --release \
+            --export-options-plist=export_options.plist
+
+    artifacts:
+      - build/app/outputs/flutter-apk/app-release.apk
+      - build/ios/ipa/*.ipa
+
+    publishing:
+      email:
+        recipients:
+          - Ibraheemakin201@gmail.com
+        notify:
+          success: true
+          failure: true
+
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: true
+        submit_to_app_store: false
