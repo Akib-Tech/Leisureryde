@@ -87,8 +87,6 @@ class MapRecord{
     return null;
   }
 
-
-
   void goToCurrentLocation(LatLng location) {
     mapController?.animateCamera(
       CameraUpdate.newCameraPosition(
@@ -116,7 +114,6 @@ class MapRecord{
 
     return polylineCoordinates;
   }
-
 
   double calcDistance(lat1, lon1, lat2, lon2) {
     const p = pi / 180;
@@ -161,11 +158,21 @@ class MapRecord{
 
   Future<List<Map<String,dynamic>?>> findAvailableDrivers() async{
     List<Map<String,dynamic>?> driverCoordinates = await Drivers().fetchLocation();
-
     return driverCoordinates;
   }
 
-  
+  Future<bool> checkAvailability() async{
+    List<Map<String,dynamic>?> driverCoordinates = await Drivers().fetchLocation();
+    print("Coordinates : $driverCoordinates");
+    if(driverCoordinates == []){
+      return false;
+    }else {
+      return true;
+    }
+  }
+
+
+
   Future<Map<String,dynamic>?> getUserLocation(String? id) async{
       DatabaseReference userLocDb =  cMethods.dBase.ref().child("driverlocation").child(id!);
       final fetchLoc = await userLocDb.get();
@@ -175,8 +182,6 @@ class MapRecord{
         "lng" : result['lng']
       };
   }
-
-
 
   Future<Map<String,dynamic>?> findMe()async {
     final position = await Geolocator.getCurrentPosition(
@@ -189,8 +194,6 @@ class MapRecord{
     };
 
   }
-
-
 
   double calculateDistance(double startLatitude, double startLongitude, double endLatitude, double endLongitude) {
     const double earthRadius = 6371.0;

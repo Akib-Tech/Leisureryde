@@ -31,7 +31,7 @@ class Drivers{
 
       for (var child in event.children) {
         Map<String, dynamic>? data = Map<String, dynamic>.from(child.value as Map);
-        if(data['status'] == 'online') {
+        if(data['status'] == 'online' && data['lat'] != null && data['lng'] != null) {
           result.add({
             "lat": data['lat'],
             "lng": data['lng'],
@@ -189,7 +189,6 @@ class Drivers{
 
       }
 
-
       void setOffline(id) async{
         DatabaseReference locationRef =    cMethods.dBase.ref().child("driverlocation");
         await locationRef.child(id).update({
@@ -202,7 +201,30 @@ class Drivers{
       }
 
 
+    void setOnline(id) async{
+      DatabaseReference locationRef =    cMethods.dBase.ref().child("driverlocation");
+      await locationRef.child(id).update({
+        "driverId" : id,
+        "status" : "online"
+      });
+
     }
+
+
+
+    Future<Map<String,dynamic>?> getOnlineStatus(id) async {
+      DatabaseReference ref = FirebaseDatabase.instance.ref("driverlocation").child(id);
+
+      final snapshot = await ref.get();
+
+      if(snapshot.exists){
+        Map<String, dynamic>? result = Map<String, dynamic>.from(snapshot.value as Map);
+        return result;
+      }else{
+        return null;
+      }
+    }
+}
 
 
 

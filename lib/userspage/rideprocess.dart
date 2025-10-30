@@ -172,19 +172,24 @@ Future<void> setDefault() async{
 // convert to string for makePayment()
         final String priceString = priceInCents.toString();
 
-       final bool payment = await Payment().makePayment(priceString, "usd");
+        bool beforePay = await MapRecord().checkAvailability();
+          print("Before Pay: $beforePay");
 
-       if(payment == true){
-        journeyDist = roundedMiles;
-        journeyprice = priceString;
-      availableDrivers = await MapRecord().findAvailableDrivers();
+        if(beforePay == true) {
+          final bool payment = await Payment().makePayment(priceString, "usd");
+          if(payment == true){
+            journeyDist = roundedMiles;
+            journeyprice = priceString;
+            availableDrivers = await MapRecord().findAvailableDrivers();
+
+            setState(() {
+              driverFound = true;
+            });
+          }
+
+        }
 
 
-         setState(() {
-           driverFound = true;
-         });
-
-       }
       }
 
 
@@ -523,6 +528,8 @@ Future<void> setDefault() async{
       stream:ConnectRide().driverOnWay(rideId) ,
       builder:(context,snapshot){
         final data = snapshot.data;
+        print("Data status: ${data?['status']}  : $data");
+
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [

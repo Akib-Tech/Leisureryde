@@ -26,6 +26,8 @@ class _HistoryState extends State<History> {
   }
   Future<List<Map<String,dynamic>?>> getMyRequest() async {
     List<Map<String, dynamic>?> rideHistory = await User().fetchRequest();
+
+    print("Ride History: $rideHistory");
     return rideHistory;
   }
 
@@ -41,11 +43,9 @@ class _HistoryState extends State<History> {
     final String reqId = data['requestId'] ?? "HEloo";
     final Map<String, dynamic>? driverDetails = await User().fetchDriverData(
         driverId);
-    double distance = MapRecord().calculateDistance(
-        data['pickup']['lat'], data['pickup']['lng'],
-        data['destination']['lat'], data['destination']['lng']);
+    final String distance = data['distance'];
 
-    final double price = distance * 2000;
+    final String price = data['price'];
 
     return {
       "driverId": driverId,
@@ -74,21 +74,24 @@ class _HistoryState extends State<History> {
       body: FutureBuilder(
           future: getMyRequest(),
           builder: (context,snapshot){
-            if(snapshot.hasData && snapshot.data != null){
+            if(snapshot.hasData && snapshot.data != null && snapshot.data! != []){
              final rideHistory = snapshot.data;
               return ListView.builder(
                 itemCount: rideHistory!.length,
                 itemBuilder: (context, index) {
                   final rideLists = rideHistory[index];
+                  print("Ride list :  $rideLists");
                   return  FutureBuilder<Map<String,dynamic>?> (
                       future: getListValue(rideLists),
                       builder: (context,snapshot){
-                        if(snapshot.hasData && snapshot.data != null){
+                        if(snapshot.hasData && snapshot.data != null && snapshot.data! !=
+                            {}){
                           final  ride = snapshot.data;
                           print(ride);
                           return _rideHistory(ride);
                         }else{
                           return Center(
+                            child: Text("No data available"),
                            );
                         }
                       }
@@ -97,15 +100,13 @@ class _HistoryState extends State<History> {
               );
             }else{
               return Center(
-                child: CircularProgressIndicator(),
+                child: Text("No Ride History Available"),
               );
             }
           }
       )
     );
   }
-
-
 
 
 
@@ -148,7 +149,7 @@ class _HistoryState extends State<History> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("Driver: ${ride?["driverProfile"]["username"]}",
+                Text("Driver: ${ride?["driverProfile"]["username"] ?? "Username" }",
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -193,7 +194,7 @@ class _HistoryState extends State<History> {
                       color: Colors.black),
                 ),
                 Text(
-                  "Distance: ${ride?["distance"].toStringAsFixed(0)} miles",
+                  "Distance: ${ride?["distance"]} miles",
                   style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
@@ -216,7 +217,7 @@ class _HistoryState extends State<History> {
                       color: Colors.black),
                 ),
                 Text(
-                  "Price: \$ ${ride?["distance"].toStringAsFixed(0)}",
+                  "Price: \$ ${ride?["price"]}",
                   style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,

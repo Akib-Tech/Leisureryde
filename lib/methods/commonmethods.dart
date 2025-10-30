@@ -58,30 +58,33 @@ class CommonMethods {
     );
   }
 
-  /// ✅ Register new users
+
+
+
+
+
   Future<void> registerNewUsers(
-      String id,
-      String email,
-      String firstname,
-      String lastname,
-      String username,
-      String password,
-      String phone,
-      BuildContext context,
-      ) async {
+     String id, // your own generated dynamic ID
+     String email,
+     String firstname,
+     String lastname,
+     String username,
+     String password,
+     String phone,
+     BuildContext context,
+  ) async {
     loadDialog("Registering user...", context);
     try {
-      UserCredential userCredential = await auth.createUserWithEmailAndPassword(
+      final userCredential = await auth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password.trim(),
       );
 
-      final User? firebaseUser = userCredential.user;
-      Navigator.pop(context); // Close loading dialog
+      final firebaseUser = userCredential.user;
+      Navigator.pop(context); // close loading dialog
 
       if (firebaseUser != null) {
-        DatabaseReference usersRef = dBase.ref().child("users").child(id);
-
+        DatabaseReference userRef = dBase.ref().child("users").child(id);
         Map<String, dynamic> userData = {
           "id": id,
           "email": email.trim(),
@@ -92,58 +95,94 @@ class CommonMethods {
           "createdAt": DateTime.now().toIso8601String(),
           "blockStatus": "no",
         };
-        await usersRef.set(userData);
+
+        await userRef.set(userData);
+
         displaySnackBar("Account created successfully!", context);
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const LoginPage()),
         );
       } else {
-        displaySnackBar("Account creation failed.", context);
-      }
-    } catch (error) {
-      displaySnackBar(error.toString(), context);
-    }
-  }
-
-  Future<void> loginUser(String email, String password, BuildContext context) async {
-    loadDialog("Verifying driver...", context);
-    try {
-      final UserCredential userCredential = await auth.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password.trim(),
-      );
-      DatabaseReference userRef = dBase.ref().child("users");
-      final event = await userRef.get();
-
-      if (userCredential.user != null) {
-        for (var child in event.children) {
-          final data = Map<String, dynamic>.from(child.value as Map);
-
-          if (data['email'] == email.trim()) {
-            final userData = data;
-
-            await SharedPref().saveUserId(userData['id']);
-            await SharedPref().saveUsername(userData['username']);
-            await SharedPref().savePhone(userData['phone']);
-
-            break;
-          }
-        }
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const HomePage()),
-        );
-      }else {
-        displaySnackBar("Incorrect login details.", context);
+        displaySnackBar("Account creation failed. Try again.", context);
       }
     } catch (error) {
       Navigator.pop(context);
-      displaySnackBar(error.toString(), context);
+      String message = "Registration failed.";
+      if (error is FirebaseAuthException) {
+        if (error.code == 'email-already-in-use') {
+          message = "This email is already registered.";
+        } else if (error.code == 'weak-password') {
+          message = "Password should be at least 6 characters.";
+        } else if (error.code == 'invalid-email') {
+          message = "Invalid email format.";
+        }
+      }
+      displaySnackBar(message, context);
     }
   }
 
+  /// 🔹 LOGIN USER (finds user by email, retrieves their dynamic ID)
+  Future<void> loginUser(
+     String email,
+     String password,
+     BuildContext context,
+  ) async {
+    loadDialog("Verifying user...", context);
 
+    try {
+      final userCredential = await auth.signInWithEmailAndPassword(
+        email: email.trim(),
+        password: password.trim(),
+      );
+
+      final firebaseUser = userCredential.user;
+      if (firebaseUser == null) throw FirebaseAuthException(code: "user-not-found");
+
+      // Fetch all users to find the one that matches the email
+      final snapshot = await dBase.ref().child("users").get();
+      if (!snapshot.exists) {
+        Navigator.pop(context);
+        displaySnackBar("No users found in database.", context);
+        return;
+      }
+
+      Map<String, dynamic>? userData;
+      for (final child in snapshot.children) {
+        final data = Map<String, dynamic>.from(child.value as Map);
+        if (data['email'] == email.trim()) {
+          userData = data;
+          break;
+        }
+      }
+
+      if (userData == null) {
+        Navigator.pop(context);
+        displaySnackBar("User record not found in database.", context);
+        return;
+      }
+
+      // Save user info locally
+      await SharedPref().saveUserId(userData['id']);
+      await SharedPref().saveUsername(userData['username']);
+      await SharedPref().savePhone(userData['phone']);
+
+      Navigator.pop(context);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomePage()),
+      );
+    } catch (error) {
+      Navigator.pop(context);
+      String message = "Login failed. Please try again.";
+      if (error is FirebaseAuthException) {
+        if (error.code == 'user-not-found') message = "No user found with this email.";
+        if (error.code == 'wrong-password') message = "Incorrect password.";
+        if (error.code == 'invalid-email') message = "Invalid email address.";
+      }
+      displaySnackBar(message, context);
+    }
+  }
   /// ✅ Fetch user data from Firebase
   Future<Map<String, dynamic>?> fetchingData() async{
     final user = await SharedPref().getUserId();
@@ -261,9 +300,8 @@ class CommonMethods {
         for (var child in event.children) {
           final data = Map<String, dynamic>.from(child.value as Map);
 
-          if (data['email'] == email.trim()) {
+          if (data['email'] == email.trim() ) {
             final driverData = data;
-
             await SharedPref().saveUserId(driverData['id']);
             await SharedPref().saveUsername(driverData['username']);
             await SharedPref().savePhone(driverData['phone']);

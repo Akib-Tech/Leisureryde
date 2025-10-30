@@ -26,7 +26,7 @@ class ConnectRide{
     });
   }
 
-  Stream<List<Map<String,dynamic>?>> notifyDriver() async*{
+  Future<List<Map<String,dynamic>?>> notifyDriver() async{
     final id = await SharedPref().getUserId();
     Map<String,dynamic>? result = {};
 
@@ -45,13 +45,13 @@ class ConnectRide{
         for (var ride in data.values) {
           final data = Map<String, dynamic>.from(event.snapshot.value as Map);
           final rides = data.values.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-          yield rides;
+          return rides;
         }
       } else {
-        yield []; // no requests
+        return []; // no requests
       }
     }
-
+      return [];
   }
 
 

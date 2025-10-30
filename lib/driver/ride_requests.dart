@@ -32,7 +32,7 @@ class _DriverRequestState extends State<DriverRequest> {
   final FirebaseDatabase dBase = FirebaseDatabase.instance;
    late final DatabaseReference rideRequestRef = dBase.ref("rideRequests");
   final bool isOnline = false;
-  final bool status = false;
+   bool status = true;
   var request = [];
 
   String? id = "";
@@ -47,11 +47,14 @@ class _DriverRequestState extends State<DriverRequest> {
     final String destination = await  cMethods.getAddressFromCoordinates(data['destination']['lat'], data['destination']['lng']);
     final String rideId = data['riderId'];
     final String driverId = data['driverId'];
+    final String distance = data['distance'];
     final String status = data['status'];
-    final String reqId = data['requestId'] ?? "HEloo";
-    double distance =  MapRecord().calculateDistance(data['pickup']['lat'], data['pickup']['lng'], data['destination']['lat'], data['destination']['lng']);
+    final String reqId = data['requestId'];
+    final String price = data['price'];
+    //double distance =  MapRecord().calculateDistance(data['pickup']['lat'], data['pickup']['lng'], data['destination']['lat'], data['destination']['lng']);
     double lat = data['pickup']['lat'];
     double lng = data['pickup']['lng'];
+    final String payment_status = data['payment_status'];
 
     return {
       "riderId" : rideId,
@@ -60,7 +63,9 @@ class _DriverRequestState extends State<DriverRequest> {
       "requestId" : reqId,
       "status" : status,
       "pickup" : pickup,
+      "price" : price,
       "destination" : destination,
+      "payment_status" : payment_status,
       "lat" : lat,
       "lng" : lng
     };
@@ -72,7 +77,6 @@ class _DriverRequestState extends State<DriverRequest> {
       final data = event.snapshot.value;
 
       if(data == null) return [];
-
 
       final fetchData = Map<dynamic,dynamic>.from(data as Map);
       final fetchList = <Map<String,dynamic>>[];
@@ -125,15 +129,15 @@ class _DriverRequestState extends State<DriverRequest> {
 }
 
 Widget listRequest(){
-    return StreamBuilder<List<Map<String,dynamic>?>>(
-        stream: ConnectRide().notifyDriver(),
+    return FutureBuilder<List<Map<String,dynamic>?>>(
+        future: ConnectRide().notifyDriver(),
         builder: (context,snapshot){
-
           if(snapshot.hasError){
             return Center(
               child: Text("Error: ${snapshot.error}"),
             );
-          }else if (snapshot.hasData && snapshot.data != null){
+          }
+          else if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty){
             final data = snapshot.data!;
             return ListView.builder(
                 itemCount: data.length,
@@ -147,6 +151,7 @@ Widget listRequest(){
                         final lat = response?['lat'];
                         final lng = response?['lng'];
                         final reqId = response?['requestId'];
+                        final price = response?['price'];
 
                           return Card(
                             shape: RoundedRectangleBorder(
@@ -207,7 +212,7 @@ Widget listRequest(){
                                         .spaceBetween,
                                     children: [
                                       Text('Distance:'),
-                                      Text("${response?['distance']} km",
+                                      Text("${response?['distance']} miles",
                                         textAlign: TextAlign.right,
                                         style: const TextStyle(
                                             fontWeight: FontWeight.w600),
@@ -221,7 +226,10 @@ Widget listRequest(){
                                         .spaceBetween,
                                     children: [
                                       const Text('Price:'),
-                                      Text('#'),
+                                      Text('\$ $price',textAlign: TextAlign.right,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w600),
+                                      ),
                                     ],
                                   ),
                                   const SizedBox(height: 6),
@@ -229,8 +237,24 @@ Widget listRequest(){
                                     mainAxisAlignment: MainAxisAlignment
                                         .spaceBetween,
                                     children: [
+                                      const Text('Payment Status:'),
+                                      Text('${response?['payment_status']}',textAlign: TextAlign.right,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w600),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment
+                                        .spaceBetween,
+                                    children: [
                                       const Text('Availability:'),
-                                      Text("${response?['status']}"),
+                                      Text("${response?['status']}",textAlign: TextAlign.right,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w600),
+                                      ),
                                     ],
                                   ),
                                   const Divider(height: 20),
@@ -238,7 +262,9 @@ Widget listRequest(){
                                     mainAxisAlignment: MainAxisAlignment
                                         .spaceBetween,
                                     children: [
-                                   status?   ElevatedButton.icon(
+                                      (
+                                      response?['status'] != "waiting..." ?
+                                   ElevatedButton.icon(
                                         onPressed: () =>
                                         {
 
@@ -252,7 +278,7 @@ Widget listRequest(){
                                         icon: const Icon(
                                             Icons.check_circle,
                                             color: Colors.white),
-                                        label: const Text('Accept'),
+                                        label: const Text('Accepted'),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.green,
                                           shape: RoundedRectangleBorder(
@@ -260,43 +286,30 @@ Widget listRequest(){
                                                 8),
                                           ),
                                         ),
-                                      ) : ElevatedButton.icon(
-                                     onPressed: () =>
-                                     {
-                                      Navigator.push(context,MaterialPageRoute(builder: (c) =>
-
-                                          ChatScreen(
-                                            receiverName: "Ibraheem",
-                                            receiverId: "${response?['riderId']}",
-
-                                          )
-                                      )),
-
-                                       Drivers().acceptRide(
-                                           "${response?['requestId']}"),
-                                       /* Navigator.push(context,
-                                              MaterialPageRoute(
-                                                  builder: (c) =>
-                                                      RideMovement()))*/
-                                     },
-                                     icon: const Icon(
-                                         Icons.check_circle,
-                                         color: Colors.white),
-                                     label: const Text('Accept'),
-                                     style: ElevatedButton.styleFrom(
-                                       backgroundColor: Colors.green,
-                                       shape: RoundedRectangleBorder(
-                                         borderRadius: BorderRadius.circular(
-                                             8),
-                                       ),
-                                     ),
-                                   )  ,
+                                      )
+                                       :
+                                      ElevatedButton.icon(
+                                        onPressed: () =>
+                                        {},
+                                        icon: const Icon(
+                                            Icons.check_circle,
+                                            color: Colors.white),
+                                        label: const Text('Accepts'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                                8),
+                                          ),
+                                        ),
+                                      )
+                                ),
+                                      (
+                                      response?['status'] == "waiting..." ?
                                       OutlinedButton.icon(
                                         onPressed: () =>
                                         {
-                                          //Drivers().rejectRide( "${response?['requestId']}"),
-
-                                          Drivers().changeDriver(reqId,driverId,lat,lng)
+                                       Drivers().changeDriver(reqId,driverId,lat,lng)
                                         },
                                         icon: const Icon(
                                             Icons.cancel, color: Colors.red),
@@ -310,7 +323,34 @@ Widget listRequest(){
                                                 8),
                                           ),
                                         ),
-                                      ),
+                                      )
+                                      :
+                                      OutlinedButton.icon(
+                                        onPressed: () =>
+                                        {
+                                          Navigator.push(context,MaterialPageRoute(builder: (c) =>
+                                              ChatScreen(
+                                                receiverName: "Ibraheem",
+                                                receiverId: "${response?['riderId']}",
+
+                                              )
+                                          )
+                                          )
+                                         },
+                                        icon: const Icon(
+                                            Icons.message, color: Colors.red),
+                                        label: const Text('Message'),
+                                        style: OutlinedButton.styleFrom(
+                                          side: const BorderSide(
+                                              color: Colors.red),
+                                          foregroundColor: Colors.red,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                                8),
+                                          ),
+                                        ),
+                                      )
+                                      )
                                     ],
                                   ),
                                 ],
@@ -322,9 +362,9 @@ Widget listRequest(){
                       }
                   );
                 });
-          }else{
-            return Center(child: Text('No driver information available.'));
-
+          }
+          else{
+            return Center(child: Text('No Ride Request Available.'));
           }
         }
     );
