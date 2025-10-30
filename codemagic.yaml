@@ -1,9 +1,9 @@
 workflows:
   build_and_test:
-    name: Build Android & iOS for Testing
+    name: Build Android & iOS for TestFlight
     environment:
       groups:
-        - appstore_credentials    # 👈 Add this group with your App Store Connect API details
+        - appstore_credentials    # Group where you stored API keys
       flutter: stable
       xcode: latest
       cocoapods: default
@@ -20,17 +20,17 @@ workflows:
 
       - name: Analyze code (ignore errors)
         script: |
-          echo "🔍 Running static analysis (will ignore errors)..."
+          echo "🔍 Analyzing code..."
           flutter analyze || true
 
       - name: Build Android APK (ignore build errors)
         script: |
-          echo "🤖 Building Android release APK..."
+          echo "🤖 Building Android APK..."
           flutter build apk --release || true
 
-      - name: Build iOS IPA (automatic signing, ignore errors)
+      - name: Build iOS IPA (automatic signing, ignore build errors)
         script: |
-          echo "🍎 Building iOS release IPA..."
+          echo "🍎 Building iOS IPA..."
           mkdir -p ios
           cat > ios/exportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -39,16 +39,16 @@ workflows:
           <dict>
               <key>method</key>
               <string>app-store</string>
-              <key>uploadBitcode</key>
-              <false/>
-              <key>uploadSymbols</key>
-              <true/>
-              <key>compileBitcode</key>
-              <false/>
               <key>signingStyle</key>
               <string>automatic</string>
               <key>destination</key>
               <string>export</string>
+              <key>compileBitcode</key>
+              <false/>
+              <key>uploadBitcode</key>
+              <false/>
+              <key>uploadSymbols</key>
+              <true/>
           </dict>
           </plist>
           EOF
@@ -57,7 +57,6 @@ workflows:
           xcode-project build-ipa \
             --workspace ios/Runner.xcworkspace \
             --scheme Runner \
-            --archive-path build/Runner.xcarchive \
             --export-options-plist ios/exportOptions.plist || true
 
     artifacts:
