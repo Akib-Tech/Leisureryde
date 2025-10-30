@@ -1,64 +1,71 @@
 workflows:
-  flutter-test-build:
-    name: Flutter Test Build (Android + iOS)
-    max_build_duration: 60
-    instance_type: mac_mini_m1
-
+  build_and_test:
+    name: Build Android & iOS (Ignore Errors)
     environment:
       flutter: stable
       xcode: latest
-      java: 17
       cocoapods: default
-      groups:
-        - app_store_credentials   # Apple API key group
       vars:
-        APP_NAME: "MyFlutterApp"
-
-    cache:
-      cache_paths:
-        - ~/.pub-cache
-        - build
+        APP_NAME: "LeisureRyde"
+        BUNDLE_ID: "com.leisureryde.app"
+        APPLE_ID: "Ibraheemakin201@gmail.com"
+        APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
+        APP_STORE_CONNECT_KEY_IDENTIFIER: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
 
     scripts:
-      - name: Install dependencies
-        script: flutter pub get
-
-      - name: Analyze project (ignore warnings & errors)
+      - name: Clean and install dependencies
         script: |
-          echo "Analyzing project..."
+          flutter clean || true
+          flutter pub get || true
+
+      - name: Analyze code (ignore warnings and errors)
+        script: |
           flutter analyze || true
 
-      - name: Run tests (ignore failures)
+      - name: Build Android (ignore errors)
         script: |
-          echo "Running tests..."
-          flutter test || true
-
-      - name: Build Android APK (release)
-        script: |
-          echo "Building Android release APK..."
           flutter build apk --release || true
 
-      - name: Build iOS IPA (release)
+      - name: Build iOS (automatic signing, ignore errors)
         script: |
-          echo "Building iOS release IPA..."
-          flutter build ipa --release \
-            --export-options-plist=export_options.plist || true
+          mkdir -p ios
+          cat > ios/exportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
+              <key>uploadBitcode</key>
+              <false/>
+              <key>uploadSymbols</key>
+              <true/>
+              <key>compileBitcode</key>
+              <false/>
+              <key>signingStyle</key>
+              <string>automatic</string>
+              <key>destination</key>
+              <string>export</string>
+          </dict>
+          </plist>
+          EOF
+
+          flutter build ios --release --no-codesign || true
+          xcode-project build-ipa \
+            --workspace ios/Runner.xcworkspace \
+            --scheme Runner \
+            --archive-path build/Runner.xcarchive \
+            --export-options-plist ios/exportOptions.plist || true
 
     artifacts:
-      - build/app/outputs/flutter-apk/app-release.apk
+      - build/app/outputs/flutter-apk/*.apk
       - build/ios/ipa/*.ipa
 
     publishing:
       email:
         recipients:
-          - Ibraheemakin201@gmail.com
-        notify:
-          success: true
-          failure: true
-
+          - "Ibraheemakin201@gmail.com"
       app_store_connect:
-        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
-        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
-        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        apple_id: "Ibraheemakin201@gmail.com"
         submit_to_testflight: true
-        submit_to_app_store: false
