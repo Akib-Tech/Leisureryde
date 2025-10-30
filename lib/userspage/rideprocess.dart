@@ -173,9 +173,6 @@ Future<void> setDefault() async{
         final String priceString = priceInCents.toString();
 
         bool beforePay = await MapRecord().checkAvailability();
-          print("Before Pay: $beforePay");
-
-        if(beforePay == true) {
           final bool payment = await Payment().makePayment(priceString, "usd");
           if(payment == true){
             journeyDist = roundedMiles;
@@ -186,8 +183,6 @@ Future<void> setDefault() async{
               driverFound = true;
             });
           }
-
-        }
 
 
       }
