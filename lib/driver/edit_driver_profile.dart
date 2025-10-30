@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:leisureryde/driver/driverlogin.dart';
 import 'package:leisureryde/methods/commonMethods.dart';
-import 'package:leisureryde/userspage/login.dart';
-import '../widgets/buttomnav.dart';
+import 'package:leisureryde/widgets/buttomnav.dart';
+import 'package:leisureryde/widgets/drivernav.dart';
 
 class EditDriverProfile extends StatefulWidget{
   const EditDriverProfile({super.key});
@@ -16,7 +17,7 @@ class _EditDriverProfileState extends State<EditDriverProfile>{
   final Color gold = const Color(0xFFFFD700);
   final Color black = Colors.black;
 
-  final CommonMethods cMethods = CommonMethods();
+  final  cMethods = CommonMethods();
 
   final TextEditingController emailController = TextEditingController();
   final TextEditingController firstNameController = TextEditingController();
@@ -47,7 +48,7 @@ class _EditDriverProfileState extends State<EditDriverProfile>{
     }else if(phoneNumberController.text.length < 9){
       cMethods.displaySnackBar("Phone number is too short", context);
     }else{
-      cMethods.updateProfile(
+      cMethods.updateDriverProfile(
           emailController.text,
           firstNameController.text,
           lastNameController.text,
@@ -79,14 +80,14 @@ class _EditDriverProfileState extends State<EditDriverProfile>{
   @override
   Widget build(BuildContext context) {
     return  FutureBuilder<Map<String, dynamic>?>(
-        future: cMethods.fetchingData(),
+        future: cMethods.fetchingDriverData(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
           if (!snapshot.hasData || snapshot.data == null) {
-            return const LoginPage();
+            return const DriverLogin();
           }else {
             final data = snapshot.data!;
             firstNameController.text = data["firstname"] ?? "";
@@ -256,7 +257,7 @@ class _EditDriverProfileState extends State<EditDriverProfile>{
               )
               ,
               // ---------------- BOTTOM NAVIGATION ----------------
-              bottomNavigationBar: const ButtomNav(),
+              bottomNavigationBar: const DriverNav(),
             );
           }
 

@@ -1,4 +1,10 @@
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:leisureryde/admin/driver_list.dart';
+import 'package:leisureryde/admin/driverpayment.dart';
+import 'package:leisureryde/admin/transaction.dart';
+import 'package:leisureryde/admin/user_list.dart';
+import 'package:leisureryde/methods/adminmethod.dart';
 import 'package:leisureryde/userspage/ridehistory.dart';
 
 class AdminHomePage extends StatefulWidget {
@@ -21,12 +27,17 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
   Future<void> _fetchSummaryData() async {
     // 🔹 Later you can fetch from Firebase here
+
+    List<Map<String,dynamic>?> usersList = await AdminMethod().usersList();
+    List<Map<String,dynamic>?> driversList = await AdminMethod().driversList();
+    List<Map<String,dynamic>?> requestsList = await AdminMethod().requestList();
+
     // For now, we’ll just simulate data
     await Future.delayed(const Duration(seconds: 1));
     setState(() {
-      totalUsers = 120;
-      totalDrivers = 40;
-      totalRides = 250;
+      totalUsers = usersList.isNotEmpty ? usersList.length : 0  ;
+      totalDrivers = driversList.isNotEmpty ? driversList.length : 0  ;
+      totalRides = requestsList.isNotEmpty ? requestsList.length : 0  ;
     });
   }
 
@@ -77,19 +88,19 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 title: "View Users",
                 icon: Icons.person_outline,
                 color: Colors.blueAccent,
-                route: const History(),
+                route: const UsersListScreen(),
               ),
               _buildButton(
                 title: "View Drivers",
                 icon: Icons.drive_eta_outlined,
                 color: Colors.green,
-                route: const History(),
+                route: const DriversListScreen(),
               ),
               _buildButton(
                 title: "Ride Requests",
                 icon: Icons.local_taxi_outlined,
                 color: Colors.orangeAccent,
-                route: const History(),
+                route: const DriverEarningsScreen(),
               ),
             ],
           ),

@@ -26,8 +26,6 @@ class _HistoryState extends State<History> {
   }
   Future<List<Map<String,dynamic>?>> getMyRequest() async {
     List<Map<String, dynamic>?> rideHistory = await User().fetchRequest();
-
-    print("Ride History: $rideHistory");
     return rideHistory;
   }
 
@@ -80,18 +78,16 @@ class _HistoryState extends State<History> {
                 itemCount: rideHistory!.length,
                 itemBuilder: (context, index) {
                   final rideLists = rideHistory[index];
-                  print("Ride list :  $rideLists");
                   return  FutureBuilder<Map<String,dynamic>?> (
                       future: getListValue(rideLists),
                       builder: (context,snapshot){
                         if(snapshot.hasData && snapshot.data != null && snapshot.data! !=
                             {}){
                           final  ride = snapshot.data;
-                          print(ride);
                           return _rideHistory(ride);
                         }else{
                           return Center(
-                            child: Text("No data available"),
+
                            );
                         }
                       }

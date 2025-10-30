@@ -17,7 +17,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("All Transactions"),
+        title: const Text("Ride Requests"),
         centerTitle: true,
         backgroundColor: Colors.blueAccent,
       ),
@@ -61,10 +61,10 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
               final destination = ride['destination'] ?? 'Unknown destination';
               final distance = ride['distance']?.toString() ?? '0';
               final price = ride['price']?.toString() ?? '0';
-              final driverName = ride['driverName'] ?? 'Unknown driver';
-              final riderName = ride['riderName'] ?? 'Unknown rider';
+              final driverName = ride['driverId'] ?? 'Unknown driver';
+              final riderName = ride['riderId'] ?? 'Unknown rider';
               final status = ride['status'] ?? 'pending';
-              final dateRaw = ride['date'] ?? '';
+             // final dateRaw = ride['date'] ?? '';
               final formattedDate ="";
 
 
@@ -94,8 +94,8 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                       Text("Driver: $driverName"),
                       Text("Rider: $riderName"),
                       Text("Distance: $distance km"),
-                      Text("Price: ₦$price"),
-                      Text("Date: $formattedDate"),
+                      Text("Price: \$ $price"),
+
                       const SizedBox(height: 4),
                       Row(
                         children: [

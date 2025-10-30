@@ -263,22 +263,17 @@ Widget listRequest(){
                                         .spaceBetween,
                                     children: [
                                       (
-                                      response?['status'] != "waiting..." ?
+                                      response?['status'] == "waiting..." ?
                                    ElevatedButton.icon(
                                         onPressed: () =>
                                         {
-
                                           Drivers().acceptRide(
                                               "${response?['requestId']}"),
-                                         /* Navigator.push(context,
-                                              MaterialPageRoute(
-                                                  builder: (c) =>
-                                                      RideMovement()))*/
                                         },
                                         icon: const Icon(
                                             Icons.check_circle,
                                             color: Colors.white),
-                                        label: const Text('Accepted'),
+                                        label: const Text("Accept"),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.green,
                                           shape: RoundedRectangleBorder(
@@ -294,7 +289,7 @@ Widget listRequest(){
                                         icon: const Icon(
                                             Icons.check_circle,
                                             color: Colors.white),
-                                        label: const Text('Accepts'),
+                                        label: const Text('Accepted'),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.green,
                                           shape: RoundedRectangleBorder(

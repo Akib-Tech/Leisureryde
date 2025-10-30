@@ -1,6 +1,6 @@
 workflows:
-  build_and_test:
-    name: Build Android & iOS (Ignore Errors)
+  build_for_test:
+    name: Build Android and iOS for testing
     environment:
       flutter: stable
       xcode: latest
@@ -14,58 +14,22 @@ workflows:
         APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
 
     scripts:
-      - name: Clean and install dependencies
-        script: |
-          flutter clean || true
-          flutter pub get || true
-
-      - name: Analyze code (ignore warnings and errors)
-        script: |
-          flutter analyze || true
-
-      - name: Build Android (ignore errors)
-        script: |
-          flutter build apk --release || true
-
-      - name: Build iOS (automatic signing, ignore errors)
-        script: |
-          mkdir -p ios
-          cat > ios/exportOptions.plist <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store</string>
-              <key>uploadBitcode</key>
-              <false/>
-              <key>uploadSymbols</key>
-              <true/>
-              <key>compileBitcode</key>
-              <false/>
-              <key>signingStyle</key>
-              <string>automatic</string>
-              <key>destination</key>
-              <string>export</string>
-          </dict>
-          </plist>
-          EOF
-
-          flutter build ios --release --no-codesign || true
-          xcode-project build-ipa \
-            --workspace ios/Runner.xcworkspace \
-            --scheme Runner \
-            --archive-path build/Runner.xcarchive \
-            --export-options-plist ios/exportOptions.plist || true
+      - flutter clean
+      - flutter pub get
+      - flutter build apk --release
+      - flutter build ios --release --no-codesign
+      - |
+        xcode-project build-ipa \
+          --workspace ios/Runner.xcworkspace \
+          --scheme Runner \
+          --archive-path build/Runner.xcarchive \
+          --export-options-plist ios/exportOptions.plist
 
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
       - build/ios/ipa/*.ipa
 
     publishing:
-      email:
-        recipients:
-          - "Ibraheemakin201@gmail.com"
       app_store_connect:
         apple_id: "Ibraheemakin201@gmail.com"
         submit_to_testflight: true

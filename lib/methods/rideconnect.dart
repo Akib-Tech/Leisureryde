@@ -54,8 +54,6 @@ class ConnectRide{
       return [];
   }
 
-
-
   Stream<Map<String, dynamic>?> driverOnWay(String? rideId) async*{
 
     final ref = FirebaseDatabase.instance.ref().child('rideRequests').child(rideId!);
@@ -68,15 +66,6 @@ class ConnectRide{
   }
 
   }
-
-
-
-
-
-
-
-
-
 
 
 }

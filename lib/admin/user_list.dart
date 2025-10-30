@@ -59,7 +59,7 @@ class _UsersListScreenState extends State<UsersListScreen> {
               final last = user['lastname'] ?? '';
               final name = (first.isEmpty && last.isEmpty) ? 'No Name' : '$first $last';
               final email = user['email'] ?? 'No Email';
-              final status = user['blockStatus'] ?? 'pending';
+              final status = user['blockStatus'] ?? '';
               final profile = user['profileImage'] ??
                   'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
@@ -70,10 +70,10 @@ class _UsersListScreenState extends State<UsersListScreen> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
-                  leading: CircleAvatar(
+                /*  leading: CircleAvatar(
                     backgroundImage: NetworkImage(profile),
                     radius: 26,
-                  ),
+                  ),*/
                   title: Text(name,
                       style: const TextStyle(
                           fontWeight: FontWeight.w600, fontSize: 16)),

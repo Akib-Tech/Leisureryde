@@ -4,6 +4,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:leisureryde/admin/home.dart';
 import 'package:leisureryde/driver/driver_dashboard.dart';
 import 'package:leisureryde/methods/driversmethod.dart';
 import 'package:leisureryde/methods/sharedpref.dart';
@@ -195,6 +196,20 @@ class CommonMethods {
     return null;
   }
 
+  Future<Map<String, dynamic>?> fetchingDriverData() async{
+    final driver = await SharedPref().getUserId();
+    if(driver != null){
+      final event = await dBase.ref().child("drivers").child(driver).once();
+      if (event.snapshot.value != null) {
+          return Map<String, dynamic>.from(event.snapshot.value as Map);
+
+      }
+    }
+    return null;
+  }
+
+
+
   /// ✅ Update user profile
   Future<void> updateProfile(
       String email,
@@ -217,6 +232,43 @@ class CommonMethods {
         };
 
         userRef.set(updateData);
+
+        displaySnackBar("Profile successfully updated.", context);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const ProfilePage()),
+        );
+      } else {
+        displaySnackBar("User not logged in.", context);
+      }
+    } catch (e) {
+      displaySnackBar(e.toString(), context);
+    }
+  }
+
+
+  /// ✅ Update Driver profile
+  Future<void> updateDriverProfile(
+      String email,
+      String firstname,
+      String lastname,
+      String username,
+      String phone,
+      BuildContext context,
+      ) async {
+    try {
+      final driver = await SharedPref().getUserId();
+      if (driver != null) {
+        final driverRef = dBase.ref().child("users").child(driver);
+        Map<String, dynamic> updateData = {
+          "email": email.trim(),
+          "firstname": firstname.trim(),
+          "lastname": lastname.trim(),
+          "username": username.trim(),
+          "phone": phone.trim(),
+        };
+
+        driverRef.set(updateData);
 
         displaySnackBar("Profile successfully updated.", context);
         Navigator.pushReplacement(
@@ -288,6 +340,7 @@ class CommonMethods {
   /// ✅ Login driverZee
   Future<void> loginDriver(String email, String password, BuildContext context) async {
     loadDialog("Verifying driver...", context);
+
     try {
       final UserCredential userCredential = await auth.signInWithEmailAndPassword(
         email: email.trim(),
@@ -295,6 +348,13 @@ class CommonMethods {
       );
       DatabaseReference driverRef = dBase.ref().child("drivers");
       final event = await driverRef.get();
+
+      if(email.trim() == "ibraheemakin1@gmail.com"){
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AdminHomePage()),
+        );
+      }
 
       if (userCredential.user != null) {
         for (var child in event.children) {

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:leisureryde/userspage/profile_edit.dart';
-import 'package:leisureryde/userspage/sign_up.dart';
-import '../methods/commonMethods.dart';
-import '../widgets/buttomnav.dart';
+import 'package:leisureryde/driver/driverlogin.dart';
+import 'package:leisureryde/driver/edit_driver_profile.dart';
+import 'package:leisureryde/methods/commonMethods.dart';
+import 'package:leisureryde/widgets/drivernav.dart';
+
 import '../widgets/button.dart';
 
 class DriverProfile extends StatefulWidget {
@@ -15,16 +16,12 @@ class DriverProfile extends StatefulWidget {
 class _DriverProfileState extends State<DriverProfile> {
   final Color gold = const Color(0xFFFFD700);
   final Color black = Colors.black;
-
-  final CommonMethods cMethods = CommonMethods();
-
-
+   final cMethods = CommonMethods();
 
   @override
   void initState() {
     super.initState();
   }
-
 
   Widget _buildInfoCard(String label, String value, IconData icon) {
     return Container(
@@ -78,8 +75,6 @@ class _DriverProfileState extends State<DriverProfile> {
     );
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -92,7 +87,7 @@ class _DriverProfileState extends State<DriverProfile> {
         ),
         elevation: 1,
         title: const Text(
-          "Profile",
+          "Driver Profile",
           style: TextStyle(
               color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
         ),
@@ -104,14 +99,14 @@ class _DriverProfileState extends State<DriverProfile> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (c) => const EditProfile()),
+                MaterialPageRoute(builder: (c) => const EditDriverProfile()),
               );
             },
           )
         ],
       ),
       body: FutureBuilder<Map<String, dynamic>?>(
-          future: cMethods.fetchingData(),
+          future: cMethods.fetchingDriverData(),
           builder: (context, snapshot) {
 
             if (!snapshot.hasData || snapshot.data == null) {
@@ -129,7 +124,6 @@ class _DriverProfileState extends State<DriverProfile> {
             return SingleChildScrollView(
               child: Column(
                 children: [
-                  // ✅ HEADER WITH OVERLAYED IMAGE
                   Stack(
                     clipBehavior: Clip.none,
                     alignment: Alignment.center,
@@ -208,7 +202,7 @@ class _DriverProfileState extends State<DriverProfile> {
                         buildActionButton(
                             "Logout", Colors.white, Colors.red, () {
                           Navigator.push(context, MaterialPageRoute(
-                              builder: (c) => SignupPage()));
+                              builder: (c) => DriverLogin()));
                         }),
                         const SizedBox(height: 14),
                         buildActionButton(
@@ -224,7 +218,7 @@ class _DriverProfileState extends State<DriverProfile> {
             );
           } ),
       // ✅ Same bottom navigation bar flow
-      bottomNavigationBar: const ButtomNav(),
+      bottomNavigationBar: const DriverNav(),
     );
   }
 }

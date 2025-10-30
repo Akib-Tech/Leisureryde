@@ -140,6 +140,7 @@ Future<void> setDefault() async{
 
 
   void bookRide(BuildContext context) async {
+    // show loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -148,11 +149,12 @@ Future<void> setDefault() async{
       ),
     );
 
-    await Future.delayed(const Duration(seconds: 3));
-
-    Navigator.pop(context);
-
     try {
+      // simulate delay (e.g. for route calculation)
+      await Future.delayed(const Duration(seconds: 3));
+      Navigator.pop(context); // close dialog
+
+      // get route details (distance, duration, etc.)
       final distance = await MapRecord().getRouteDetails(
         pickUpLocation!.latitude,
         pickUpLocation!.longitude,
@@ -163,33 +165,80 @@ Future<void> setDefault() async{
       if (distance != null && distance['distance_value'] != null) {
         final distanceInMeters = distance['distance_value']; // e.g. 12000
         final distanceInMiles = distanceInMeters / 1609.34;
-
         final roundedMiles = distanceInMiles.toStringAsFixed(2);
-        final price = distanceInMiles * 2000; // ✅ multiply the double value
-        // Stripe expects amount in cents (integer)
-        final int priceInCents = (price * 100).toInt();
 
-// convert to string for makePayment()
+        // calculate price
+        final price = distanceInMiles * 2000;
+        final int priceInCents = (price * 100).toInt();
         final String priceString = priceInCents.toString();
 
-        bool beforePay = await MapRecord().checkAvailability();
-          final bool payment = await Payment().makePayment(priceString, "usd");
-          if(payment == true){
-            journeyDist = roundedMiles;
-            journeyprice = priceString;
+        // 🔹 Check driver availability first
+        bool driversAvailable = await MapRecord().checkAvailability();
+
+        if (!driversAvailable) {
+          // ❌ No drivers available, show message and return
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("No drivers are currently available. Please try again later."),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return; // stop here, no payment
+        }
+
+        // ✅ If drivers are available, proceed to payment
+        final bool paymentSuccess = await Payment().makePayment(priceString, "usd");
+
+        if (paymentSuccess) {
+          // update state only if payment and driver assignment succeed
+          journeyDist = roundedMiles;
+          journeyprice = priceString;
+
+          availableDrivers = await MapRecord().findAvailableDrivers();
+/*
+         while(availableDrivers.isEmpty){
             availableDrivers = await MapRecord().findAvailableDrivers();
+            if(availableDrivers.isNotEmpty){
+              break;
+            }
+         }
 
-            setState(() {
-              driverFound = true;
-            });
-          }
+*/
+          setState(() {
+            driverFound = true;
+          });
 
-
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Ride booked successfully! Searching for a driver..."),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Payment failed. Please try again."),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Unable to calculate distance. Try again."),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
-
-
     } catch (e) {
+      Navigator.pop(context);
       print('Error booking ride: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 

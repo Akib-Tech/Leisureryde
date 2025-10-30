@@ -6,6 +6,7 @@ import 'package:leisureryde/methods/commonmethods.dart';
 import 'package:leisureryde/methods/driversmethod.dart';
 import 'package:leisureryde/methods/maprecord.dart';
 import 'package:leisureryde/methods/sharedpref.dart';
+import 'package:leisureryde/widgets/drivernav.dart';
 
 class DriverDashboard extends StatefulWidget {
   const DriverDashboard({super.key});
@@ -202,6 +203,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
             }
           }
       ),
+      bottomNavigationBar: const DriverNav(),
 
     );
   }

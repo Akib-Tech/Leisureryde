@@ -59,7 +59,7 @@ class _DriversListScreenState extends State<DriversListScreen> {
               final email = driver['email'] ?? 'No Email';
               final phone = driver['phone'] ?? 'No Phone';
               final status = driver['status'] ?? 'pending';
-              final driverStatus = driver['driverStatus'] ?? 'waiting';
+              final driverStatus = driver['id'] ?? '';
               final lat = driver['lat'] ?? 'unknown';
               final lng = driver['lng'] ?? 'unknown';
               final licenseUrl = driver['licence'] ?? '';
@@ -74,10 +74,10 @@ class _DriversListScreenState extends State<DriversListScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: ListTile(
-                  leading: CircleAvatar(
+                /*  leading: CircleAvatar(
                     backgroundImage: NetworkImage(profile),
                     radius: 26,
-                  ),
+                  ),*/
                   title: Text(
                     name,
                     style: const TextStyle(
@@ -88,7 +88,7 @@ class _DriversListScreenState extends State<DriversListScreen> {
                     children: [
                       Text(email),
                       Text("Phone: $phone"),
-                      Text("Driver Status: $driverStatus"),
+                      Text("Driver Identity: $driverStatus"),
                       Text("Location: ($lat, $lng)"),
                       const SizedBox(height: 4),
                       Row(

@@ -164,7 +164,7 @@ class MapRecord{
   Future<bool> checkAvailability() async{
     List<Map<String,dynamic>?> driverCoordinates = await Drivers().fetchLocation();
     print("Coordinates : $driverCoordinates");
-    if(driverCoordinates == []){
+    if(driverCoordinates.isEmpty){
       return false;
     }else {
       return true;
