@@ -1,12 +1,12 @@
 workflows:
   ios-testflight:
-    name: iOS → TestFlight (Auto-Sign)
+    name: iOS to TestFlight (Auto-Sign)
     max_build_duration: 120
     instance_type: mac_mini_m2
 
     environment:
       groups:
-        - appstore_credentials   # Create this in Codemagic UI (see notes below)
+        - appstore_credentials
       vars:
         BUNDLE_ID: "com.leisureryde.ryde"
         XCODE_WORKSPACE: "Runner.xcworkspace"
@@ -18,32 +18,28 @@ workflows:
       xcode: latest
       cocoapods: default
 
-    triggering:
-      events:
-        - push
-        - tag
-      branch_patterns:
-        - pattern: "main"
-          include: true
-        - pattern: "release/*"
-          include: true
-
     scripts:
       - name: Get Flutter dependencies
         script: |
           flutter pub get
 
-      - name: Patch Podfile for iOS 14.0
+      - name: Patch Podfile for iOS 14
         script: |
-          echo "🛠 Patching Podfile for iOS 14.0..."
-          PODFILE="ios/Podfile"
-
-          if [ ! -f "$PODFILE" ]; then
-            cd ios && pod init && cd ..
+          echo "🔧 Ensuring Podfile exists and setting iOS 14.0..."
+          cd ios
+          if [ ! -f "Podfile" ]; then
+            pod init
           fi
 
-          cat <<'RUBY' >> "$PODFILE"
+          # Ensure platform line exists and is set to 14.0
+          if grep -q "platform :ios" Podfile; then
+            sed -i '' "s/platform :ios.*/platform :ios, '14.0'/" Podfile
+          else
+            echo "platform :ios, '14.0'" >> Podfile
+          fi
 
+          # Append post_install hook for deployment target
+          cat >> Podfile <<'RUBY'
   post_install do |installer|
   installer.pods_project.targets.each do |target|
   flutter_additional_ios_build_settings(target)
@@ -53,29 +49,29 @@ workflows:
   end
   end
   RUBY
-  
-  echo "✅ Podfile patched successfully."
+  cd ..
 
-- name: Install CocoaPods
-  script: |
-    cd ios
-    pod repo update
-    pod install --verbose
-    cd ..
+  - name: Install CocoaPods
+    script: |
+      echo "📦 Installing CocoaPods..."
+      cd ios
+      pod repo update
+      pod install --verbose
+      cd ..
 
-- name: Set iOS Minimum Deployment Target
-  script: |
-    /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 14.0" ios/Runner/Info.plist 2>/dev/null \
-      || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 14.0" ios/Runner/Info.plist
+  - name: Set iOS deployment target in Info.plist
+    script: |
+      echo "📝 Setting MinimumOSVersion to 14.0 in Info.plist"
+      /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 14.0" ios/Runner/Info.plist 2>/dev/null \
+        || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 14.0" ios/Runner/Info.plist
 
-- name: Build and Archive for TestFlight
-  script: |
-    echo "📦 Archiving app for TestFlight upload..."
-    
-    ARCHIVE_PATH="$CM_BUILD_DIR/Runner.xcarchive"
-    IPA_PATH="$CM_BUILD_DIR/ipa"
-    
-    cat > ios/exportOptions.plist <<EOF
+  - name: Archive and Export IPA
+    script: |
+      echo "📦 Archiving app..."
+      ARCHIVE_PATH="$CM_BUILD_DIR/Runner.xcarchive"
+      IPA_PATH="$CM_BUILD_DIR/ipa"
+      
+      cat > ios/exportOptions.plist <<EOF
   <?xml version="1.0" encoding="UTF-8"?>
   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
   <plist version="1.0">
@@ -84,7 +80,6 @@ workflows:
   <key>signingStyle</key><string>automatic</string>
   <key>teamID</key><string>$APPLE_TEAM_ID</string>
   <key>uploadSymbols</key><true/>
-  <key>compileBitcode</key><false/>
   </dict>
   </plist>
   EOF
@@ -94,26 +89,23 @@ workflows:
   -archivePath "$ARCHIVE_PATH" \
   DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
   CODE_SIGN_STYLE=Automatic \
-  archive | xcpretty
+  archive
   
   xcodebuild -exportArchive \
   -archivePath "$ARCHIVE_PATH" \
   -exportOptionsPlist ios/exportOptions.plist \
   -exportPath "$IPA_PATH" \
-  -allowProvisioningUpdates | xcpretty
-  
-  echo "✅ Archive and export complete!"
+  -allowProvisioningUpdates
 
-artifacts:
-  - $CM_BUILD_DIR/ipa/*.ipa
+  artifacts:
+    - $CM_BUILD_DIR/ipa/*.ipa
 
-publishing:
-  email:
-    recipients:
-      - "Ibraheemakin201@gmail.com"
-
-  app_store_connect:
-    api_key: $APP_STORE_CONNECT_PRIVATE_KEY
-    key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
-    issuer_id: $APP_STORE_CONNECT_ISSUER_ID
-    submit_to_testflight: true
+  publishing:
+    email:
+      recipients:
+        - "Ibraheemakin201@gmail.com"
+    app_store_connect:
+      api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+      key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+      issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+      submit_to_testflight: true
