@@ -1,27 +1,36 @@
 workflows:
   ios-testflight:
-    name: iOS to TestFlight (Auto-Sign)
+    name: iOS → TestFlight (Auto-Sign)
     max_build_duration: 120
     instance_type: mac_mini_m2
 
     environment:
       groups:
-        - appstore_credentials
+        - appstore_credentials   # Create this in Codemagic UI (see notes below)
       vars:
         BUNDLE_ID: "com.leisureryde.ryde"
         XCODE_WORKSPACE: "Runner.xcworkspace"
         XCODE_SCHEME: "Runner"
         IOS_DEPLOYMENT_TARGET: "14.0"
-        APPLE_TEAM_ID: "S8LF4BM9D3"  # ✅ Replace with your actual Apple Team ID
+        APPLE_TEAM_ID: $apple_team_id
+
       flutter: stable
       xcode: latest
       cocoapods: default
 
+    triggering:
+      events:
+        - push
+        - tag
+      branch_patterns:
+        - pattern: "main"
+          include: true
+        - pattern: "release/*"
+          include: true
+
     scripts:
       - name: Get Flutter dependencies
         script: |
-          echo "📦 Fetching Flutter dependencies..."
-          flutter clean || true
           flutter pub get
 
       - name: Patch Podfile for iOS 14.0
@@ -33,7 +42,6 @@ workflows:
             cd ios && pod init && cd ..
           fi
 
-          # Append post_install block safely
           cat <<'RUBY' >> "$PODFILE"
 
   post_install do |installer|
@@ -45,25 +53,25 @@ workflows:
   end
   end
   RUBY
+  
   echo "✅ Podfile patched successfully."
 
 - name: Install CocoaPods
   script: |
-    echo "📦 Installing CocoaPods..."
     cd ios
-    pod repo update || true
+    pod repo update
     pod install --verbose
     cd ..
 
-- name: Set iOS Deployment Target
+- name: Set iOS Minimum Deployment Target
   script: |
-    echo "📱 Setting iOS deployment target..."
     /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 14.0" ios/Runner/Info.plist 2>/dev/null \
       || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 14.0" ios/Runner/Info.plist
 
-- name: Archive and Export IPA
+- name: Build and Archive for TestFlight
   script: |
-    echo "🏗 Building iOS archive and exporting IPA..."
+    echo "📦 Archiving app for TestFlight upload..."
+    
     ARCHIVE_PATH="$CM_BUILD_DIR/Runner.xcarchive"
     IPA_PATH="$CM_BUILD_DIR/ipa"
     
@@ -93,6 +101,8 @@ workflows:
   -exportOptionsPlist ios/exportOptions.plist \
   -exportPath "$IPA_PATH" \
   -allowProvisioningUpdates | xcpretty
+  
+  echo "✅ Archive and export complete!"
 
 artifacts:
   - $CM_BUILD_DIR/ipa/*.ipa
