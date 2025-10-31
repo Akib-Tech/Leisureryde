@@ -30,55 +30,29 @@ workflows:
           include: true
 
     scripts:
-      # ========================================
-      # 1. Flutter Setup
-      # ========================================
-      - name: Install Flutter dependencies
+      - name: Get Flutter dependencies
         script: |
           flutter pub get
 
-      # ========================================
-      # 2. Force iOS 14.0 (Podfile + Xcode)
-      # ========================================
-      - name: Set iOS deployment target to 14.0
+      - name: Generate iOS project
+        script: |
+          flutter build ios --release --no-codesign
+
+      - name: Force iOS 14.0 in Podfile
         script: |
           PODFILE="ios/Podfile"
-          PLIST="ios/Runner/Info.plist"
-
-          # --- Ensure Podfile exists ---
-          if [ ! -f "$PODFILE" ]; then
-            echo "Podfile missing! Running pod init..."
-            (cd ios && pod init)
-          fi
-
-          # --- Insert or update platform :ios, "14.0" ---
           if ! grep -q "platform :ios" "$PODFILE"; then
-            echo "Adding platform :ios, '14.0' to Podfile"
             sed -i '' '1s/^/platform :ios, "14.0"\n\n/' "$PODFILE"
           else
-            echo "Updating platform version to 14.0"
             sed -i '' 's/platform :ios.*/platform :ios, "14.0"/' "$PODFILE"
           fi
+          /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 14.0" ios/Runner/Info.plist || true
 
-          # --- Set MinimumOSVersion in Info.plist ---
-          /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 14.0" "$PLIST" 2>/dev/null \
-            || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 14.0" "$PLIST"
-
-          # --- Verify ---
-          echo "Podfile platform:"
-          grep "platform :ios" "$PODFILE"
-          echo "Info.plist MinimumOSVersion:"
-          /usr/libexec/PlistBuddy -c "Print :MinimumOSVersion" "$PLIST"
-
-      # ========================================
-      # 3. Install CocoaPods
-      # ========================================
       - name: Install CocoaPods
         script: |
           cd ios
           pod repo update
           pod install --verbose
-
       # ========================================
       # 4. Build Flutter iOS (no codesign)
       # ========================================
