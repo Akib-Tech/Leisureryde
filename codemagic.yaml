@@ -1,6 +1,6 @@
 workflows:
   build_ios_only:
-    name: Build & Upload iOS App to TestFlight (Automatic Signing)
+    name: Build & Upload iOS App to TestFlight
     environment:
       groups:
         - appstore_credentials
@@ -10,7 +10,7 @@ workflows:
       vars:
         APP_NAME: "LeisureRyde"
         BUNDLE_ID: "com.leisureryde.ryde"
-        APP_STORE_TEAM_ID: "S8LF4BM9D3"   # 👈 your real Apple Team ID
+        APP_STORE_TEAM_ID: "S8LF4BM9D3"   # Your Apple Team ID
 
     scripts:
       - name: Clean project & install dependencies
@@ -19,28 +19,31 @@ workflows:
           flutter clean || true
           flutter pub get || true
 
-      - name: Ensure Podfile exists and iOS platform >= 14.0
+      - name: Ensure Podfile and platform >= 14.0
         script: |
-          echo "🛠 Ensuring Podfile and platform version..."
+          echo "🛠 Ensuring Podfile platform..."
           if [ ! -f "ios/Podfile" ]; then
             cd ios
             pod init
             cd ..
           fi
-          sed -i '' 's/platform :ios.*/platform :ios, '\''14.0'\''/' ios/Podfile || true
+          sed -i '' 's/platform :ios.*/platform :ios, '\''14.0'\''/' ios/Podfile || echo "platform :ios, '14.0'" >> ios/Podfile
+          cat ios/Podfile
 
       - name: Install CocoaPods dependencies
         script: |
-          echo "📦 Installing iOS pods..."
+          echo "📦 Installing pods..."
           cd ios
           pod repo update || true
           pod install || true
           cd ..
 
-      - name: Enable automatic signing
+      - name: Enable automatic code signing
         script: |
-          echo "🔐 Enabling automatic signing for $BUNDLE_ID ..."
-          xcode-project use-profiles --team-id $APP_STORE_TEAM_ID --automatic-signing
+          echo "🔐 Configuring automatic code signing..."
+          automatic-code-signing use-auto-signing \
+            --team-id $APP_STORE_TEAM_ID \
+            --bundle-id $BUNDLE_ID
 
       - name: Build iOS IPA for TestFlight
         script: |
@@ -57,11 +60,7 @@ workflows:
               <string>automatic</string>
               <key>teamID</key>
               <string>$APP_STORE_TEAM_ID</string>
-              <key>destination</key>
-              <string>export</string>
               <key>compileBitcode</key>
-              <false/>
-              <key>uploadBitcode</key>
               <false/>
               <key>uploadSymbols</key>
               <true/>
@@ -73,9 +72,7 @@ workflows:
           xcode-project build-ipa \
             --workspace ios/Runner.xcworkspace \
             --scheme Runner \
-            --export-options-plist ios/exportOptions.plist \
-            --team-id $APP_STORE_TEAM_ID \
-            --automatic-signing
+            --export-options-plist ios/exportOptions.plist
 
     artifacts:
       - build/ios/ipa/*.ipa
