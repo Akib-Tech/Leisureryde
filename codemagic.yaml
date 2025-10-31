@@ -1,38 +1,37 @@
 workflows:
-  build_and_test:
-    name: Build Android & iOS for TestFlight (Auto Signing)
+  build_ios_only:
+    name: Build & Upload iOS App to TestFlight (Automatic Signing)
     environment:
       groups:
-        - appstore_credentials
+        - appstore_credentials      # 👈 Must include your App Store API key vars
       flutter: stable
       xcode: latest
       cocoapods: default
       vars:
         APP_NAME: "LeisureRyde"
-        BUNDLE_ID: "com.leisureryde.app"
-        APP_STORE_TEAM_ID: "S8LF4BM9D3"   # 👈 Replace this with your real Apple Team ID
+        BUNDLE_ID: "com.leisureryde.ios"
+        APP_STORE_TEAM_ID: "S8LF4BM9D3"   # 👈 Replace with your real Apple Team ID
 
     scripts:
-      - name: Clean and get dependencies
+      - name: Clean project & install dependencies
         script: |
-          echo "🧹 Cleaning project..."
+          echo "🧹 Cleaning Flutter project..."
           flutter clean || true
           flutter pub get || true
 
-      - name: Ensure Podfile exists and set platform
+      - name: Ensure Podfile exists and iOS platform >= 14.0
         script: |
-          echo "🛠 Ensuring Podfile exists..."
+          echo "🛠 Ensuring Podfile and platform version..."
           if [ ! -f "ios/Podfile" ]; then
             cd ios
             pod init
             cd ..
           fi
-          echo "📱 Ensuring iOS platform >= 14.0"
           sed -i '' 's/platform :ios.*/platform :ios, '\''14.0'\''/' ios/Podfile || true
 
-      - name: Install CocoaPods
+      - name: Install CocoaPods dependencies
         script: |
-          echo "📦 Installing pods..."
+          echo "📦 Installing iOS pods..."
           cd ios
           pod repo update || true
           pod install || true
@@ -46,14 +45,9 @@ workflows:
             --team-id $APP_STORE_TEAM_ID \
             --signing-style automatic || true
 
-      - name: Build Android APK
+      - name: Build iOS IPA (auto-signing)
         script: |
-          echo "🤖 Building Android..."
-          flutter build apk --release || true
-
-      - name: Build iOS IPA (automatic signing, ignore errors)
-        script: |
-          echo "🍎 Building iOS IPA..."
+          echo "🍎 Building iOS IPA for TestFlight..."
           mkdir -p ios
           cat > ios/exportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -76,14 +70,15 @@ workflows:
           </plist>
           EOF
 
-          flutter build ios --release --no-codesign || true
+          flutter build ios --release --no-codesign
           xcode-project build-ipa \
             --workspace ios/Runner.xcworkspace \
             --scheme Runner \
-            --export-options-plist ios/exportOptions.plist || true
+            --team-id $APP_STORE_TEAM_ID \
+            --automatic-signing \
+            --export-options-plist ios/exportOptions.plist
 
     artifacts:
-      - build/app/outputs/flutter-apk/*.apk
       - build/ios/ipa/*.ipa
 
     publishing:
