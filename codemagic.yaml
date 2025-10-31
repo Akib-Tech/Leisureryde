@@ -1,13 +1,20 @@
 workflows:
-  build_ios:
-    name: Build iOS for TestFlight (Automatic Signing)
+  ios-testflight:
+    name: iOS → TestFlight (Auto-Sign)
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+
     environment:
       groups:
-        - appstore_credentials          # <-- your API-key variables
+        - appstore_credentials        # Your App Store Connect API Key
       vars:
-        APP_NAME: "LeisureRyde"
         BUNDLE_ID: "com.leisureryde.ryde"
-        APP_STORE_TEAM_ID: "S8LF4BM9D3"   # <-- you already have this as apple_team_id
+        XCODE_WORKSPACE: "Runner.xcworkspace"
+        XCODE_SCHEME: "Runner"
+        IOS_DEPLOYMENT_TARGET: "14.0"
+        # Your Team ID (already stored as apple_team_id in Codemagic)
+        APPLE_TEAM_ID: $apple_team_id
+
       flutter: stable
       xcode: latest
       cocoapods: default
@@ -15,59 +22,79 @@ workflows:
     triggering:
       events:
         - push
+        - tag
       branch_patterns:
-        - pattern: main
+        - pattern: 'main'
+          include: true
+        - pattern: 'release/*'
           include: true
 
     scripts:
-      # --------------------------------------------------------------
-      # 1. Flutter deps
-      # --------------------------------------------------------------
-      - name: Flutter clean & get
+      # ========================================
+      # 1. Flutter Setup
+      # ========================================
+      - name: Install Flutter dependencies
         script: |
-          flutter clean
           flutter pub get
 
-      # --------------------------------------------------------------
-      # 2. Force iOS 14.0 in Podfile **and** in the Xcode project
-      # --------------------------------------------------------------
+      # ========================================
+      # 2. Force iOS 14.0 (Podfile + Xcode)
+      # ========================================
       - name: Set iOS deployment target to 14.0
         script: |
-          # ---- Podfile ------------------------------------------------
-          PODFILE=ios/Podfile
+          PODFILE="ios/Podfile"
+          PLIST="ios/Runner/Info.plist"
+
+          # --- Ensure Podfile exists ---
+          if [ ! -f "$PODFILE" ]; then
+            echo "Podfile missing! Running pod init..."
+            (cd ios && pod init)
+          fi
+
+          # --- Insert or update platform :ios, "14.0" ---
           if ! grep -q "platform :ios" "$PODFILE"; then
-            echo "Adding platform line"
-            sed -i '' '1s/^/platform :ios, "14.0"\n/' "$PODFILE"
+            echo "Adding platform :ios, '14.0' to Podfile"
+            sed -i '' '1s/^/platform :ios, "14.0"\n\n/' "$PODFILE"
           else
+            echo "Updating platform version to 14.0"
             sed -i '' 's/platform :ios.*/platform :ios, "14.0"/' "$PODFILE"
           fi
 
-          # ---- Info.plist (Xcode project) -----------------------------
-          PLIST=ios/Runner/Info.plist
-          /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 14.0" "$PLIST" \
+          # --- Set MinimumOSVersion in Info.plist ---
+          /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 14.0" "$PLIST" 2>/dev/null \
             || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 14.0" "$PLIST"
 
-          # ---- Verify -------------------------------------------------
+          # --- Verify ---
           echo "Podfile platform:"
           grep "platform :ios" "$PODFILE"
           echo "Info.plist MinimumOSVersion:"
           /usr/libexec/PlistBuddy -c "Print :MinimumOSVersion" "$PLIST"
 
-      # --------------------------------------------------------------
-      # 3. CocoaPods
-      # --------------------------------------------------------------
+      # ========================================
+      # 3. Install CocoaPods
+      # ========================================
       - name: Install CocoaPods
         script: |
           cd ios
           pod repo update
-          pod install
+          pod install --verbose
 
-      # --------------------------------------------------------------
-      # 4. Build the archive (automatic signing)
-      # --------------------------------------------------------------
-      - name: Archive with automatic signing
+      # ========================================
+      # 4. Build Flutter iOS (no codesign)
+      # ========================================
+      - name: Build Flutter iOS
         script: |
-          # exportOptions.plist (you already create it later – we reuse it)
+          flutter build ios --release --no-codesign
+
+      # ========================================
+      # 5. Archive with Automatic Signing
+      # ========================================
+      - name: Archive App (Automatic Signing)
+        script: |
+          ARCHIVE_PATH="$CM_BUILD_DIR/Runner.xcarchive"
+          IPA_PATH="$CM_BUILD_DIR/ipa"
+
+          # Create exportOptions.plist
           cat > ios/exportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -75,27 +102,29 @@ workflows:
           <dict>
             <key>method</key><string>app-store</string>
             <key>signingStyle</key><string>automatic</string>
-            <key>teamID</key><string>$APP_STORE_TEAM_ID</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
             <key>uploadSymbols</key><true/>
             <key>compileBitcode</key><false/>
           </dict>
           </plist>
           EOF
 
-          flutter build ios --release --no-codesign
-
-          xcodebuild -workspace ios/Runner.xcworkspace \
-                     -scheme Runner \
+          echo "Starting archive..."
+          xcodebuild -workspace "ios/$XCODE_WORKSPACE" \
+                     -scheme "$XCODE_SCHEME" \
                      -configuration Release \
-                     -archivePath $CM_BUILD_DIR/Runner.xcarchive \
-                     DEVELOPMENT_TEAM=$APP_STORE_TEAM_ID \
+                     -archivePath "$ARCHIVE_PATH" \
+                     DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
                      CODE_SIGN_STYLE=automatic \
+                     IPHONEOS_DEPLOYMENT_TARGET="$IOS_DEPLOYMENT_TARGET" \
                      archive
 
-          xcodebuild -archivePath $CM_BUILD_DIR/Runner.xcarchive \
+          echo "Exporting IPA..."
+          xcodebuild -archivePath "$ARCHIVE_PATH" \
                      -exportArchive \
                      -exportOptionsPlist ios/exportOptions.plist \
-                     -exportPath $CM_BUILD_DIR/ipa
+                     -exportPath "$IPA_PATH" \
+                     -allowProvisioningUpdates
 
     artifacts:
       - $CM_BUILD_DIR/ipa/*.ipa
@@ -105,8 +134,14 @@ workflows:
       email:
         recipients:
           - "Ibraheemakin201@gmail.com"
+        notify:
+          success: true
+          failure: true
+
       app_store_connect:
+        auth: api_key
         api_key: $APP_STORE_CONNECT_PRIVATE_KEY
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
+        notify_external_testers: true
