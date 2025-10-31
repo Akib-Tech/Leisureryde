@@ -1,6 +1,6 @@
 workflows:
   ios-testflight:
-    name: iOS → TestFlight (Auto-Sign)
+    name: iOS to TestFlight (Auto-Sign)
     max_build_duration: 120
     instance_type: mac_mini_m2
 
@@ -29,28 +29,18 @@ workflows:
           include: true
 
     scripts:
-      # ========================================
-      # 1. Get Flutter dependencies
-      # ========================================
       - name: Get Flutter dependencies
         script: |
           flutter pub get
 
-      # ========================================
-      # 2. Patch Podfile with post_install to force iOS 14.0
-      # ========================================
       - name: Patch Podfile to enforce iOS 14.0
         script: |
           PODFILE="ios/Podfile"
-
-          # Ensure Podfile exists
           if [ ! -f "$PODFILE" ]; then
-            echo "Podfile missing. Running pod init..."
             (cd ios && pod init)
           fi
 
-          # Append post_install hook (idempotent)
-          cat >> "$PODFILE" <<'EOF'
+          cat >> "$PODFILE" <<EOF
 
 # === FORCE ALL PODS TO iOS 14.0 ===
   post_install do |installer|
@@ -58,42 +48,29 @@ workflows:
   flutter_additional_ios_build_settings(target)
   target.build_configurations.each do |config|
   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
-  config.build_settings['SWIFT_VERSION'] = '5.0'
   end
   end
   end
   EOF
   
-  echo "Patched Podfile with post_install hook for iOS 14.0"
+  echo "Podfile patched with post_install hook"
 
-# ========================================
-# 3. Install CocoaPods (now sees iOS 14.0)
-# ========================================
 - name: Install CocoaPods
   script: |
     cd ios
     pod repo update
     pod install --verbose
 
-# ========================================
-# 4. Ensure Xcode project target is 14.0
-# ========================================
 - name: Set Xcode deployment target
   script: |
-    PLIST="ios/Runner/Info.plist"
-    /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 14.0" "$PLIST" 2>/dev/null \
-      || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 14.0" "$PLIST"
-    echo "Xcode deployment target set to 14.0"
+    /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 14.0" ios/Runner/Info.plist 2>/dev/null \
+      || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 14.0" ios/Runner/Info.plist
 
-# ========================================
-# 5. Archive with Automatic Signing
-# ========================================
 - name: Archive and Export IPA
   script: |
     ARCHIVE_PATH="$CM_BUILD_DIR/Runner.xcarchive"
     IPA_PATH="$CM_BUILD_DIR/ipa"
     
-    # Create exportOptions.plist
     cat > ios/exportOptions.plist <<EOF
   <?xml version="1.0" encoding="UTF-8"?>
   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -103,31 +80,25 @@ workflows:
   <key>signingStyle</key><string>automatic</string>
   <key>teamID</key><string>$APPLE_TEAM_ID</string>
   <key>uploadSymbols</key><true/>
-  <key>compileBitcode</key><false/>
   </dict>
   </plist>
   EOF
   
-  echo "Starting archive..."
   xcodebuild -workspace "ios/$XCODE_WORKSPACE" \
   -scheme "$XCODE_SCHEME" \
-  -configuration Release \
   -archivePath "$ARCHIVE_PATH" \
   DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
   CODE_SIGN_STYLE=automatic \
-  IPHONEOS_DEPLOYMENT_TARGET="$IOS_DEPLOYMENT_TARGET" \
-  archive | xcpretty
+  archive
   
-  echo "Exporting IPA..."
   xcodebuild -archivePath "$ARCHIVE_PATH" \
   -exportArchive \
   -exportOptionsPlist ios/exportOptions.plist \
   -exportPath "$IPA_PATH" \
-  -allowProvisioningUpdates | xcpretty
+  -allowProvisioningUpdates
 
 artifacts:
   - $CM_BUILD_DIR/ipa/*.ipa
-  - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
 publishing:
   email:
