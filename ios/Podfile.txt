@@ -1,0 +1,70 @@
+# Uncomment to define a global platform version
+platform :ios, '14.0'
+
+# Enable frameworks and modular headers for Swift + ObjC compatibility
+use_frameworks!
+use_modular_headers!
+
+# Abort early if Flutter environment isn't configured
+unless File.exist?('../.flutter-plugins-dependencies')
+  puts '⚠️  Missing .flutter-plugins-dependencies file. Run "flutter pub get" first.'
+  exit 1
+end
+
+# The main target for the Flutter app
+target 'Runner' do
+  flutter_application_path = '../'
+
+  # Try to load Flutter plugin dependencies
+  begin
+    eval(File.read(File.join(flutter_application_path, '.flutter-plugins-dependencies')))
+  rescue => e
+    puts "🚨 Error loading Flutter plugin dependencies: #{e}"
+    puts "💡 Run 'flutter pub get' to regenerate .flutter-plugins-dependencies"
+    exit 1
+  end
+
+  # Handle common CocoaPods plugin linking issues
+  use_frameworks! :linkage => :dynamic
+
+  # Prevent common symbol duplication in Firebase or Google SDKs
+  inhibit_all_warnings!
+
+  # Handle pods that might fail under M1/M2 architecture
+  post_install do |installer|
+    installer.pods_project.targets.each do |target|
+      flutter_additional_ios_build_settings(target)
+
+      target.build_configurations.each do |config|
+        # Set minimum iOS deployment target
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
+
+        # Disable bitcode (deprecated by Apple)
+        config.build_settings['ENABLE_BITCODE'] = 'NO'
+
+        # Fix for arm64 simulators on Apple Silicon (M1/M2)
+        config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+
+        # Prevent "duplicate symbols" errors in release builds
+        config.build_settings['ONLY_ACTIVE_ARCH'] = 'NO'
+      end
+    end
+
+    # Fix for Xcode 15+ where modules sometimes fail due to missing headers
+    begin
+      installer.pods_project.build_configurations.each do |config|
+        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+      end
+    rescue => e
+      puts "⚠️  Warning: could not adjust build settings for modular headers: #{e}"
+    end
+  end
+end
+
+# Add resilience for pod repo updates
+begin
+  puts "📦 Updating CocoaPods repo..."
+  system('pod repo update')
+rescue => e
+  puts "⚠️  Pod repo update failed: #{e}. Continuing..."
+end
