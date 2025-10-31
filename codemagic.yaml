@@ -1,6 +1,6 @@
 workflows:
-  build_ios_only:
-    name: Build & Upload iOS App to TestFlight
+  build_ios:
+    name: Build iOS for TestFlight (Automatic Signing)
     environment:
       groups:
         - appstore_credentials
@@ -10,27 +10,27 @@ workflows:
       vars:
         APP_NAME: "LeisureRyde"
         BUNDLE_ID: "com.leisureryde.ryde"
-        APP_STORE_TEAM_ID: "S8LF4BM9D3"   # Your Apple Team ID
+        APP_STORE_TEAM_ID: "S8LF4BM9D3"
 
     scripts:
-      - name: Clean project & install dependencies
+      - name: Clean and get dependencies
         script: |
-          echo "🧹 Cleaning Flutter project..."
+          echo "🧹 Cleaning project..."
           flutter clean || true
           flutter pub get || true
 
-      - name: Ensure Podfile and platform >= 14.0
+      - name: Ensure Podfile exists and set platform
         script: |
-          echo "🛠 Ensuring Podfile platform..."
+          echo "🛠 Ensuring Podfile exists..."
           if [ ! -f "ios/Podfile" ]; then
             cd ios
             pod init
             cd ..
           fi
-          sed -i '' 's/platform :ios.*/platform :ios, '\''14.0'\''/' ios/Podfile || echo "platform :ios, '14.0'" >> ios/Podfile
-          cat ios/Podfile
+          echo "📱 Ensuring iOS platform >= 14.0"
+          sed -i '' 's/platform :ios.*/platform :ios, '\''14.0'\''/' ios/Podfile || true
 
-      - name: Install CocoaPods dependencies
+      - name: Install CocoaPods
         script: |
           echo "📦 Installing pods..."
           cd ios
@@ -38,14 +38,7 @@ workflows:
           pod install || true
           cd ..
 
-      - name: Enable automatic code signing
-        script: |
-          echo "🔐 Configuring automatic code signing..."
-          automatic-code-signing use-auto-signing \
-            --team-id $APP_STORE_TEAM_ID \
-            --bundle-id $BUNDLE_ID
-
-      - name: Build iOS IPA for TestFlight
+      - name: Build iOS IPA
         script: |
           echo "🍎 Building iOS IPA..."
           mkdir -p ios
@@ -58,9 +51,11 @@ workflows:
               <string>app-store</string>
               <key>signingStyle</key>
               <string>automatic</string>
-              <key>teamID</key>
-              <string>$APP_STORE_TEAM_ID</string>
+              <key>destination</key>
+              <string>export</string>
               <key>compileBitcode</key>
+              <false/>
+              <key>uploadBitcode</key>
               <false/>
               <key>uploadSymbols</key>
               <true/>
