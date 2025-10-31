@@ -3,74 +3,103 @@ workflows:
     name: Build iOS for TestFlight (Automatic Signing)
     environment:
       groups:
-        - appstore_credentials
-      flutter: stable
-      xcode: latest
-      cocoapods: default
+        - appstore_credentials          # <-- your API-key variables
       vars:
         APP_NAME: "LeisureRyde"
         BUNDLE_ID: "com.leisureryde.ryde"
-        APP_STORE_TEAM_ID: "S8LF4BM9D3"
+        APP_STORE_TEAM_ID: "S8LF4BM9D3"   # <-- you already have this as apple_team_id
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
 
     scripts:
-      - name: Clean and get dependencies
+      # --------------------------------------------------------------
+      # 1. Flutter deps
+      # --------------------------------------------------------------
+      - name: Flutter clean & get
         script: |
-          echo "🧹 Cleaning project..."
-          flutter clean || true
-          flutter pub get || true
+          flutter clean
+          flutter pub get
 
-      - name: Ensure Podfile exists and set platform
+      # --------------------------------------------------------------
+      # 2. Force iOS 14.0 in Podfile **and** in the Xcode project
+      # --------------------------------------------------------------
+      - name: Set iOS deployment target to 14.0
         script: |
-          echo "🛠 Ensuring Podfile exists..."
-          if [ ! -f "ios/Podfile" ]; then
-            cd ios
-            pod init
-            cd ..
+          # ---- Podfile ------------------------------------------------
+          PODFILE=ios/Podfile
+          if ! grep -q "platform :ios" "$PODFILE"; then
+            echo "Adding platform line"
+            sed -i '' '1s/^/platform :ios, "14.0"\n/' "$PODFILE"
+          else
+            sed -i '' 's/platform :ios.*/platform :ios, "14.0"/' "$PODFILE"
           fi
-          echo "📱 Ensuring iOS platform >= 14.0"
-          sed -i '' 's/platform :ios.*/platform :ios, '\''14.0'\''/' ios/Podfile || true
 
+          # ---- Info.plist (Xcode project) -----------------------------
+          PLIST=ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 14.0" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 14.0" "$PLIST"
+
+          # ---- Verify -------------------------------------------------
+          echo "Podfile platform:"
+          grep "platform :ios" "$PODFILE"
+          echo "Info.plist MinimumOSVersion:"
+          /usr/libexec/PlistBuddy -c "Print :MinimumOSVersion" "$PLIST"
+
+      # --------------------------------------------------------------
+      # 3. CocoaPods
+      # --------------------------------------------------------------
       - name: Install CocoaPods
         script: |
-          echo "📦 Installing pods..."
           cd ios
-          pod repo update || true
-          pod install || true
-          cd ..
+          pod repo update
+          pod install
 
-      - name: Build iOS IPA
+      # --------------------------------------------------------------
+      # 4. Build the archive (automatic signing)
+      # --------------------------------------------------------------
+      - name: Archive with automatic signing
         script: |
-          echo "🍎 Building iOS IPA..."
-          mkdir -p ios
+          # exportOptions.plist (you already create it later – we reuse it)
           cat > ios/exportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-              <key>method</key>
-              <string>app-store</string>
-              <key>signingStyle</key>
-              <string>automatic</string>
-              <key>destination</key>
-              <string>export</string>
-              <key>compileBitcode</key>
-              <false/>
-              <key>uploadBitcode</key>
-              <false/>
-              <key>uploadSymbols</key>
-              <true/>
+            <key>method</key><string>app-store</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>$APP_STORE_TEAM_ID</string>
+            <key>uploadSymbols</key><true/>
+            <key>compileBitcode</key><false/>
           </dict>
           </plist>
           EOF
 
           flutter build ios --release --no-codesign
-          xcode-project build-ipa \
-            --workspace ios/Runner.xcworkspace \
-            --scheme Runner \
-            --export-options-plist ios/exportOptions.plist
+
+          xcodebuild -workspace ios/Runner.xcworkspace \
+                     -scheme Runner \
+                     -configuration Release \
+                     -archivePath $CM_BUILD_DIR/Runner.xcarchive \
+                     DEVELOPMENT_TEAM=$APP_STORE_TEAM_ID \
+                     CODE_SIGN_STYLE=automatic \
+                     archive
+
+          xcodebuild -archivePath $CM_BUILD_DIR/Runner.xcarchive \
+                     -exportArchive \
+                     -exportOptionsPlist ios/exportOptions.plist \
+                     -exportPath $CM_BUILD_DIR/ipa
 
     artifacts:
-      - build/ios/ipa/*.ipa
+      - $CM_BUILD_DIR/ipa/*.ipa
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
     publishing:
       email:
