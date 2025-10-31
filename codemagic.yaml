@@ -35,12 +35,12 @@ workflows:
 
       - name: Patch Podfile to enforce iOS 14.0
         script: |
-          PODFILE="ios/Podfile"
+          PODFILE="・マios/Podfile"
           if [ ! -f "$PODFILE" ]; then
             (cd ios && pod init)
           fi
 
-          cat >> "$PODFILE" <<EOF
+          cat >> "$PODFILE" <<'EOF'
 
 # === FORCE ALL PODS TO iOS 14.0 ===
   post_install do |installer|
@@ -71,7 +71,7 @@ workflows:
     ARCHIVE_PATH="$CM_BUILD_DIR/Runner.xcarchive"
     IPA_PATH="$CM_BUILD_DIR/ipa"
     
-    cat > ios/exportOptions.plist <<EOF
+    cat > ios/exportOptions.plist <<'EOF'
   <?xml version="1.0" encoding="UTF-8"?>
   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
   <plist version="1.0">
