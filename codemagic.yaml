@@ -12,37 +12,30 @@ workflows:
         XCODE_WORKSPACE: "Runner.xcworkspace"
         XCODE_SCHEME: "Runner"
         IOS_DEPLOYMENT_TARGET: "14.0"
-        APPLE_TEAM_ID: $apple_team_id
-
+        APPLE_TEAM_ID: "S8LF4BM9D3"  # ✅ Replace with your actual Apple Team ID
       flutter: stable
       xcode: latest
       cocoapods: default
 
-    triggering:
-      events:
-        - push
-        - tag
-      branch_patterns:
-        - pattern: 'main'
-          include: true
-        - pattern: 'release/*'
-          include: true
-
     scripts:
       - name: Get Flutter dependencies
         script: |
+          echo "📦 Fetching Flutter dependencies..."
+          flutter clean || true
           flutter pub get
 
-      - name: Patch Podfile to enforce iOS 14.0
+      - name: Patch Podfile for iOS 14.0
         script: |
-          PODFILE="・マios/Podfile"
+          echo "🛠 Patching Podfile for iOS 14.0..."
+          PODFILE="ios/Podfile"
+
           if [ ! -f "$PODFILE" ]; then
-            (cd ios && pod init)
+            cd ios && pod init && cd ..
           fi
 
-          cat >> "$PODFILE" <<'EOF'
+          if ! grep -q "post_install do" "$PODFILE"; then
+            cat >> "$PODFILE" <<'EOF'
 
-# === FORCE ALL PODS TO iOS 14.0 ===
   post_install do |installer|
   installer.pods_project.targets.each do |target|
   flutter_additional_ios_build_settings(target)
@@ -52,26 +45,30 @@ workflows:
   end
   end
   EOF
-  
-  echo "Podfile patched with post_install hook"
+  fi
+  echo "✅ Podfile patched successfully."
 
 - name: Install CocoaPods
   script: |
+    echo "📦 Installing CocoaPods..."
     cd ios
-    pod repo update
+    pod repo update || true
     pod install --verbose
+    cd ..
 
-- name: Set Xcode deployment target
+- name: Set iOS Deployment Target
   script: |
+    echo "📱 Setting iOS deployment target..."
     /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 14.0" ios/Runner/Info.plist 2>/dev/null \
       || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 14.0" ios/Runner/Info.plist
 
 - name: Archive and Export IPA
   script: |
+    echo "🏗 Building iOS archive and exporting IPA..."
     ARCHIVE_PATH="$CM_BUILD_DIR/Runner.xcarchive"
     IPA_PATH="$CM_BUILD_DIR/ipa"
     
-    cat > ios/exportOptions.plist <<'EOF'
+    cat > ios/exportOptions.plist <<EOF
   <?xml version="1.0" encoding="UTF-8"?>
   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
   <plist version="1.0">
@@ -80,6 +77,7 @@ workflows:
   <key>signingStyle</key><string>automatic</string>
   <key>teamID</key><string>$APPLE_TEAM_ID</string>
   <key>uploadSymbols</key><true/>
+  <key>compileBitcode</key><false/>
   </dict>
   </plist>
   EOF
@@ -88,14 +86,14 @@ workflows:
   -scheme "$XCODE_SCHEME" \
   -archivePath "$ARCHIVE_PATH" \
   DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-  CODE_SIGN_STYLE=automatic \
-  archive
+  CODE_SIGN_STYLE=Automatic \
+  archive | xcpretty
   
-  xcodebuild -archivePath "$ARCHIVE_PATH" \
-  -exportArchive \
+  xcodebuild -exportArchive \
+  -archivePath "$ARCHIVE_PATH" \
   -exportOptionsPlist ios/exportOptions.plist \
   -exportPath "$IPA_PATH" \
-  -allowProvisioningUpdates
+  -allowProvisioningUpdates | xcpretty
 
 artifacts:
   - $CM_BUILD_DIR/ipa/*.ipa
