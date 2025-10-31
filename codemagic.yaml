@@ -1,6 +1,6 @@
 workflows:
   ios-testflight:
-    name: iOS to TestFlight (Auto Podfile)
+    name: iOS to TestFlight
     max_build_duration: 120
     instance_type: mac_mini_m2
 
@@ -19,38 +19,18 @@ workflows:
       cocoapods: default
 
     scripts:
-      - name: Get Flutter dependencies
+      - name: 📦 Get Flutter dependencies
         script: flutter pub get
 
-      - name: Ensure Podfile exists and set iOS 14.0
-        script: |
-          echo "📱 Checking Podfile..."
-          cd ios
-          if [ ! -f "Podfile" ]; then
-            echo "⚙️ No Podfile found. Creating one..."
-            pod init
-          fi
+      - name: 🏗️ Build iOS app (handles pods automatically)
+        script: flutter build ios --release --no-codesign
 
-          # Ensure platform :ios, '14.0'
-          if grep -q "platform :ios" Podfile; then
-            sed -i '' "s/platform :ios.*/platform :ios, '14.0'/" Podfile
-          else
-            echo "platform :ios, '14.0'" >> Podfile
-          fi
-          cd ..
-
-      - name: Install CocoaPods
-        script: |
-          cd ios
-          pod repo update
-          pod install
-          cd ..
-
-      - name: Build and export IPA
+      - name: 📦 Archive and export IPA
         script: |
           ARCHIVE_PATH="$CM_BUILD_DIR/Runner.xcarchive"
           IPA_PATH="$CM_BUILD_DIR/ipa"
 
+          echo "📦 Archiving app..."
           xcodebuild -workspace "ios/$XCODE_WORKSPACE" \
             -scheme "$XCODE_SCHEME" \
             -archivePath "$ARCHIVE_PATH" \
@@ -58,6 +38,7 @@ workflows:
             CODE_SIGN_STYLE=Automatic \
             archive
 
+          echo "📤 Exporting IPA..."
           xcodebuild -exportArchive \
             -archivePath "$ARCHIVE_PATH" \
             -exportOptionsPlist ios/exportOptions.plist \
@@ -66,6 +47,8 @@ workflows:
 
     artifacts:
       - $CM_BUILD_DIR/ipa/*.ipa
+      - build/ios/ipa
+      - build/ios/iphoneos/*.ipa
 
     publishing:
       app_store_connect:
@@ -73,6 +56,7 @@ workflows:
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
+
       email:
         recipients:
           - "Ibraheemakin201@gmail.com"
