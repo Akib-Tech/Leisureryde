@@ -33,8 +33,8 @@ workflows:
             cd ios && pod init && cd ..
           fi
 
-          if ! grep -q "post_install do" "$PODFILE"; then
-            cat >> "$PODFILE" <<'EOF'
+          # Append post_install block safely
+          cat <<'RUBY' >> "$PODFILE"
 
   post_install do |installer|
   installer.pods_project.targets.each do |target|
@@ -44,8 +44,7 @@ workflows:
   end
   end
   end
-  EOF
-  fi
+  RUBY
   echo "✅ Podfile patched successfully."
 
 - name: Install CocoaPods
@@ -102,7 +101,7 @@ publishing:
   email:
     recipients:
       - "Ibraheemakin201@gmail.com"
-
+a
   app_store_connect:
     api_key: $APP_STORE_CONNECT_PRIVATE_KEY
     key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
