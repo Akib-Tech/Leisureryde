@@ -33,33 +33,42 @@ target 'Runner' do
   # Handle pods that might fail under M1/M2 architecture
   post_install do |installer|
     installer.pods_project.targets.each do |target|
+      # Apply Flutter additional settings
       flutter_additional_ios_build_settings(target)
 
       target.build_configurations.each do |config|
-        # Set minimum iOS deployment target
+        # Consistent minimum iOS version
         config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
 
-        # Disable bitcode (deprecated by Apple)
+        # Disable Bitcode (Apple deprecated it and many pods fail with bitcode enabled)
         config.build_settings['ENABLE_BITCODE'] = 'NO'
 
-        # Fix for arm64 simulators on Apple Silicon (M1/M2)
+        # Avoid arm64 simulator build problems on Apple Silicon CI hosts
+        # Put it in pod build settings, not raw project file edits
         config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
 
-        # Prevent "duplicate symbols" errors in release builds
+        # Force Swift version for pods (set to 5.0 or your app's Swift version)
+        config.build_settings['SWIFT_VERSION'] = '5.0'
+
+        # Ensure reasonable optimization levels:
+        # Debug should be -Onone, Release can be -O or -Owholemodule
+        if config.name =~ /Debug/
+          config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone'
+        else
+          # Use whole-module optimization for release for faster builds and less linking trouble
+          config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Owholemodule'
+        end
+
+        # Prevent certain duplicate symbol / distribution issues
         config.build_settings['ONLY_ACTIVE_ARCH'] = 'NO'
       end
     end
 
-    # Fix for Xcode 15+ where modules sometimes fail due to missing headers
-    begin
-      installer.pods_project.build_configurations.each do |config|
-        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
-      end
-    rescue => e
-      puts "⚠️  Warning: could not adjust build settings for modular headers: #{e}"
+    # Also set project level flags (fallback)
+    installer.pods_project.build_configurations.each do |config|
+      config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES' rescue nil
     end
   end
-end
 
 # Add resilience for pod repo updates
 begin
