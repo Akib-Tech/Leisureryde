@@ -39,7 +39,9 @@ workflows:
           fi
 
           # Append post_install hook for deployment target
-          cat >> Podfile <<'RUBY'
+          echo "Adding post_install block to Podfile..."
+          cat <<'RUBY' >> Podfile
+
   post_install do |installer|
   installer.pods_project.targets.each do |target|
   flutter_additional_ios_build_settings(target)
@@ -51,27 +53,27 @@ workflows:
   RUBY
   cd ..
 
-  - name: Install CocoaPods
-    script: |
-      echo "📦 Installing CocoaPods..."
-      cd ios
-      pod repo update
-      pod install --verbose
-      cd ..
+- name: Install CocoaPods
+  script: |
+    echo "📦 Installing CocoaPods..."
+    cd ios
+    pod repo update
+    pod install --verbose
+    cd ..
 
-  - name: Set iOS deployment target in Info.plist
-    script: |
-      echo "📝 Setting MinimumOSVersion to 14.0 in Info.plist"
-      /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 14.0" ios/Runner/Info.plist 2>/dev/null \
-        || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 14.0" ios/Runner/Info.plist
+- name: Set iOS deployment target in Info.plist
+  script: |
+    echo "📝 Setting MinimumOSVersion to 14.0 in Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 14.0" ios/Runner/Info.plist 2>/dev/null \
+      || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 14.0" ios/Runner/Info.plist
 
-  - name: Archive and Export IPA
-    script: |
-      echo "📦 Archiving app..."
-      ARCHIVE_PATH="$CM_BUILD_DIR/Runner.xcarchive"
-      IPA_PATH="$CM_BUILD_DIR/ipa"
-      
-      cat > ios/exportOptions.plist <<EOF
+- name: Archive and Export IPA
+  script: |
+    echo "📦 Archiving app..."
+    ARCHIVE_PATH="$CM_BUILD_DIR/Runner.xcarchive"
+    IPA_PATH="$CM_BUILD_DIR/ipa"
+    
+    cat > ios/exportOptions.plist <<EOF
   <?xml version="1.0" encoding="UTF-8"?>
   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
   <plist version="1.0">
@@ -97,15 +99,15 @@ workflows:
   -exportPath "$IPA_PATH" \
   -allowProvisioningUpdates
 
-  artifacts:
-    - $CM_BUILD_DIR/ipa/*.ipa
+artifacts:
+  - $CM_BUILD_DIR/ipa/*.ipa
 
-  publishing:
-    email:
-      recipients:
-        - "Ibraheemakin201@gmail.com"
-    app_store_connect:
-      api_key: $APP_STORE_CONNECT_PRIVATE_KEY
-      key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
-      issuer_id: $APP_STORE_CONNECT_ISSUER_ID
-      submit_to_testflight: true
+publishing:
+  email:
+    recipients:
+      - "Ibraheemakin201@gmail.com"
+  app_store_connect:
+    api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+    key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+    issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+    submit_to_testflight: true
