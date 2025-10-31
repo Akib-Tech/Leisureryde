@@ -25,23 +25,21 @@ workflows:
 
       - name: Patch Podfile for iOS 14
         script: |
-          echo "🔧 Ensuring Podfile exists and setting iOS 14.0..."
+          echo "Ensuring Podfile exists and setting iOS 14.0..."
           cd ios
           if [ ! -f "Podfile" ]; then
             pod init
           fi
 
-          # Ensure platform line exists and is set to 14.0
+          # Set platform :ios, '14.0'
           if grep -q "platform :ios" Podfile; then
             sed -i '' "s/platform :ios.*/platform :ios, '14.0'/" Podfile
           else
             echo "platform :ios, '14.0'" >> Podfile
           fi
 
-          # Append post_install hook for deployment target
-          echo "Adding post_install block to Podfile..."
-          cat <<'RUBY' >> Podfile
-
+          # Append post_install block — CORRECT INDENTATION
+          cat >> Podfile <<'RUBY'
   post_install do |installer|
   installer.pods_project.targets.each do |target|
   flutter_additional_ios_build_settings(target)
@@ -55,7 +53,7 @@ workflows:
 
 - name: Install CocoaPods
   script: |
-    echo "📦 Installing CocoaPods..."
+    echo "Installing CocoaPods..."
     cd ios
     pod repo update
     pod install --verbose
@@ -63,17 +61,17 @@ workflows:
 
 - name: Set iOS deployment target in Info.plist
   script: |
-    echo "📝 Setting MinimumOSVersion to 14.0 in Info.plist"
+    echo "Setting MinimumOSVersion to 14.0"
     /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 14.0" ios/Runner/Info.plist 2>/dev/null \
       || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 14.0" ios/Runner/Info.plist
 
 - name: Archive and Export IPA
   script: |
-    echo "📦 Archiving app..."
+    echo "Archiving app..."
     ARCHIVE_PATH="$CM_BUILD_DIR/Runner.xcarchive"
     IPA_PATH="$CM_BUILD_DIR/ipa"
     
-    cat > ios/exportOptions.plist <<EOF
+    cat > ios/exportOptions.plist <<'EOF'
   <?xml version="1.0" encoding="UTF-8"?>
   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
   <plist version="1.0">
@@ -90,11 +88,11 @@ workflows:
   -scheme "$XCODE_SCHEME" \
   -archivePath "$ARCHIVE_PATH" \
   DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-  CODE_SIGN_STYLE=Automatic \
+  CODE_SIGN_STYLE=automatic \
   archive
   
-  xcodebuild -exportArchive \
-  -archivePath "$ARCHIVE_PATH" \
+  xcodebuild -archivePath "$ARCHIVE_PATH" \
+  -exportArchive \
   -exportOptionsPlist ios/exportOptions.plist \
   -exportPath "$IPA_PATH" \
   -allowProvisioningUpdates
@@ -106,6 +104,7 @@ publishing:
   email:
     recipients:
       - "Ibraheemakin201@gmail.com"
+
   app_store_connect:
     api_key: $APP_STORE_CONNECT_PRIVATE_KEY
     key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
