@@ -3,14 +3,14 @@ workflows:
     name: Build & Upload iOS App to TestFlight (Automatic Signing)
     environment:
       groups:
-        - appstore_credentials      # 👈 Must include your App Store API key vars
+        - appstore_credentials
       flutter: stable
       xcode: latest
       cocoapods: default
       vars:
         APP_NAME: "LeisureRyde"
-        BUNDLE_ID: "com.leisureryde.ios"
-        APP_STORE_TEAM_ID: "S8LF4BM9D3"   # 👈 Replace with your real Apple Team ID
+        BUNDLE_ID: "com.leisureryde.ryde"
+        APP_STORE_TEAM_ID: "S8LF4BM9D3"   # 👈 your real Apple Team ID
 
     scripts:
       - name: Clean project & install dependencies
@@ -40,14 +40,11 @@ workflows:
       - name: Enable automatic signing
         script: |
           echo "🔐 Enabling automatic signing for $BUNDLE_ID ..."
-          xcode-project use-profiles \
-            --bundle-id $BUNDLE_ID \
-            --team-id $APP_STORE_TEAM_ID \
-            --signing-style automatic || true
+          xcode-project use-profiles --team-id $APP_STORE_TEAM_ID --automatic-signing
 
-      - name: Build iOS IPA (auto-signing)
+      - name: Build iOS IPA for TestFlight
         script: |
-          echo "🍎 Building iOS IPA for TestFlight..."
+          echo "🍎 Building iOS IPA..."
           mkdir -p ios
           cat > ios/exportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -58,6 +55,8 @@ workflows:
               <string>app-store</string>
               <key>signingStyle</key>
               <string>automatic</string>
+              <key>teamID</key>
+              <string>$APP_STORE_TEAM_ID</string>
               <key>destination</key>
               <string>export</string>
               <key>compileBitcode</key>
@@ -74,9 +73,9 @@ workflows:
           xcode-project build-ipa \
             --workspace ios/Runner.xcworkspace \
             --scheme Runner \
+            --export-options-plist ios/exportOptions.plist \
             --team-id $APP_STORE_TEAM_ID \
-            --automatic-signing \
-            --export-options-plist ios/exportOptions.plist
+            --automatic-signing
 
     artifacts:
       - build/ios/ipa/*.ipa
