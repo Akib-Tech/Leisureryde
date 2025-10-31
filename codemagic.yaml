@@ -1,15 +1,16 @@
 workflows:
   build_and_test:
-    name: Build Android & iOS for TestFlight (Safe Mode)
+    name: Build Android & iOS for TestFlight (Auto Signing)
     environment:
       groups:
-        - appstore_credentials    # Group containing API key, key_id, issuer_id
+        - appstore_credentials
       flutter: stable
       xcode: latest
       cocoapods: default
       vars:
         APP_NAME: "LeisureRyde"
         BUNDLE_ID: "com.leisureryde.app"
+        APP_STORE_TEAM_ID: "S8LF4BM9D3"   # 👈 Replace this with your real Apple Team ID
 
     scripts:
       - name: Clean and get dependencies
@@ -18,36 +19,37 @@ workflows:
           flutter clean || true
           flutter pub get || true
 
-      - name: Analyze code (ignore errors)
+      - name: Ensure Podfile exists and set platform
         script: |
-          echo "🔍 Analyzing code..."
-          flutter analyze || true
-
-      - name: Build Android APK
-        script: |
-          echo "🤖 Building Android release APK..."
-          flutter build apk --release || true
-
-      - name: Ensure Podfile exists and set platform version
-        script: |
-          echo "🛠 Checking Podfile..."
+          echo "🛠 Ensuring Podfile exists..."
           if [ ! -f "ios/Podfile" ]; then
-            echo "⚙️ Podfile missing — creating one..."
             cd ios
             pod init
             cd ..
           fi
-
-          echo "📱 Ensuring iOS platform is at least 14.0..."
+          echo "📱 Ensuring iOS platform >= 14.0"
           sed -i '' 's/platform :ios.*/platform :ios, '\''14.0'\''/' ios/Podfile || true
 
-      - name: Install CocoaPods dependencies
+      - name: Install CocoaPods
         script: |
           echo "📦 Installing pods..."
           cd ios
           pod repo update || true
           pod install || true
           cd ..
+
+      - name: Enable automatic signing
+        script: |
+          echo "🔐 Enabling automatic signing for $BUNDLE_ID ..."
+          xcode-project use-profiles \
+            --bundle-id $BUNDLE_ID \
+            --team-id $APP_STORE_TEAM_ID \
+            --signing-style automatic || true
+
+      - name: Build Android APK
+        script: |
+          echo "🤖 Building Android..."
+          flutter build apk --release || true
 
       - name: Build iOS IPA (automatic signing, ignore errors)
         script: |
