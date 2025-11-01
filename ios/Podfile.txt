@@ -1,0 +1,78 @@
+# Clean, stable Podfile for Flutter iOS build
+
+platform :ios, '14.0'        # ✅ required for google_maps_flutter_ios and modern Firebase pods
+use_frameworks!              # required for most modern Flutter iOS plugins
+use_modular_headers!         # helps resolve transitive header conflicts
+
+# CocoaPods analytics are disabled to speed up CI builds
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+# Flutter root
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "Generated.xcconfig not found. Run 'flutter pub get' first."
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise "FLUTTER_ROOT not set in Generated.xcconfig"
+end
+
+require File.expand_path(File.join(flutter_root, 'packages', 'flutter_tools', 'bin', 'podhelper'))
+
+flutter_ios_podfile_setup
+
+target 'Runner' do
+  use_frameworks!
+  use_modular_headers!
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+end
+
+# 🔧 Harmonize build settings for all pods
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+
+    target.build_configurations.each do |config|
+      # ✅ Minimum deployment version (for google_maps_flutter_ios & Firebase)
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
+
+      # ✅ Disable bitcode (deprecated by Apple, prevents linker failures)
+      config.build_settings['ENABLE_BITCODE'] = 'NO'
+
+      # ✅ Exclude ARM64 for simulators (avoids M1/M2 linking errors)
+      config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+
+      # ✅ Enforce Swift 5 for all pods
+      config.build_settings['SWIFT_VERSION'] = '5.0'
+
+      # ✅ Optimization rules
+      if config.name == 'Debug'
+        config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone'
+      else
+        config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Owholemodule'
+      end
+
+      # ✅ Allow modules with mixed headers (for Firebase, Stripe, etc.)
+      config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+
+      # ✅ Prevent partial architecture builds
+      config.build_settings['ONLY_ACTIVE_ARCH'] = 'NO'
+    end
+  end
+
+  # Fixes “Multiple commands produce” errors in some pod setups
+  installer.pods_project.build_configurations.each do |config|
+    config.build_settings['CODE_SIGN_IDENTITY'] = '-'
+  end
+end
