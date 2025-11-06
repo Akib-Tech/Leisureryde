@@ -1,26 +1,23 @@
+
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_stripe/flutter_stripe.dart' show Stripe, CardField;
-import 'package:leisureryde/admin/driver_list.dart';
-import 'package:leisureryde/admin/home.dart';
-import 'package:leisureryde/admin/user_list.dart';
-import 'package:leisureryde/payment.dart';
-import 'package:leisureryde/userspage/chat.dart';
-import 'package:leisureryde/userspage/rideprocess.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:leisureryde/services/auth_service.dart';
 import 'package:leisureryde/userspage/splash.dart';
+import 'package:provider/provider.dart';
 
-import 'admin/transaction.dart' show TransactionListScreen;
-Future<void> main() async{
+import 'app/app_theme.dart';
+import 'app/service_locator.dart';
+import 'firebase_options.dart';
+import 'viewmodel/theme_view_model.dart';
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  /*
- await FirebaseAppCheck.instance.activate(
-    androidProvider: AndroidProvider.debug,
-    appleProvider: AppleProvider.debug,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-   */
+  await setupLocator();
+  await locator<ThemeViewModel>().init();
+
   Stripe.publishableKey = "pk_test_51OZFSaHgohLFgzD9HlcOJOIBMOSLJjflsszJ2VAFa2nzNohZlSvqFCTTZ7u9bbVvo9wsiYW86VCehXZ2mqQqhwpx009JGSDueI";
   await Stripe.instance.applySettings();
 
@@ -32,15 +29,23 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false, // remove debug banner
-      title: 'LeisureRide',
-      theme: ThemeData(
-        primarySwatch: Colors.red,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => locator<AuthService>()),
+        ChangeNotifierProvider(create: (context) => locator<ThemeViewModel>()),
+      ],
+      child: Consumer<ThemeViewModel>(
+        builder: (context, themeViewModel, child) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'LeisureRyde',
+            theme: AppTheme.lightTheme,       // Provide light theme
+            darkTheme: AppTheme.darkTheme,     // Provide dark theme
+            themeMode: themeViewModel.themeMode, // Set the current mode
+            home: const SplashScreen(),
+          );
+        },
       ),
-      home: SplashScreen()
-
-    );  }
+    );
+  }
 }
-
-

@@ -133,7 +133,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
                           const SizedBox(height: 10),
                           Switch(
                             value: data?['status'],
-                            activeThumbColor: gold,
+                            // activeThumbColor: gold,
+                            activeColor: gold,
                             onChanged: (val) {
                               isOnline = val;
                               setState(() {

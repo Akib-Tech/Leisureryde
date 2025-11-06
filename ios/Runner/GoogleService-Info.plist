@@ -26,5 +26,8 @@
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
 	<string>1:785199365327:ios:9c5881d91131bfb43c8bba</string>
+
+	<key>DATABASE_URL</key>
+	<string>https://leisureryde-3ca0b-default-rtdb.firebaseio.com</string>
 </dict>
 </plist>

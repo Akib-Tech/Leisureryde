@@ -1,6 +1,8 @@
 {
   "project_info": {
     "project_number": "785199365327",
+
+    "firebase_url": "https://leisureryde-3ca0b-default-rtdb.firebaseio.com",
     "project_id": "leisureryde-3ca0b",
     "storage_bucket": "leisureryde-3ca0b.firebasestorage.app"
   },
