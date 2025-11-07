@@ -1,14 +1,13 @@
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:leisureryde/services/auth_service.dart';
-import 'package:leisureryde/userspage/splash.dart';
 import 'package:provider/provider.dart';
 
 import 'app/app_theme.dart';
 import 'app/service_locator.dart';
 import 'firebase_options.dart';
+import 'screens/shared/splash_screen/splash_screen.dart';
 import 'viewmodel/theme_view_model.dart';
 
 Future<void> main() async {
@@ -18,8 +17,6 @@ Future<void> main() async {
   await setupLocator();
   await locator<ThemeViewModel>().init();
 
-  Stripe.publishableKey = "pk_test_51OZFSaHgohLFgzD9HlcOJOIBMOSLJjflsszJ2VAFa2nzNohZlSvqFCTTZ7u9bbVvo9wsiYW86VCehXZ2mqQqhwpx009JGSDueI";
-  await Stripe.instance.applySettings();
 
   runApp(const MyApp());
 }

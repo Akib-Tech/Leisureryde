@@ -4,8 +4,7 @@ import 'dart:io' show Platform;
 
 final String googleMapKey = Platform.isAndroid
     ? "AIzaSyBJIRixyDjY3bFicM3oG36yW0Vaj43FZWs"
-:"AIzaSyBJIRixyDjY3bFicM3oG36yW0Vaj43FZWs";
-    // : "AIzaSyCafvoLv-uc357oW0ceC2PzFsodhdnVlu8";
+    : "AIzaSyCafvoLv-uc357oW0ceC2PzFsodhdnVlu8";
 
 
 
