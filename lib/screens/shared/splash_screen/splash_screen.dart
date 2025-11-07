@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:leisureryde/admin/home.dart';
 import 'package:leisureryde/screens/shared/main_screen/main_screen.dart';
 import 'package:leisureryde/screens/shared/splash_screen/welcome_screen.dart';
-import 'package:leisureryde/userspage/home.dart';
 import 'package:provider/provider.dart';
 import 'package:leisureryde/services/auth_service.dart';
 import 'package:leisureryde/screens/shared/splash_screen/splash_screen.dart';

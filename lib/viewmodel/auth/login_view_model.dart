@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:leisureryde/app/service_locator.dart';
 import 'package:leisureryde/screens/shared/main_screen/main_screen.dart';
-import 'package:leisureryde/userspage/home.dart';
 
 import '../../app/enums.dart';
 import '../../screens/admin/admin_home_page.dart';
