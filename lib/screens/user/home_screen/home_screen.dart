@@ -232,7 +232,7 @@ class HomeScreen extends StatelessWidget {
                 // computed them. If not, HomeViewModel.selectRoute will call
                 // mapViewModel.getDirections to get these.
                 final actualResult = RouteSelectionResult(
-                  origin: initialPickup, // Always use current location as origin
+                  origin: result.origin, // Always use current location as origin
                   destination: result.destination,
                   duration: result.duration,
                   distance: result.distance,
@@ -241,7 +241,7 @@ class HomeScreen extends StatelessWidget {
                   eta: result.eta,
                   polylinePoints: result.polylinePoints,
                 );
-                viewModel.selectRoute(actualResult);
+                viewModel.selectRoute(result.origin, result.destination);
               }
             },
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -291,11 +291,49 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+
   Widget _buildRouteInfoCardContent(BuildContext context, HomeViewModel viewModel) {
     final theme = Theme.of(context);
-    // Use the directionsResult from mapViewModel which has all details
-    final directions = viewModel.mapViewModel.directionsResult!;
-    final etaTime = DateFormat.jm().format(directions.eta!); // Use null-aware operator
+    final directions = viewModel.mapViewModel.directionsResult; // Removed '!'
+
+    // CRITICAL FIX: Add null check for directions
+    if (directions == null) {
+      return Container(
+        key: const ValueKey('LoadingRouteInfo'), // Unique key for AnimatedSwitcher
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: theme.scaffoldBackgroundColor,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 20,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(
+              "Calculating route...",
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: viewModel.cancelRideSelection,
+              child: const Text("Cancel"),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Now 'directions' is guaranteed to be non-null
+    final etaTime = DateFormat.jm().format(directions.eta!); // eta is nullable, so use '!' after null check
 
     return Container(
       key: const ValueKey('RouteInfoCard'),
@@ -380,6 +418,7 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
+
 
   Widget _buildRideSelectionCardContent(BuildContext context, HomeViewModel viewModel) {
     final theme = Theme.of(context);

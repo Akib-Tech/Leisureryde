@@ -106,9 +106,9 @@ class ActivityScreen extends StatelessWidget {
       child: InkWell(
         onTap: () {
           // TODO: Navigate to a RideDetailsScreen(rideId: ride.id)
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Tapped on ride to ${ride.destinationAddress}')),
-          );
+          // ScaffoldMessenger.of(context).showSnackBar(
+          //   SnackBar(content: Text('Tapped on ride to ${ride.destinationAddress}')),
+          // );
         },
         borderRadius: BorderRadius.circular(16),
         child: Padding(

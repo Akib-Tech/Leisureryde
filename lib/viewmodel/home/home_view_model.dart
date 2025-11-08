@@ -1,4 +1,3 @@
-// lib/viewmodel/home/home_view_model.dart
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -17,6 +16,8 @@ import '../../services/ride_service.dart';
 import '../../services/place_service.dart';
 import '../maps/maps_viewmodel.dart';
 import '../payment/payment.dart';
+import 'dart:ui' as ui;
+import 'package:flutter/services.dart';
 
 enum HomeStep {
   initial,
@@ -112,15 +113,10 @@ class HomeViewModel extends ChangeNotifier {
   }
 
   Future<void> _initializeIcons() async {
-    // Ensure assets paths are correct
-    _greenCarIcon = await BitmapDescriptor.fromAssetImage(
-      const ImageConfiguration(size: Size(48, 48)),
-      'assets/icons/bluecar.png',
-    );
-    _goldCarIcon = await BitmapDescriptor.fromAssetImage(
-      const ImageConfiguration(size: Size(48, 48)),
-      'assets/icons/goldcar.png',
-    );
+    const int iconWidth = 96;
+
+    _greenCarIcon = await getMarkerIcon('assets/icons/bluecar.png', iconWidth);
+    _goldCarIcon = await getMarkerIcon('assets/icons/goldcar.png', iconWidth);
   }
 
   // --- Payment State Change Handler ---
@@ -228,7 +224,7 @@ class HomeViewModel extends ChangeNotifier {
     );
     // When selecting a saved place, we create a basic RouteSelectionResult
     // The actual directions (duration, distance, polyline) will be fetched by mapViewModel.getDirections
-    await selectRoute(RouteSelectionResult(origin: origin, destination: dest));
+    await selectRoute(origin, dest);
   }
 
   Future<void> selectRecentDestination(RideDestination dest) async {
@@ -244,8 +240,7 @@ class HomeViewModel extends ChangeNotifier {
       location: LatLng(dest.latitude, dest.longitude),
     );
     // When selecting a recent destination, create a basic RouteSelectionResult
-    await selectRoute(
-        RouteSelectionResult(origin: origin, destination: destination));
+    await selectRoute(origin, destination);
   }
 
   Future<void> _reloadPlaces() async {
@@ -264,17 +259,24 @@ class HomeViewModel extends ChangeNotifier {
   // FLOW CONTROL
   // ---------------------------------------------------------------------------
 
-  Future<void> selectRoute(RouteSelectionResult result) async {
+  Future<void> selectRoute(PlaceDetails origin, PlaceDetails destination) async {
     if (mapViewModel.currentPosition == null) {
-      // Handle error, e.g., show snackbar
+      // Potentially show a snackbar or error here
+      debugPrint("Current position is null, cannot select route.");
       return;
     }
 
-    // Call mapViewModel to get detailed directions, which will update its directionsResult
-    await mapViewModel.getDirections(
-        result.origin.location, result.destination.location);
+    await mapViewModel.getDirections(origin.location, destination.location);
 
-    _currentStep = HomeStep.routePreview;
+    // CRITICAL FIX: Only change step to routePreview IF directions were successfully fetched.
+    if (mapViewModel.directionsResult != null) {
+      _currentStep = HomeStep.routePreview;
+    } else {
+      // If directions failed, revert to initial or show error.
+      debugPrint("Failed to get directions for the selected route.");
+      _currentStep = HomeStep.initial; // Revert to initial step
+      // Optionally show a user-friendly error message via a snackbar.
+    }
     notifyListeners();
   }
 
@@ -491,8 +493,19 @@ class HomeViewModel extends ChangeNotifier {
     _paymentViewModel.resetPayment(); // Reset payment state
     notifyListeners();
   }
+  // Helper function to get a resized custom marker icon
+  Future<BitmapDescriptor> getMarkerIcon(String path, int width) async {
+    final ByteData data = await rootBundle.load(path);
+    final ui.Codec codec = await ui.instantiateImageCodec(
+      data.buffer.asUint8List(),
+      targetWidth: width,
+    );
+    final ui.FrameInfo fi = await codec.getNextFrame();
+    final byteData = await fi.image.toByteData(format: ui.ImageByteFormat.png);
+    final resizedBytes = byteData!.buffer.asUint8List();
+    return BitmapDescriptor.fromBytes(resizedBytes);
+  }
 
-  // ---------------------------------------------------------------------------
   @override
   void dispose() {
     mapViewModel.dispose();
