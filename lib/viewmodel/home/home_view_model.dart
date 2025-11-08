@@ -1,3 +1,4 @@
+// lib/viewmodel/home/home_view_model.dart
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -11,14 +12,17 @@ import '../../models/ride_request_model.dart';
 import '../../models/route_selection.dart';
 import '../../models/saved_places.dart';
 import '../../screens/shared/account_screen/saved_places_screen.dart';
+import '../../screens/user/payment/stripe_checkout.dart';
 import '../../services/ride_service.dart';
 import '../../services/place_service.dart';
 import '../maps/maps_viewmodel.dart';
+import '../payment/payment.dart';
 
 enum HomeStep {
   initial,
   routePreview,
   vehicleSelection,
+  payment, // NEW STEP: Payment comes after vehicle selection
   findingDriver,
   activeTrip,
 }
@@ -27,9 +31,8 @@ class HomeViewModel extends ChangeNotifier {
   final _auth = locator<AuthService>();
   final _db = locator<DatabaseService>();
   final _rideService = locator<RideService>();
-  final FareCalculationService fareService =
-  locator<FareCalculationService>();
-  final MapViewModel mapViewModel = MapViewModel();
+  final FareCalculationService fareService = locator<FareCalculationService>();
+  final MapViewModel mapViewModel = MapViewModel(); // Initialized directly
 
   // USER PROFILE
   UserProfile? _userProfile;
@@ -39,8 +42,8 @@ class HomeViewModel extends ChangeNotifier {
   bool _isLoading = true;
   bool get isLoading => _isLoading;
 
-  bool _isRequestingRide = false;
-  bool get isRequestingRide => _isRequestingRide;
+  bool _isInitiatingRideRequest = false; // Renamed to avoid confusion with payment loading
+  bool get isInitiatingRideRequest => _isInitiatingRideRequest;
 
   HomeStep _currentStep = HomeStep.initial;
   HomeStep get currentStep => _currentStep;
@@ -67,15 +70,20 @@ class HomeViewModel extends ChangeNotifier {
   StreamSubscription<DocumentSnapshot>? _rideListener;
   String? activeDriverId;
 
+  // PAYMENT INTEGRATION
+  final PaymentViewModel _paymentViewModel = locator<PaymentViewModel>(); // Injected YOUR PaymentViewModel
+  PaymentViewModel get paymentViewModel => _paymentViewModel; // Expose PaymentViewModel
+
   HomeViewModel() {
     _initialize();
+    _paymentViewModel.addListener(_onPaymentStateChanged); // Listen to payment state changes
   }
 
   Future<void> _initialize() async {
     _isLoading = true;
     notifyListeners();
 
-    await mapViewModel.initialize();
+    await mapViewModel.initialize(); // Initialize MapViewModel
     await _initializeIcons();
 
     final uid = _auth.currentUser?.uid;
@@ -104,6 +112,7 @@ class HomeViewModel extends ChangeNotifier {
   }
 
   Future<void> _initializeIcons() async {
+    // Ensure assets paths are correct
     _greenCarIcon = await BitmapDescriptor.fromAssetImage(
       const ImageConfiguration(size: Size(48, 48)),
       'assets/icons/bluecar.png',
@@ -114,8 +123,41 @@ class HomeViewModel extends ChangeNotifier {
     );
   }
 
+  // --- Payment State Change Handler ---
+  void _onPaymentStateChanged() {
+    debugPrint("HomeViewModel: Detected PaymentState change: ${_paymentViewModel.state}");
+    switch (_paymentViewModel.state) {
+      case PaymentState.success:
+        debugPrint("Payment successful. Proceeding to ride request.");
+        _requestRideInternal(); // Request ride AFTER successful payment
+        _paymentViewModel.resetPayment(); // Reset payment VM for next use
+        break;
+      case PaymentState.failed:
+        debugPrint("Payment failed: ${_paymentViewModel.errorMessage}");
+        // Optionally show a dialog/snackbar in the UI, which will observe this state
+        // Revert to payment step, UI should show error.
+        _currentStep = HomeStep.payment;
+        notifyListeners();
+        break;
+      case PaymentState.cancelled:
+        debugPrint("Payment cancelled.");
+        // Revert to vehicle selection
+        _currentStep = HomeStep.vehicleSelection;
+        _paymentViewModel.resetPayment();
+        notifyListeners();
+        break;
+      case PaymentState.loading:
+      case PaymentState.processing:
+      case PaymentState.idle:
+      default:
+      // UI will react to paymentViewModel.isLoading for progress indicators
+        notifyListeners(); // Ensure HomeViewModel also updates its listeners
+        break;
+    }
+  }
+
   Future<void> refresh() async {
-    await _initialize();    // calls the private init again
+    await _initialize();
   }
 
   // ---------------------------------------------------------------------------
@@ -134,12 +176,8 @@ class HomeViewModel extends ChangeNotifier {
           markerId: MarkerId(id),
           position: pos,
           icon: (activeDriverId != null && id == activeDriverId)
-              ? _goldCarIcon ??
-              BitmapDescriptor.defaultMarkerWithHue(
-                  BitmapDescriptor.hueOrange)
-              : _greenCarIcon ??
-              BitmapDescriptor.defaultMarkerWithHue(
-                  BitmapDescriptor.hueGreen),
+              ? _goldCarIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange)
+              : _greenCarIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
           rotation: (data['heading'] ?? 0.0).toDouble(),
           flat: true,
           anchor: const Offset(0.5, 0.5),
@@ -160,15 +198,13 @@ class HomeViewModel extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   // PLACES / ROUTES
   // ---------------------------------------------------------------------------
-  Future<void> selectSavedPlace(
-      BuildContext context, String placeName) async {
+  Future<void> selectSavedPlace(BuildContext context, String placeName) async {
     final p = _savedPlaces.firstWhere(
             (pl) => pl.name == placeName,
         orElse: () => SavedPlace(
             id: '', name: '', address: '', latitude: 0, longitude: 0));
 
     if (p.id.isEmpty) {
-      // go add new saved place
       final added = await Navigator.push<SavedPlace>(
         context,
         MaterialPageRoute(
@@ -190,6 +226,8 @@ class HomeViewModel extends ChangeNotifier {
       address: p.address,
       location: LatLng(p.latitude, p.longitude),
     );
+    // When selecting a saved place, we create a basic RouteSelectionResult
+    // The actual directions (duration, distance, polyline) will be fetched by mapViewModel.getDirections
     await selectRoute(RouteSelectionResult(origin: origin, destination: dest));
   }
 
@@ -205,6 +243,7 @@ class HomeViewModel extends ChangeNotifier {
       address: dest.address,
       location: LatLng(dest.latitude, dest.longitude),
     );
+    // When selecting a recent destination, create a basic RouteSelectionResult
     await selectRoute(
         RouteSelectionResult(origin: origin, destination: destination));
   }
@@ -226,8 +265,15 @@ class HomeViewModel extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   Future<void> selectRoute(RouteSelectionResult result) async {
+    if (mapViewModel.currentPosition == null) {
+      // Handle error, e.g., show snackbar
+      return;
+    }
+
+    // Call mapViewModel to get detailed directions, which will update its directionsResult
     await mapViewModel.getDirections(
         result.origin.location, result.destination.location);
+
     _currentStep = HomeStep.routePreview;
     notifyListeners();
   }
@@ -246,55 +292,126 @@ class HomeViewModel extends ChangeNotifier {
     mapViewModel.clearRoute();
     _selectedVehicle = null;
     _currentStep = HomeStep.initial;
+    _paymentViewModel.resetPayment(); // Reset payment state on early exit
     notifyListeners();
   }
 
-  // ---------------------------------------------------------------------------
-  // REQUEST RIDE  (User)
-  // ---------------------------------------------------------------------------
+  // NEW: Method to proceed to the payment screen and initiate Stripe Checkout
+  Future<void> proceedToPayment(BuildContext context) async {
+    if (_selectedVehicle == null || _userProfile == null || mapViewModel.directionsResult == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Missing details for payment.')),
+      );
+      return;
+    }
 
-  Future<void> requestRide(BuildContext context) async {
-    if (_isRequestingRide) return;
-    _isRequestingRide = true;
+    _currentStep = HomeStep.payment; // Move to payment card
+    notifyListeners();
+
+    final d = mapViewModel.directionsResult!;
+    // Ensure durationValue and distanceValue are not null before passing to calculateFare
+    if (d.durationValue == null || d.distanceValue == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Missing route details for fare calculation.')),
+      );
+      _currentStep = HomeStep.routePreview; // Revert
+      notifyListeners();
+      return;
+    }
+
+    final fares = fareService.calculateFare(d.distanceValue!, d.durationValue!);
+    double estimatedFare = fares.getFareForVehicle(_selectedVehicle!);
+
+    // A unique identifier for this booking/ride before it's even created in RideService
+    final tempBookingId = 'temp_ride_${_userProfile!.uid}_${DateTime.now().millisecondsSinceEpoch}';
+
+    final paymentSessionData = await _paymentViewModel.initializePayment(
+      amount: estimatedFare.toStringAsFixed(2), // Amount as string
+      currency: 'USD',
+      userId: _userProfile!.uid,
+      bookingId: tempBookingId, // This will be stored in Firestore 'payments' collection
+      metadata: {
+        'vehicleType': _selectedVehicle!,
+        'destinationAddress': d.endAddress,
+      },
+    );
+
+    if (paymentSessionData != null && paymentSessionData['checkoutUrl'] != null) {
+      // Launch Stripe Checkout WebView
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (ctx) => StripeCheckoutScreen(
+            checkoutUrl: paymentSessionData['checkoutUrl']!,
+            sessionId: paymentSessionData['sessionId']!,
+            paymentId: paymentSessionData['paymentId']!,
+            onPaymentSuccess: _paymentViewModel.handlePaymentSuccess,
+            onPaymentCancelled: _paymentViewModel.handlePaymentCancelled,
+          ),
+        ),
+      );
+    } else {
+      // Payment initialization failed, revert
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_paymentViewModel.errorMessage ?? 'Failed to initialize payment.')),
+      );
+      _currentStep = HomeStep.vehicleSelection; // Go back if initialization failed
+      _paymentViewModel.resetPayment();
+      notifyListeners();
+    }
+  }
+
+
+  // ---------------------------------------------------------------------------
+  // REQUEST RIDE (User) - Called AFTER Payment is successful
+  // ---------------------------------------------------------------------------
+  Future<void> _requestRideInternal() async {
+    _isInitiatingRideRequest = true;
     notifyListeners();
 
     try {
       if (_selectedVehicle == null ||
           _userProfile == null ||
-          mapViewModel.directionsResult == null) {
-        throw Exception("Cannot request ride – incomplete data.");
+          mapViewModel.directionsResult == null ||
+          mapViewModel.currentPosition == null ||
+          _paymentViewModel.paymentDetails == null) {
+        throw Exception("Cannot request ride – missing payment or ride data.");
       }
 
       final d = mapViewModel.directionsResult!;
-      final fares =
-      fareService.calculateFare(d.distanceValue, d.durationValue);
-      double fare;
-      switch (_selectedVehicle!) {
-        case 'Leisure Plus':
-          fare = fares.leisurePlus;
-          break;
-        case 'Leisure Exec':
-          fare = fares.leisureExec;
-          break;
-        default:
-          fare = fares.leisureComfort;
+      // Ensure durationValue and distanceValue are not null
+      if (d.durationValue == null || d.distanceValue == null) {
+        throw Exception("Missing route details for fare calculation during ride request.");
       }
 
+      final fares = fareService.calculateFare(d.distanceValue!, d.durationValue!);
+      double calculatedFare = fares.getFareForVehicle(_selectedVehicle!);
+
+      // Extract payment details from PaymentViewModel
+      final String? paymentId = _paymentViewModel.currentPaymentId;
+      final String? stripePaymentIntentId = _paymentViewModel.paymentDetails!['stripePaymentIntent'];
+      // Convert amountTotal from cents to dollars for storage in RideRequest
+      final double? amountTotalCents = (_paymentViewModel.paymentDetails!['amountTotal'] as double);
+      final String? amountPaid = amountTotalCents != null ? (amountTotalCents / 100.0).toStringAsFixed(2) : null;
+
+
       final rideRequest = RideRequest(
-        id: '',
+        id: '', // Firestore will generate this
         userId: _userProfile!.uid,
         vehicleType: _selectedVehicle!,
         status: RideStatus.pending,
         passengerName: _userProfile!.fullName,
-        passengerRating: 5.0,
-        pickupLocation: LatLng(mapViewModel.currentPosition!.latitude,
-            mapViewModel.currentPosition!.longitude),
-        destinationLocation: d.polylinePoints.last,
+        passengerRating: _userProfile!.rating, // Use actual user rating
+        pickupLocation: LatLng(mapViewModel.currentPosition!.latitude, mapViewModel.currentPosition!.longitude),
+        destinationLocation: d.polylinePoints.last, // Use endLocation from DirectionsResult
         pickupAddress: d.startAddress,
         destinationAddress: d.endAddress,
-        fare: fare,
-        distance: d.distanceValue * 0.000621371,
+        fare: calculatedFare,
+        distance: d.distanceValue! / 1000.0, // distance in km
         createdAt: DateTime.now(),
+        paymentId: paymentId,
+        stripePaymentIntentId: stripePaymentIntentId,
+        amountPaid: amountPaid,
       );
 
       final id = await _db.createRideRequest(rideRequest);
@@ -302,13 +419,12 @@ class HomeViewModel extends ChangeNotifier {
       _currentStep = HomeStep.findingDriver;
       _listenForRideStatus(id!);
     } catch (e) {
-      debugPrint("Ride creation error: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("An error occurred: $e")),
-      );
-      _currentStep = HomeStep.initial;
+      debugPrint("Ride creation error after payment: $e");
+      // On error, revert to payment or vehicle selection
+      _currentStep = HomeStep.payment; // Or HomeStep.vehicleSelection
+      // Optionally update payment status in Firestore if ride creation fails after payment
     } finally {
-      _isRequestingRide = false;
+      _isInitiatingRideRequest = false;
       notifyListeners();
     }
   }
@@ -322,13 +438,18 @@ class HomeViewModel extends ChangeNotifier {
     _rideListener = _rideService.getRideStream(id).listen((snap) {
       if (!snap.exists) return;
       final data = snap.data() as Map<String, dynamic>;
-      final status = data['status'];
-      if (status == 'accepted') {
+      final statusString = data['status'] as String;
+      final status = RideStatus.values.firstWhere((e) => e.name == statusString, orElse: () => RideStatus.pending);
+
+      debugPrint("Ride $id status updated to: $status");
+
+      if (status == RideStatus.accepted) {
         activeDriverId = data['driverId'];
         _currentStep = HomeStep.activeTrip;
-      } else if (status == 'cancelled' ||
-          status == 'cancelled_by_driver' ||
-          status == 'completed') {
+      } else if (status == RideStatus.cancelled ||
+          status == RideStatus.cancelled_by_driver ||
+          status == RideStatus.completed ||
+          status == RideStatus.failed) {
         _resetRide();
       }
       notifyListeners();
@@ -347,6 +468,19 @@ class HomeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // **The missing `cancelPayment` method, now fully implemented:**
+  void cancelPayment() {
+    debugPrint("HomeViewModel: cancelPayment called.");
+    // If a payment process was active, inform the PaymentViewModel it was cancelled
+    if (_paymentViewModel.state == PaymentState.loading || _paymentViewModel.state == PaymentState.processing) {
+      _paymentViewModel.handlePaymentCancelled(_paymentViewModel.currentPaymentId ?? 'unknown_payment_id');
+    }
+    // Always revert to vehicle selection when backing out of payment
+    _currentStep = HomeStep.vehicleSelection;
+    notifyListeners();
+  }
+
+
   // Reset state once ride ends/cancels
   void _resetRide() {
     _rideId = null;
@@ -354,6 +488,8 @@ class HomeViewModel extends ChangeNotifier {
     _selectedVehicle = null;
     mapViewModel.clearRoute();
     _currentStep = HomeStep.initial;
+    _paymentViewModel.resetPayment(); // Reset payment state
+    notifyListeners();
   }
 
   // ---------------------------------------------------------------------------
@@ -362,6 +498,8 @@ class HomeViewModel extends ChangeNotifier {
     mapViewModel.dispose();
     _driverSub?.cancel();
     _rideListener?.cancel();
+    _paymentViewModel.removeListener(_onPaymentStateChanged); // Remove listener
+    _paymentViewModel.dispose(); // Dispose the injected ViewModel
     super.dispose();
   }
 }

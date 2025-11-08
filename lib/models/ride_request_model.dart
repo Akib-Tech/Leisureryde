@@ -8,7 +8,10 @@ enum RideStatus {
   enroute,
   ongoing,
   completed,
+  failed,
+  cancelled_by_driver,
   cancelled;
+
 
   static RideStatus fromString(String status) {
     return RideStatus.values.firstWhere(
@@ -38,6 +41,10 @@ class RideRequest {
   final String? driverId;
   final String? driverName;
   final String? driverPhone;
+  final double? driverRating;
+  final String? amountPaid;
+  final String? paymentId;
+  final String? stripePaymentIntentId;
 
   RideRequest({
     required this.id,
@@ -53,9 +60,14 @@ class RideRequest {
     required this.fare,
     required this.distance,
     required this.createdAt,
+
+    required this.amountPaid,
+    required this.paymentId,
+    required this.stripePaymentIntentId,
     this.driverId,
     this.driverName,
     this.driverPhone,
+    this.driverRating,
   });
 
   Map<String, dynamic> toMap() {
@@ -72,10 +84,13 @@ class RideRequest {
       'fare': fare,
       'distance': distance,
       'createdAt': Timestamp.fromDate(createdAt),
-      // ✨ FIX 2: These fields will be added to Firestore only if they exist.
+      'amountPaid': amountPaid,
+      'paymentId': paymentId,
+      'stripePaymentIntentId': stripePaymentIntentId,
       if (driverId != null) 'driverId': driverId,
       if (driverName != null) 'driverName': driverName,
       if (driverPhone != null) 'driverPhone': driverPhone,
+      if(driverRating!=null) 'driverRating': driverRating
     };
   }
 
@@ -101,10 +116,13 @@ class RideRequest {
       fare: (data['fare'] as num?)?.toDouble() ?? 0.0,
       distance: (data['distance'] as num?)?.toDouble() ?? 0.0,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      // ✨ FIX 3: Safely parse the optional driver fields from Firestore.
+      amountPaid: (data['amountPaid']),
+      paymentId: data['paymentId'],
+      stripePaymentIntentId: data['stripePaymentIntentId'],
       driverId: data['driverId'],
       driverName: data['driverName'],
       driverPhone: data['driverPhone'],
+      driverRating: data['driverRating'],
     );
   }
 }

@@ -20,7 +20,7 @@
 
 
     <application
-        android:label="leisureryde"
+        android:label="Leisure Ryde"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 

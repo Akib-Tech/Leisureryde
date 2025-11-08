@@ -42,4 +42,21 @@ class CalculatedFare {
     required this.leisurePlus,
     required this.leisureExec,
   });
+
+  /// Retrieves the fare for a specific vehicle type.
+  /// This method was missing and caused the error.
+  double getFareForVehicle(String vehicleType) {
+    switch (vehicleType) {
+      case 'Leisure Comfort':
+        return leisureComfort;
+      case 'Leisure Plus':
+        return leisurePlus;
+      case 'Leisure Exec':
+        return leisureExec;
+      default:
+      // Handle unexpected vehicle type gracefully, e.g., throw error or return comfort fare
+      // For robustness, you might log this or throw a more specific exception.
+        return leisureComfort;
+    }
+  }
 }

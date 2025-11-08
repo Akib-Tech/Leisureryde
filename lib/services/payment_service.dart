@@ -1,6 +1,8 @@
+// lib/services/payment_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart'; // For debugPrint
 
 class PaymentService {
   static const String _secretKey = "sk_test_51OZFSaHgohLFgzD9XaARhprvgpkTqmJUWwtFkXPTgyaajA0TuuPUSFVFLmHNAdnyKbcg68uhmz3RVtPqy6tMKt1C00AuREqvxV";
@@ -8,10 +10,10 @@ class PaymentService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Future<Map<String, dynamic>?> createCheckoutSession({
-    required String amount,
+    required String amount, // Amount as a string, e.g., "12.34"
     required String currency,
     required String userId,
-    required String bookingId,
+    required String bookingId, // This is your rideId or a temporary booking ID
     Map<String, dynamic>? metadata,
   }) async {
     try {
@@ -26,12 +28,16 @@ class PaymentService {
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
         'metadata': metadata ?? {},
+        'paymentMethod': 'card', // Assuming card for Stripe Checkout
       });
+
+      // Convert amount string to integer cents for Stripe API
+      final int amountInCents = (double.parse(amount) * 100).toInt();
 
       final Map<String, String> requestBody = {
         'payment_method_types[]': 'card',
         'line_items[0][price_data][currency]': currency,
-        'line_items[0][price_data][unit_amount]': amount,
+        'line_items[0][price_data][unit_amount]': amountInCents.toString(),
         'line_items[0][price_data][product_data][name]': 'Leisure Ride Service',
         'line_items[0][quantity]': '1',
         'mode': 'payment',
@@ -53,7 +59,6 @@ class PaymentService {
         });
       }
 
-      // Create Stripe session
       final response = await http.post(
         Uri.parse("https://api.stripe.com/v1/checkout/sessions"),
         headers: {
@@ -65,8 +70,6 @@ class PaymentService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-
-        // Update Firestore with Stripe session ID
         await paymentDocRef.update({
           'stripeSessionId': data['id'],
           'checkoutUrl': data['url'],
@@ -76,21 +79,20 @@ class PaymentService {
           'paymentId': paymentId,
           'sessionId': data['id'],
           'checkoutUrl': data['url'],
-          'amount': data['amount_total'],
+          'amount': data['amount_total'], // in cents
           'currency': data['currency'],
         };
       } else {
-        print("Checkout Session Error: ${response.body}");
+        debugPrint("Checkout Session Error: ${response.body}");
         await paymentDocRef.update({'status': 'failed', 'error': response.body});
         return null;
       }
     } catch (e) {
-      print("Create Checkout Session Exception: $e");
+      debugPrint("Create Checkout Session Exception: $e");
       return null;
     }
   }
 
-  /// Verify payment status from Stripe
   Future<Map<String, dynamic>?> verifyPaymentSession(String sessionId) async {
     try {
       final response = await http.get(
@@ -105,49 +107,43 @@ class PaymentService {
         return {
           'paymentStatus': data['payment_status'],
           'paymentIntent': data['payment_intent'],
-          'amountTotal': data['amount_total'],
+          'amountTotal': data['amount_total'], // in cents
           'customerEmail': data['customer_details']?['email'],
           'metadata': data['metadata'],
         };
       } else {
-        print("Verify Session Error: ${response.body}");
+        debugPrint("Verify Session Error: ${response.body}");
         return null;
       }
     } catch (e) {
-      print("Verify Payment Exception: $e");
+      debugPrint("Verify Payment Exception: $e");
       return null;
     }
   }
 
-  /// Update payment status in Firestore
-  /// Update payment status in Firestore
   Future<void> updatePaymentStatus({
     required String paymentId,
     required String status,
     Map<String, dynamic>? additionalData,
   }) async {
     try {
-      // Use Map<String, Object> instead of Map<String, dynamic>
-      final Map<String, Object> updateData = {
+      final Map<String, Object?> updateData = { // Use Object? for nullable values
         'status': status,
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
       if (additionalData != null) {
-        // Convert dynamic values to Object and add them
         additionalData.forEach((key, value) {
-          if (value != null) {
-            updateData[key] = value as Object;
-          }
+          updateData[key] = value;
         });
       }
 
       await _firestore.collection('payments').doc(paymentId).update(updateData);
     } catch (e) {
-      print("Update Payment Status Exception: $e");
+      debugPrint("Update Payment Status Exception: $e");
     }
   }
-  /// Listen to payment status changes (Real-time)
+
   Stream<DocumentSnapshot> listenToPaymentStatus(String paymentId) {
     return _firestore.collection('payments').doc(paymentId).snapshots();
   }

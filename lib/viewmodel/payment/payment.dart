@@ -1,30 +1,28 @@
+// lib/viewmodel/payment/payment_view_model.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:leisureryde/app/service_locator.dart';
-
 import '../../services/payment_service.dart';
 
 enum PaymentState {
   idle,
-  loading,
-  processing,
+  loading, // Initializing session with backend
+  processing, // WebView launched or awaiting webhook
   success,
   failed,
   cancelled,
 }
 
 class PaymentViewModel extends ChangeNotifier {
-  final  _paymentService = locator<PaymentService>();
+  final PaymentService _paymentService = locator<PaymentService>();
 
-  // State management
   PaymentState _state = PaymentState.idle;
   String? _errorMessage;
   String? _currentPaymentId;
-  Map<String, dynamic>? _paymentDetails;
+  Map<String, dynamic>? _paymentDetails; // Stores verified details
   StreamSubscription<DocumentSnapshot>? _paymentListener;
 
-  // Getters
   PaymentState get state => _state;
   String? get errorMessage => _errorMessage;
   String? get currentPaymentId => _currentPaymentId;
@@ -32,10 +30,10 @@ class PaymentViewModel extends ChangeNotifier {
   bool get isLoading => _state == PaymentState.loading || _state == PaymentState.processing;
 
   Future<Map<String, dynamic>?> initializePayment({
-    required String amount,
+    required String amount, // e.g., "12.34"
     required String currency,
     required String userId,
-    required String bookingId,
+    required String bookingId, // Use ride ID here
     Map<String, dynamic>? metadata,
   }) async {
     _updateState(PaymentState.loading);
@@ -57,8 +55,8 @@ class PaymentViewModel extends ChangeNotifier {
       }
 
       _currentPaymentId = sessionData['paymentId'] as String;
-      _startPaymentListener(_currentPaymentId!);
-      _updateState(PaymentState.processing);
+      _startPaymentListener(_currentPaymentId!); // Start listening to Firestore
+      _updateState(PaymentState.processing); // Move to processing as WebView is about to launch
 
       return sessionData;
     } catch (e) {
@@ -68,9 +66,8 @@ class PaymentViewModel extends ChangeNotifier {
     }
   }
 
-  /// Start listening to Firestore payment status changes
   void _startPaymentListener(String paymentId) {
-    _paymentListener?.cancel(); // Cancel any existing listener
+    _paymentListener?.cancel();
 
     _paymentListener = _paymentService.listenToPaymentStatus(paymentId).listen(
           (snapshot) {
@@ -79,11 +76,11 @@ class PaymentViewModel extends ChangeNotifier {
         final data = snapshot.data() as Map<String, dynamic>;
         final status = data['status'] as String;
 
-        print("📡 Payment status update: $status");
+        debugPrint("📡 Payment status update: $status for $paymentId (from Firestore listener)");
 
         switch (status) {
           case 'completed':
-            _paymentDetails = data;
+            _paymentDetails = data; // Store details from Firestore (could include Stripe's paymentIntentId, etc.)
             _updateState(PaymentState.success);
             _paymentListener?.cancel();
             break;
@@ -98,7 +95,7 @@ class PaymentViewModel extends ChangeNotifier {
             break;
           case 'pending':
           case 'processing':
-            _updateState(PaymentState.processing);
+            _updateState(PaymentState.processing); // Keep as processing if still pending/waiting
             break;
         }
       },
@@ -109,18 +106,19 @@ class PaymentViewModel extends ChangeNotifier {
     );
   }
 
-  /// Handle successful payment from WebView
   Future<void> handlePaymentSuccess(String sessionId, String paymentId) async {
-    _updateState(PaymentState.processing);
+    debugPrint("PaymentViewModel: handlePaymentSuccess called for session $sessionId, payment $paymentId");
+    _updateState(PaymentState.processing); // Stay in processing while verifying
 
     try {
       final verificationResult = await _paymentService.verifyPaymentSession(sessionId);
 
       if (verificationResult == null) {
+        // If Stripe verification fails, update Firestore payment status
         await _paymentService.updatePaymentStatus(
           paymentId: paymentId,
           status: 'failed',
-          additionalData: {'error': 'Verification failed'},
+          additionalData: {'error': 'Verification failed after webview success'},
         );
         _errorMessage = "Payment verification failed";
         _updateState(PaymentState.failed);
@@ -128,30 +126,41 @@ class PaymentViewModel extends ChangeNotifier {
       }
 
       final paymentStatus = verificationResult['paymentStatus'] as String;
+      final stripePaymentIntent = verificationResult['paymentIntent'] as String?;
+      final amountTotal = verificationResult['amountTotal'] as int?; // in cents
+      final customerEmail = verificationResult['customerEmail'] as String?;
 
       if (paymentStatus == 'paid') {
-        // Update Firestore
+        // Update Firestore payment status to completed
         await _paymentService.updatePaymentStatus(
           paymentId: paymentId,
           status: 'completed',
           additionalData: {
-            'stripePaymentIntent': verificationResult['paymentIntent'],
-            'amountTotal': verificationResult['amountTotal'],
-            'customerEmail': verificationResult['customerEmail'],
+            'stripeSessionId': sessionId, // Store session ID in payment record
+            'stripePaymentIntent': stripePaymentIntent,
+            'amountTotalCents': amountTotal, // Store amount in cents from Stripe
+            'customerEmail': customerEmail,
             'verifiedAt': FieldValue.serverTimestamp(),
           },
         );
 
-        _paymentDetails = verificationResult;
+        _paymentDetails = { // Store details for HomeViewModel
+          'paymentId': paymentId,
+          'stripeSessionId': sessionId,
+          'stripePaymentIntent': stripePaymentIntent,
+          'amountTotal': amountTotal,
+          'customerEmail': customerEmail,
+        };
         _updateState(PaymentState.success);
       } else {
+        // Payment might still be processing or failed on Stripe's side
         await _paymentService.updatePaymentStatus(
           paymentId: paymentId,
-          status: 'pending',
+          status: 'pending', // Or 'failed' depending on specific Stripe status
           additionalData: {'stripeStatus': paymentStatus},
         );
-        _errorMessage = "Payment pending: $paymentStatus";
-        _updateState(PaymentState.processing);
+        _errorMessage = "Payment pending or failed: $paymentStatus";
+        _updateState(PaymentState.processing); // Keep processing or move to failed
       }
     } catch (e) {
       await _paymentService.updatePaymentStatus(
@@ -164,8 +173,8 @@ class PaymentViewModel extends ChangeNotifier {
     }
   }
 
-  /// Handle cancelled payment from WebView
   Future<void> handlePaymentCancelled(String paymentId) async {
+    debugPrint("PaymentViewModel: handlePaymentCancelled called for payment $paymentId");
     await _paymentService.updatePaymentStatus(
       paymentId: paymentId,
       status: 'cancelled',
@@ -173,7 +182,6 @@ class PaymentViewModel extends ChangeNotifier {
     _updateState(PaymentState.cancelled);
   }
 
-  /// Reset payment state
   void resetPayment() {
     _paymentListener?.cancel();
     _state = PaymentState.idle;
@@ -183,7 +191,6 @@ class PaymentViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Update state and notify listeners
   void _updateState(PaymentState newState) {
     _state = newState;
     notifyListeners();
