@@ -1,9 +1,7 @@
-// In: lib/models/driver_profile.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:leisureryde/models/user_profile.dart'; // Make sure this path is correct
-
-import '../app/enums.dart'; // Make sure this path is correct
+import 'package:leisureryde/models/user_profile.dart';
+import '../app/enums.dart';
 
 class DriverProfile extends UserProfile {
   final String licenseUrl;
@@ -13,6 +11,10 @@ class DriverProfile extends UserProfile {
   final String carModel;
   final String licensePlate;
   final Timestamp? lastWentOnlineAt;
+
+  final String vehicleRegistrationUrl;
+  final String proofOfInsuranceUrl;
+
 
   DriverProfile({
     required super.uid,
@@ -30,9 +32,11 @@ class DriverProfile extends UserProfile {
     required this.carModel,
     required this.licensePlate,
     this.lastWentOnlineAt,
+    required super.pushNotificationsEnabled, // NEW: Pass to super constructor
+    this.vehicleRegistrationUrl = '',
+    this.proofOfInsuranceUrl = '',
   }) : super(role: UserRole.driver);
 
-  // The factory constructor needs to pass the profile image URL to the main constructor
   factory DriverProfile.fromFirestore(DocumentSnapshot doc) {
     Map data = doc.data() as Map<String, dynamic>;
     return DriverProfile(
@@ -51,6 +55,10 @@ class DriverProfile extends UserProfile {
       carModel: data['carModel'] ?? '',
       licensePlate: data['licensePlate'] ?? '',
       lastWentOnlineAt: data['lastWentOnlineAt'] as Timestamp?,
+      vehicleRegistrationUrl: data['vehicleRegistrationUrl'] ?? '',
+      proofOfInsuranceUrl: data['proofOfInsuranceUrl'] ?? '',
+      pushNotificationsEnabled: data['pushNotificationsEnabled'] ?? true, // NEW
+
     );
   }
 
@@ -61,9 +69,8 @@ class DriverProfile extends UserProfile {
     String? lastName,
     String? email,
     String? phone,
-    UserRole? role, // Add this to match the parent's signature
+    UserRole? role,
     String? profileImageUrl,
-
     String? licenseUrl,
     bool? isApproved,
     bool? isOnline,
@@ -73,6 +80,10 @@ class DriverProfile extends UserProfile {
     String? licensePlate,
     Timestamp? lastWentOnlineAt,
     bool? isBlocked,
+    String? vehicleRegistrationUrl,
+    String? proofOfInsuranceUrl,
+    bool? pushNotificationsEnabled, // NEW
+
   }) {
     return DriverProfile(
       uid: uid ?? this.uid,
@@ -80,7 +91,7 @@ class DriverProfile extends UserProfile {
       lastName: lastName ?? this.lastName,
       email: email ?? this.email,
       phone: phone ?? this.phone,
-      profileImageUrl: profileImageUrl ?? this.profileImageUrl, // <-- FIX 2: NOW THIS WORKS
+      profileImageUrl: profileImageUrl ?? this.profileImageUrl,
       licenseUrl: licenseUrl ?? this.licenseUrl,
       isApproved: isApproved ?? this.isApproved,
       isOnline: isOnline ?? this.isOnline,
@@ -89,8 +100,10 @@ class DriverProfile extends UserProfile {
       carModel: carModel ?? this.carModel,
       licensePlate: licensePlate ?? this.licensePlate,
       lastWentOnlineAt: lastWentOnlineAt ?? this.lastWentOnlineAt,
-      isBlocked: isBlocked ?? this.isBlocked
-
+      isBlocked: isBlocked ?? this.isBlocked,
+      vehicleRegistrationUrl: vehicleRegistrationUrl ?? this.vehicleRegistrationUrl,
+      proofOfInsuranceUrl: proofOfInsuranceUrl ?? this.proofOfInsuranceUrl,
+      pushNotificationsEnabled: pushNotificationsEnabled ?? this.pushNotificationsEnabled, // NEW
 
     );
   }

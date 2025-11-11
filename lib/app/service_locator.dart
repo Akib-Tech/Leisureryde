@@ -11,8 +11,10 @@ import '../services/fare_calculation_service.dart';
 import '../services/local_storage_service.dart';
 import '../services/location_service.dart';
 import '../services/place_service.dart';
+import '../services/push_notifications_service.dart';
 import '../services/ride_service.dart';
 import '../services/storage_service.dart';
+import '../viewmodel/home/home_view_model.dart';
 import '../viewmodel/theme_view_model.dart';
 import 'app_theme.dart';
 
@@ -35,8 +37,11 @@ Future<void> setupLocator() async {
 
   locator.registerLazySingleton(() => PaymentService());
   locator.registerLazySingleton(() => PaymentViewModel());
+  locator.registerLazySingleton(() => HomeViewModel()); // <-- ADD THIS LINE
 
   locator.registerLazySingleton(() => ChatService());
+  locator.registerLazySingleton(() => NotificationService()); // NEW
+
 
 
 

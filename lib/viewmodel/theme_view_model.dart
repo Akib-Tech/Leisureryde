@@ -14,7 +14,7 @@ class ThemeViewModel extends ChangeNotifier {
   // Initialize the theme from saved preferences
   Future<void> init() async {
     final prefs = _localStorageService.getPreferences(); // We'll add this to the service
-    final themeString = prefs.getString(_themeModeKey) ?? 'system';
+    final themeString = prefs.getString(_themeModeKey) ?? 'dark';
 
     if (themeString == 'light') {
       _themeMode = ThemeMode.light;

@@ -1,24 +1,18 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
-import 'package:leisureryde/app/service_locator.dart';
-import '../../../services/ride_service.dart';
-// lib/screens/trip/finding_driver.dart
-import 'dart:async';
-import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_spinkit/flutter_spinkit.dart';
-import 'package:leisureryde/app/service_locator.dart';
-import '../../../services/ride_service.dart'; // Adjust path if needed
+import 'package:leisureryde/viewmodel/home/home_view_model.dart'; // --- ADDED ---
+import 'package:provider/provider.dart'; // --- ADDED ---
 
 class FindingDriverCard extends StatefulWidget {
-  final String rideId; // <-- ADDED THIS PARAMETER
+  // --- REMOVED ---
+  // The card no longer needs to receive the rideId.
+  // final String rideId;
+
   final VoidCallback onCancel;
 
   const FindingDriverCard({
     super.key,
-    required this.rideId, // <-- MARKED AS REQUIRED
+    // required this.rideId, // <-- REMOVED
     required this.onCancel,
   });
 
@@ -27,40 +21,27 @@ class FindingDriverCard extends StatefulWidget {
 }
 
 class _FindingDriverCardState extends State<FindingDriverCard> {
-  final RideService _rideService = locator<RideService>();
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _sub;
-  bool _driverAccepted = false;
+  // --- REMOVED ---
+  // The HomeViewModel is now the single source of truth for the ride status,
+  // so this card doesn't need its own listener or state.
+  // final RideService _rideService = locator<RideService>();
+  // StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _sub;
+  // bool _driverAccepted = false;
 
   @override
   void initState() {
     super.initState();
-    // Start listening to the ride status when the card is active
-    _listenToRideStatus();
+
+
   }
 
-  void _listenToRideStatus() {
-    if (widget.rideId.isNotEmpty) {
-      _sub = _rideService.getRideStream(widget.rideId).listen((snapshot) {
-        if (snapshot.exists) {
-          final data = snapshot.data() as Map<String, dynamic>;
-          final status = data['status'] as String;
-          if (status == 'accepted' && !_driverAccepted) {
-            setState(() {
-              _driverAccepted = true;
-            });
-            // HomeViewModel will handle the step change to activeTrip
-          }
-          // You might also want to handle 'cancelled' or 'failed' statuses here
-        }
-      }, onError: (error) {
-        debugPrint("Error listening to ride status in FindingDriverCard: $error");
-      });
-    }
-  }
+  // --- REMOVED ---
+  // The listener logic is now centralized in the HomeViewModel.
+  // void _listenToRideStatus() { ... }
 
   @override
   void dispose() {
-    _sub?.cancel();
+    // _sub?.cancel(); // No longer needed
     super.dispose();
   }
 
@@ -97,9 +78,11 @@ class _FindingDriverCardState extends State<FindingDriverCard> {
           SpinKitPulse(color: theme.primaryColor, size: 90),
           const SizedBox(height: 24),
           Text(
-            _driverAccepted
-                ? "Driver found! Connecting..."
-                : "Finding your driver...",
+            // --- SIMPLIFIED ---
+            // The card's only job is finding a driver. When one is found,
+            // the HomeViewModel will change the step and this card will be
+            // replaced by the ActiveTripCard.
+            "Finding your driver...",
             style: theme.textTheme.titleLarge?.copyWith(
               color: theme.primaryColor,
               fontWeight: FontWeight.bold,
@@ -107,9 +90,7 @@ class _FindingDriverCardState extends State<FindingDriverCard> {
           ),
           const SizedBox(height: 8),
           Text(
-            _driverAccepted
-                ? "Please wait while we finalize your trip."
-                : "Please wait while we match you to a nearby driver.",
+            "Please wait while we match you to a nearby driver.",
             style: theme.textTheme.bodyMedium?.copyWith(
                 color:
                 theme.textTheme.bodySmall?.color?.withOpacity(0.8)),

@@ -9,6 +9,7 @@ import 'package:leisureryde/screens/shared/splash_screen/splash_screen.dart';
 import '../../../app/enums.dart';
 import '../../../widgets/custom_loading_indicator.dart';
 import '../../admin/admin_home_page.dart';
+import 'entry_page.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -66,7 +67,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       } else {
         // Not logged in, go to welcome
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+          MaterialPageRoute(builder: (_) => const WelcomePage()),
         );
       }
     }
@@ -74,23 +75,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            FadeTransition(
-              opacity: _fadeAnimation,
-              child: const Icon(
-                Icons.local_taxi, // Replace with your app logo widget
-                size: 180,
-                color: Color(0xFFD4AF37), // Primary color can be hardcoded here
-              ),
-            ),
-            const SizedBox(height: 40),
-            const CustomLoadingIndicator(),
-          ],
-        ),
-      ),
-    );
+      body: EntryPage(),
+    );;
   }
 }

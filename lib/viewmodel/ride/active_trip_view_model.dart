@@ -200,66 +200,7 @@ class ActiveTripViewModel extends ChangeNotifier {
     await _rideService.cancelRide(rideId, cancelledBy: 'user');
   }
 
-  Future<void> startPaymentFlow(BuildContext context) async {
-    final rideDataMap = rideData!.data() as Map<String, dynamic>;
-    final fare = rideDataMap['fare'].toString(); // In dollars
-    final int amountInCents = (double.parse(fare) * 100).toInt(); // Stripe uses cents
-    final userId = rideDataMap['userId'];
-    final bookingId = rideId;
 
-    final paymentVm = locator<PaymentViewModel>();
-
-    final session = await paymentVm.initializePayment(
-      amount: amountInCents.toString(),
-      currency: 'usd',
-      userId: userId,
-      bookingId: bookingId,
-      metadata: {
-        'rideId': rideId,
-        'pickup': rideDataMap['pickupAddress'],
-        'destination': rideDataMap['destinationAddress'],
-      },
-    );
-
-    if (session == null) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Could not start payment.")),
-        );
-      }
-      return;
-    }
-
-    if (!context.mounted) return;
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => StripeCheckoutScreen(
-          checkoutUrl: session['checkoutUrl'],
-          sessionId: session['sessionId'],
-          paymentId: session['paymentId'],
-          onPaymentSuccess: (sessionId, paymentId) async {
-            await paymentVm.handlePaymentSuccess(sessionId, paymentId);
-            if (context.mounted) _showPaymentResult(context, success: true);
-          },
-          onPaymentCancelled: (paymentId) async {
-            await paymentVm.handlePaymentCancelled(paymentId);
-            if (context.mounted) _showPaymentResult(context, success: false);
-          },
-        ),
-      ),
-    );
-  }
-
-  void _showPaymentResult(BuildContext context, {required bool success}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(
-        success ? "Payment successful! Thank you." : "Payment cancelled or failed.",
-      ),
-    ));
-
-    Navigator.popUntil(context, (route) => route.isFirst); // Back to Home
-  }
 
   @override
   void dispose() {

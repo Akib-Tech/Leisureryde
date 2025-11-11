@@ -1,13 +1,15 @@
-// In: screens/account/account_screen.dart
+// In: lib/screens/account/account_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../models/driver_profile.dart' show DriverProfile;
-import '../../../models/saved_places.dart';
-import '../../../viewmodel/account/account_view_model.dart';
-import '../../../viewmodel/theme_view_model.dart';
-import '../../../widgets/custom_loading_indicator.dart';
+import 'package:leisureryde/models/driver_profile.dart' show DriverProfile;
+import 'package:leisureryde/models/saved_places.dart';
+import 'package:leisureryde/viewmodel/account/account_view_model.dart';
+import 'package:leisureryde/widgets/custom_loading_indicator.dart';
+import '../../driver/vehicle/vehicle_info_screen.dart';
 import '../splash_screen/welcome_screen.dart';
+import 'notications.dart';
+
 
 class AccountScreen extends StatefulWidget {
   final bool isDriver;
@@ -18,36 +20,27 @@ class AccountScreen extends StatefulWidget {
 }
 
 class _AccountScreenState extends State<AccountScreen> {
-  // It's good practice to create the ViewModel once.
   late final AccountViewModel _viewModel;
 
-  // STEP 2: Override initState to set up the ViewModel and listener
   @override
   void initState() {
     super.initState();
     _viewModel = AccountViewModel(isDriver: widget.isDriver);
-
-    // Add a listener that will be called after the state changes, but outside the build method.
     _viewModel.addListener(_handleProfileState);
   }
 
-  // A separate function to handle the logic. This is the safe place to navigate.
   void _handleProfileState() {
-    // We only want to navigate if the profile is null AND we are done loading.
-    if (!mounted) return; // Always check if the widget is still in the tree.
-
+    if (!mounted) return;
     if (!_viewModel.isLoading && _viewModel.userProfile == null) {
-      // It's also good practice to remove the listener before navigating away.
       _viewModel.removeListener(_handleProfileState);
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+        MaterialPageRoute(builder: (_) => const WelcomePage()),
             (route) => false,
       );
     }
   }
 
-  // Don't forget to remove the listener in dispose to prevent memory leaks!
   @override
   void dispose() {
     _viewModel.removeListener(_handleProfileState);
@@ -57,7 +50,8 @@ class _AccountScreenState extends State<AccountScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Use the viewModel created in initState
+    // We provide the _viewModel instance created in initState.
+    // This is important for the fix below.
     return ChangeNotifierProvider.value(
       value: _viewModel,
       child: Scaffold(
@@ -73,12 +67,7 @@ class _AccountScreenState extends State<AccountScreen> {
               return const CustomLoadingIndicator();
             }
 
-            // STEP 3: Remove the navigation logic from the build method.
-            // If we get here, it means the profile is not null (because the listener
-            // would have navigated us away already). We can safely build the UI.
             if (viewModel.userProfile == null) {
-              // Return an empty container while the listener navigates away.
-              // This prevents a flicker of an error message.
               return const SizedBox.shrink();
             }
 
@@ -100,6 +89,72 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
+  // --- THIS WIDGET CONTAINS THE FIX ---
+  Widget _buildSettingsSection(BuildContext context, AccountViewModel viewModel) {
+    return _SettingsGroup(
+      title: 'Settings & Preferences',
+      children: [
+        if (viewModel.isDriver) ...[
+          _SettingsTile(
+            icon: Icons.directions_car,
+            title: 'Vehicle Information',
+            onTap: () {
+              // THE FIX IS HERE:
+              // We wrap the new screen in a ChangeNotifierProvider.value.
+              // This ensures the EXISTING viewModel instance is passed into the new route,
+              // making it available to VehicleInfoScreen.
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ChangeNotifierProvider.value(
+                    value: viewModel,
+                    child: const VehicleInfoScreen(),
+                  ),
+                ),
+              );
+            },
+          ),
+          const _Divider(),
+        ],
+        _SettingsTile(
+          icon: Icons.notifications,
+          title: 'Notification Settings',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ChangeNotifierProvider.value(
+                  value: viewModel,
+                  child: const NotificationSettingsScreen(),
+                ),
+              ),
+            );
+          },
+        ),
+        const _Divider(),
+        // _SettingsTile(
+        //   icon: Icons.lock,
+        //   title: 'Security',
+        //   onTap: () => Navigator.of(context).push(
+        //     MaterialPageRoute(builder: (_) => const SecurityScreen()),
+        //   ),
+        // ),
+        const _Divider(),
+        _SettingsTile(
+          icon: Icons.help_outline,
+          title: 'Help & Support',
+          onTap: () => viewModel.launchUrlHelper('https://leisureryde.com/help', context),
+        ),
+        const _Divider(),
+        _SettingsTile(
+          icon: Icons.gavel,
+          title: 'Legal',
+          onTap: () => viewModel.launchUrlHelper('https://leisureryde.com/legal/terms', context),
+        ),
+      ],
+    );
+  }
+
+  // --- NO OTHER CHANGES ARE NEEDED BELOW THIS LINE ---
+
   Widget _buildProfileHeader(BuildContext context, AccountViewModel viewModel) {
     final theme = Theme.of(context);
     final user = viewModel.userProfile!;
@@ -111,13 +166,10 @@ class _AccountScreenState extends State<AccountScreen> {
             CircleAvatar(
               radius: 40,
               backgroundColor: theme.primaryColor.withOpacity(0.1),
-              backgroundImage: user.profileImageUrl.isNotEmpty
-                  ? NetworkImage(user.profileImageUrl,
-              )
-                  : null,
+              backgroundImage: user.profileImageUrl.isNotEmpty ? NetworkImage(user.profileImageUrl) : null,
               child: user.profileImageUrl.isEmpty
                   ? Text(
-                user.firstName.isNotEmpty ? user.firstName[0] : 'U',
+                user.firstName.isNotEmpty ? user.firstName[0].toUpperCase() : 'U',
                 style: TextStyle(fontSize: 32, color: theme.primaryColor),
               )
                   : null,
@@ -154,10 +206,13 @@ class _AccountScreenState extends State<AccountScreen> {
               Text(
                 user.fullName,
                 style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
               ),
+              const SizedBox(height: 2),
               Text(
                 user.email,
-                style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w400, fontSize: 12 ),
+                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey.shade600),
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
               if (user is DriverProfile)
@@ -178,10 +233,9 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  // --- NEW WIDGET FOR SAVED PLACES ---
   Widget _buildSavedPlacesSection(BuildContext context, AccountViewModel viewModel) {
-    final home = viewModel.savedPlaces.where((p) => p!.name == 'Home').firstOrNull;
-    final work = viewModel.savedPlaces.where((p) => p!.name == 'Work').firstOrNull;
+    final home = viewModel.savedPlaces.where((p) => p.name == 'Home').firstOrNull;
+    final work = viewModel.savedPlaces.where((p) => p.name == 'Work').firstOrNull;
 
     return _SettingsGroup(
       title: 'Saved Places',
@@ -193,9 +247,10 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  Widget _buildSavedPlaceTile(BuildContext context, AccountViewModel viewModel, {required IconData icon, required String name, SavedPlace? place}) {
+  Widget _buildSavedPlaceTile(BuildContext context, AccountViewModel viewModel,
+      {required IconData icon, required String name, SavedPlace? place}) {
     return Dismissible(
-      key: Key(name), // Unique key for the dismissible
+      key: Key(name),
       direction: place != null ? DismissDirection.endToStart : DismissDirection.none,
       onDismissed: (_) => viewModel.deleteSavedPlace(name),
       background: Container(
@@ -211,44 +266,9 @@ class _AccountScreenState extends State<AccountScreen> {
         onTap: () {
           if (place == null) {
             viewModel.addOrUpdateSavedPlace(context, name);
-          } else {
-            // TODO: Maybe navigate to an edit screen?
           }
         },
       ),
-    );
-  }
-  // --- END NEW WIDGET ---
-
-  Widget _buildSettingsSection(BuildContext context, AccountViewModel viewModel) {
-    final themeVM = Provider.of<ThemeViewModel>(context);
-    return _SettingsGroup(
-      title: 'Settings',
-      children: [
-        if (viewModel.isDriver) ...[
-          _SettingsTile(
-            icon: Icons.directions_car,
-            title: 'Vehicle Information',
-            onTap: () {},
-          ),
-          const _Divider(),
-        ],
-        _SettingsTile(
-          icon: Icons.help_outline,
-          title: 'Help & Support',
-          onTap: () {},
-        ),
-        SwitchListTile(
-          secondary: Icon(
-            themeVM.themeMode == ThemeMode.dark ? Icons.dark_mode : Icons.light_mode,
-          ),
-          title: const Text('Dark Mode'),
-          value: themeVM.themeMode == ThemeMode.dark,
-          onChanged: (value) {
-            themeVM.setThemeMode(value ? ThemeMode.dark : ThemeMode.light);
-          },
-        ),
-      ],
     );
   }
 
@@ -275,8 +295,7 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 }
 
-// --- HELPER WIDGETS FOR A CLEANER BUILD METHOD ---
-
+// Helper Widgets
 class _SettingsGroup extends StatelessWidget {
   final String? title;
   final List<Widget> children;
@@ -289,10 +308,10 @@ class _SettingsGroup extends StatelessWidget {
       children: [
         if (title != null)
           Padding(
-            padding: const EdgeInsets.only(left: 8.0, bottom: 8.0),
+            padding: const EdgeInsets.fromLTRB(8.0, 0, 8.0, 8.0),
             child: Text(
-              title!,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
+              title!.toUpperCase(),
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Colors.grey.shade600),
             ),
           ),
         Container(
@@ -326,8 +345,8 @@ class _SettingsTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       leading: Icon(icon, color: color),
-      title: Text(title, style: TextStyle(color: color)),
-      trailing: hideArrow ? null : const Icon(Icons.arrow_forward_ios, size: 16),
+      title: Text(title, style: TextStyle(color: color, fontWeight: FontWeight.w500)),
+      trailing: hideArrow ? null : const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
       onTap: onTap,
     );
   }

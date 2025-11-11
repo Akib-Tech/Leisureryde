@@ -12,12 +12,21 @@ enum RideStatus {
   cancelled_by_driver,
   cancelled;
 
-
   static RideStatus fromString(String status) {
     return RideStatus.values.firstWhere(
           (e) => e.name == status,
       orElse: () => RideStatus.pending,
     );
+  }
+}
+
+// NEW: Add this helper extension
+extension RideStatusX on RideStatus {
+  bool get isTerminal {
+    return this == RideStatus.completed ||
+        this == RideStatus.failed ||
+        this == RideStatus.cancelled_by_driver ||
+        this == RideStatus.cancelled;
   }
 }
 
@@ -61,9 +70,9 @@ class RideRequest {
     required this.distance,
     required this.createdAt,
 
-    required this.amountPaid,
-    required this.paymentId,
-    required this.stripePaymentIntentId,
+     this.amountPaid,
+     this.paymentId,
+     this.stripePaymentIntentId,
     this.driverId,
     this.driverName,
     this.driverPhone,

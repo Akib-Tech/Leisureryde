@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../../../app/service_locator.dart';
 import '../../../models/route_selection.dart';
 import '../../../models/user_profile.dart';
 import '../../../services/place_service.dart'; // For PlaceDetails
@@ -19,11 +20,13 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => HomeViewModel(),
+    return ChangeNotifierProvider.value(
+      value: locator<HomeViewModel>(),
       child: Scaffold(
         body: Consumer<HomeViewModel>(
           builder: (context, viewModel, child) {
+            debugPrint("🟢 [HomeScreen] Rebuilding. Current step is: ${viewModel.currentStep}");
+
             if (viewModel.isLoading || viewModel.mapViewModel.isLoading) {
               return const CustomLoadingIndicator();
             }
@@ -185,7 +188,7 @@ class HomeScreen extends StatelessWidget {
       case HomeStep.payment:
         return _buildPaymentCardContent(context, viewModel);
       case HomeStep.findingDriver:
-        return FindingDriverCard(key: const ValueKey('FindingDriverCard'), rideId: viewModel.currentRideId ?? '', onCancel: viewModel.cancelRide);
+        return FindingDriverCard(key: const ValueKey('FindingDriverCard'), onCancel: viewModel.cancelRide);
       case HomeStep.activeTrip:
         return ActiveTripCard(key: const ValueKey('ActiveTripCard'), rideId: viewModel.currentRideId ?? '');
     }

@@ -1,10 +1,10 @@
+// In: lib/screens/driver/ride_requests_screen.dart (or your file path)
+
 import 'package:flutter/material.dart';
-
 import 'package:provider/provider.dart';
-
-import '../../../models/ride_request_model.dart';
-import '../../../viewmodel/ride/ride_request_view_model.dart';
-import '../../../widgets/custom_loading_indicator.dart';
+import 'package:leisureryde/models/ride_request_model.dart';
+import 'package:leisureryde/viewmodel/ride/ride_request_view_model.dart';
+import 'package:leisureryde/widgets/custom_loading_indicator.dart'; // Assuming you have this
 
 class RideRequestsScreen extends StatelessWidget {
   const RideRequestsScreen({super.key});
@@ -20,6 +20,12 @@ class RideRequestsScreen extends StatelessWidget {
         ),
         body: Consumer<RideRequestsViewModel>(
           builder: (context, viewModel, child) {
+            // First, check if the ViewModel is fetching the driver's profile
+            if (viewModel.isInitializing) {
+              return const CustomLoadingIndicator();
+            }
+
+            // Then, build the UI based on the stream of ride requests
             return StreamBuilder<List<RideRequest>>(
               stream: viewModel.rideRequestsStream,
               builder: (context, snapshot) {
@@ -27,7 +33,8 @@ class RideRequestsScreen extends StatelessWidget {
                   return const CustomLoadingIndicator();
                 }
                 if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
+                  print('Ride Requests Stream Error: ${snapshot.error}');
+                  return const Center(child: Text('An error occurred. Please try again.'));
                 }
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return const Center(
@@ -47,7 +54,11 @@ class RideRequestsScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                   itemCount: requests.length,
                   itemBuilder: (context, index) {
-                    return _RideRequestCard(request: requests[index]);
+                    return _RideRequestCard(
+                      request: requests[index],
+                      // Pass the approval status from the ViewModel to the card
+                      isDriverApproved: viewModel.isDriverApproved,
+                    );
                   },
                 );
               },
@@ -59,9 +70,17 @@ class RideRequestsScreen extends StatelessWidget {
   }
 }
 
+// --- RIDE REQUEST CARD WIDGET ---
+// (This is the same widget as before, placed here for completeness)
+
 class _RideRequestCard extends StatelessWidget {
   final RideRequest request;
-  const _RideRequestCard({required this.request});
+  final bool isDriverApproved;
+
+  const _RideRequestCard({
+    required this.request,
+    required this.isDriverApproved,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -144,38 +163,62 @@ class _RideRequestCard extends StatelessWidget {
             ),
             const Divider(height: 24),
 
-            // Action buttons
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => viewModel.declineRide(request.id),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: const Text("Decline"),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    onPressed: () => viewModel.acceptRide(request.id, context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: theme.primaryColor,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: Text(
-                      "Accept (${(request.distance / 1000).toStringAsFixed(1)} km)",
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            // Action buttons or Informational message
+            if (isDriverApproved)
+              _buildActionButtons(context, viewModel)
+            else
+              _buildApprovalMessage(),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildActionButtons(BuildContext context, RideRequestsViewModel viewModel) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: () => viewModel.declineRide(request.id),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.red,
+              side: const BorderSide(color: Colors.red),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: const Text("Decline"),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 2,
+          child: ElevatedButton(
+            onPressed: () => viewModel.acceptRide(request.id, context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).primaryColor,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: Text(
+              "Accept (${(request.distance / 1000).toStringAsFixed(1)} km)",
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildApprovalMessage() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.withOpacity(0.5)),
+      ),
+      child: const Text(
+        "Your account requires approval to accept rides.",
+        textAlign: TextAlign.center,
+        style: TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.w500),
       ),
     );
   }

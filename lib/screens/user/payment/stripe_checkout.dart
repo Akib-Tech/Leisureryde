@@ -3,18 +3,10 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 class StripeCheckoutScreen extends StatefulWidget {
   final String checkoutUrl;
-  final String sessionId;
-  final String paymentId;
-  final Function(String sessionId, String paymentId) onPaymentSuccess;
-  final Function(String paymentId) onPaymentCancelled;
-
+  // We no longer need callbacks here, it will pop with a result.
   const StripeCheckoutScreen({
     Key? key,
     required this.checkoutUrl,
-    required this.sessionId,
-    required this.paymentId,
-    required this.onPaymentSuccess,
-    required this.onPaymentCancelled,
   }) : super(key: key);
 
   @override
@@ -22,121 +14,74 @@ class StripeCheckoutScreen extends StatefulWidget {
 }
 
 class _StripeCheckoutScreenState extends State<StripeCheckoutScreen> {
-  late WebViewController _webViewController;
-  bool _isLoading = true;
+  late final WebViewController _controller;
+
+  // --- CRITICAL DEBUGGING STEP ---
+  // Make sure these URLs are IDENTICAL to the ones you configured when creating
+  // the Stripe Checkout Session on your backend server.
+  // Example: "https://yourdomain.com/success"
+  final String successUrl = "https://example.com/success";
+  final String cancelUrl = "https://example.com/cancel";
+
+  bool _isPopping = false; // Prevents double-pop issues
 
   @override
   void initState() {
     super.initState();
-    _initializeWebView();
-  }
 
-  void _initializeWebView() {
-    _webViewController = WebViewController()
+    _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.white)
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (String url) {
-            setState(() => _isLoading = true);
-            _handleNavigation(url);
-          },
-          onPageFinished: (String url) {
-            setState(() => _isLoading = false);
-          },
           onNavigationRequest: (NavigationRequest request) {
-            // Intercept custom scheme URLs
-            if (request.url.startsWith('leisureryde://')) {
-              _handleDeepLink(request.url);
-              return NavigationDecision.prevent;
+            // Log every navigation request to debug URL issues
+            debugPrint("[StripeCheckoutScreen] Navigating to: ${request.url}");
+
+            if (request.url.startsWith(successUrl) && !_isPopping) {
+              _isPopping = true;
+              debugPrint("✅ [StripeCheckoutScreen] SUCCESS redirect detected. Popping with TRUE.");
+              // Pop with a success result
+              Navigator.of(context).pop(true);
+              return NavigationDecision.prevent; // Stop the navigation
+            }
+            if (request.url.startsWith(cancelUrl) && !_isPopping) {
+              _isPopping = true;
+              debugPrint("🟡 [StripeCheckoutScreen] CANCEL redirect detected. Popping with FALSE.");
+              // Pop with a failure/cancel result
+              Navigator.of(context).pop(false);
+              return NavigationDecision.prevent; // Stop the navigation
             }
             return NavigationDecision.navigate;
-          },
-          onWebResourceError: (WebResourceError error) {
-            print("WebView Error: ${error.description}");
-            _showErrorDialog(error.description);
           },
         ),
       )
       ..loadRequest(Uri.parse(widget.checkoutUrl));
   }
 
-  void _handleNavigation(String url) {
-    // Handle success/cancel URLs
-    if (url.contains('leisureryde://payment/success')) {
-      _handleDeepLink(url);
-    } else if (url.contains('leisureryde://payment/cancel')) {
-      _handleDeepLink(url);
-    }
-  }
-
-  void _handleDeepLink(String url) {
-    final uri = Uri.parse(url);
-
-    if (uri.path == '/payment/success') {
-      final sessionId = uri.queryParameters['session_id'] ?? widget.sessionId;
-      final paymentId = uri.queryParameters['payment_id'] ?? widget.paymentId;
-
-      Navigator.pop(context);
-      widget.onPaymentSuccess(sessionId, paymentId);
-    }
-    else if (uri.path == '/payment/cancel') {
-      final paymentId = uri.queryParameters['payment_id'] ?? widget.paymentId;
-
-      Navigator.pop(context);
-      widget.onPaymentCancelled(paymentId);
-    }
-  }
-
-  void _showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Payment Error'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context); // Close webview
-              widget.onPaymentCancelled(widget.paymentId);
-            },
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
+  @override
+  void dispose() {
+    _controller.loadRequest(Uri.parse('about:blank'));
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        widget.onPaymentCancelled(widget.paymentId);
-        return true;
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Secure Payment'),
-          leading: IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () {
-              Navigator.pop(context);
-              widget.onPaymentCancelled(widget.paymentId);
-            },
-          ),
-          backgroundColor: Colors.blueAccent,
-        ),
-        body: Stack(
-          children: [
-            WebViewWidget(controller: _webViewController),
-            if (_isLoading)
-              const Center(
-                child: CircularProgressIndicator(),
-              ),
-          ],
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Secure Payment"),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () {
+            if (!_isPopping) {
+              _isPopping = true;
+              debugPrint("🟡 [StripeCheckoutScreen] Manual cancel (X button) pressed. Popping with FALSE.");
+              // The user manually closed the page
+              Navigator.of(context).pop(false);
+            }
+          },
         ),
       ),
+      body: WebViewWidget(controller: _controller),
     );
   }
 }

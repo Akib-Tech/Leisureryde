@@ -4,6 +4,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
+import '../models/saved_places.dart';
+
 class PlacesService {
   static const String _apiKey = "AIzaSyBJIRixyDjY3bFicM3oG36yW0Vaj43FZWs";
   String _sessionToken = const Uuid().v4();
@@ -82,6 +84,21 @@ class PlaceDetails {
         json['geometry']['location']['lat'],
         json['geometry']['location']['lng'],
       ),
+    );
+  }
+  factory PlaceDetails.fromCurrentPosition(LatLng position) {
+    return PlaceDetails(
+      name: "Current Location",
+      address: "Your current location",
+      location: position,
+    );
+  }
+
+  factory PlaceDetails.fromSavedPlace(SavedPlace place) {
+    return PlaceDetails(
+      name: place.name,
+      address: place.address,
+      location: LatLng(place.latitude, place.longitude),
     );
   }
 }

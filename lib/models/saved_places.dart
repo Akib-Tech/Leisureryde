@@ -24,7 +24,15 @@ class SavedPlace {
       longitude: (data['longitude'] as num?)?.toDouble() ?? 0.0,
     );
   }
-
+  factory SavedPlace.empty() {
+    return SavedPlace(
+      id: '',
+      name: '',
+      address: '',
+      latitude: 0.0,
+      longitude: 0.0,
+    );
+  }
   Map<String, dynamic> toMap() {
     return {
       'name': name,

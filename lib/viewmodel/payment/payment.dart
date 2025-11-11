@@ -1,4 +1,3 @@
-// lib/viewmodel/payment/payment_view_model.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,12 +5,12 @@ import 'package:leisureryde/app/service_locator.dart';
 import '../../services/payment_service.dart';
 
 enum PaymentState {
-  idle,
-  loading, // Initializing session with backend
-  processing, // WebView launched or awaiting webhook
-  success,
-  failed,
-  cancelled,
+  idle,       // Nothing is happening
+  loading,    // Creating the session via Cloud Function
+  processing, // WebView is open, waiting for webhook
+  success,    // Webhook confirmed payment
+  failed,     // Payment failed (webhook or error)
+  cancelled,  // User manually closed the WebView
 }
 
 class PaymentViewModel extends ChangeNotifier {
@@ -20,55 +19,69 @@ class PaymentViewModel extends ChangeNotifier {
   PaymentState _state = PaymentState.idle;
   String? _errorMessage;
   String? _currentPaymentId;
-  Map<String, dynamic>? _paymentDetails; // Stores verified details
   StreamSubscription<DocumentSnapshot>? _paymentListener;
 
   PaymentState get state => _state;
   String? get errorMessage => _errorMessage;
   String? get currentPaymentId => _currentPaymentId;
-  Map<String, dynamic>? get paymentDetails => _paymentDetails;
   bool get isLoading => _state == PaymentState.loading || _state == PaymentState.processing;
 
+  /// Step 1: Initiates the payment flow.
+  /// Returns the checkout URL and payment ID needed to launch the WebView.
+  /// Step 1: Initiates the payment flow.
+  /// Returns the checkout URL and payment ID needed to launch the WebView.
   Future<Map<String, dynamic>?> initializePayment({
-    required String amount, // e.g., "12.34"
+    required String amount,
     required String currency,
-    required String userId,
-    required String bookingId, // Use ride ID here
-    Map<String, dynamic>? metadata,
+    required String bookingId,
   }) async {
     _updateState(PaymentState.loading);
     _errorMessage = null;
 
     try {
-      final sessionData = await _paymentService.createCheckoutSession(
+      debugPrint("🔄 Calling createStripeSessionViaFunction...");
+      debugPrint("   Amount: $amount, Currency: $currency, BookingId: $bookingId");
+
+      // Call our secure Cloud Function to get the session details
+      final sessionData = await _paymentService.createStripeSessionViaFunction(
         amount: amount,
         currency: currency,
-        userId: userId,
         bookingId: bookingId,
-        metadata: metadata,
       );
 
-      if (sessionData == null) {
-        _errorMessage = "Failed to create payment session";
-        _updateState(PaymentState.failed);
-        return null;
-      }
+      debugPrint("✅ Session created successfully!");
+      debugPrint("   Response: $sessionData");
 
       _currentPaymentId = sessionData['paymentId'] as String;
-      _startPaymentListener(_currentPaymentId!); // Start listening to Firestore
-      _updateState(PaymentState.processing); // Move to processing as WebView is about to launch
 
-      return sessionData;
+
+      // IMPORTANT: Start listening for backend updates immediately
+      _startPaymentListener(_currentPaymentId!);
+
+      _updateState(PaymentState.processing);
+      return sessionData; // Pass {'checkoutUrl', 'paymentId'} to the UI
     } catch (e) {
-      _errorMessage = "Payment initialization error: $e";
+      debugPrint("❌ Payment initialization failed!");
+      debugPrint("   Error Type: ${e.runtimeType}");
+      debugPrint("   Error Message: $e");
+      debugPrint("   Full Stack Trace: ${e is Exception ? (e as Exception).toString() : 'N/A'}");
+
+      _errorMessage = "Failed to create payment session. Please try again.";
       _updateState(PaymentState.failed);
       return null;
     }
   }
 
-  void _startPaymentListener(String paymentId) {
-    _paymentListener?.cancel();
+  void handlePaymentSuccess(String paymentId) {
+    _state = PaymentState.success;
+    _currentPaymentId = paymentId; // Store the payment ID
+    _errorMessage = null;
+    notifyListeners();
+  }
 
+  /// Step 2: Listens for status changes from the webhook.
+  void _startPaymentListener(String paymentId) {
+    _paymentListener?.cancel(); // Cancel any previous listener
     _paymentListener = _paymentService.listenToPaymentStatus(paymentId).listen(
           (snapshot) {
         if (!snapshot.exists) return;
@@ -76,16 +89,15 @@ class PaymentViewModel extends ChangeNotifier {
         final data = snapshot.data() as Map<String, dynamic>;
         final status = data['status'] as String;
 
-        debugPrint("📡 Payment status update: $status for $paymentId (from Firestore listener)");
+        debugPrint("📡 Firestore Payment Status Updated: $status");
 
         switch (status) {
-          case 'completed':
-            _paymentDetails = data; // Store details from Firestore (could include Stripe's paymentIntentId, etc.)
+          case 'succeeded': // This status is set by our webhook
             _updateState(PaymentState.success);
-            _paymentListener?.cancel();
+            _paymentListener?.cancel(); // Stop listening on final state
             break;
           case 'failed':
-            _errorMessage = data['error'] as String? ?? 'Payment failed';
+            _errorMessage = data['error'] as String? ?? 'Payment failed.';
             _updateState(PaymentState.failed);
             _paymentListener?.cancel();
             break;
@@ -93,101 +105,36 @@ class PaymentViewModel extends ChangeNotifier {
             _updateState(PaymentState.cancelled);
             _paymentListener?.cancel();
             break;
-          case 'pending':
-          case 'processing':
-            _updateState(PaymentState.processing); // Keep as processing if still pending/waiting
-            break;
         }
       },
       onError: (error) {
-        _errorMessage = "Payment listener error: $error";
+        _errorMessage = "Error listening to payment status.";
         _updateState(PaymentState.failed);
       },
     );
   }
 
-  Future<void> handlePaymentSuccess(String sessionId, String paymentId) async {
-    debugPrint("PaymentViewModel: handlePaymentSuccess called for session $sessionId, payment $paymentId");
-    _updateState(PaymentState.processing); // Stay in processing while verifying
+  /// Step 3: Called by the UI when the user manually closes the WebView.
+  Future<void> handlePaymentCancelled() async {
+    if (_currentPaymentId == null) return;
 
-    try {
-      final verificationResult = await _paymentService.verifyPaymentSession(sessionId);
-
-      if (verificationResult == null) {
-        // If Stripe verification fails, update Firestore payment status
-        await _paymentService.updatePaymentStatus(
-          paymentId: paymentId,
-          status: 'failed',
-          additionalData: {'error': 'Verification failed after webview success'},
-        );
-        _errorMessage = "Payment verification failed";
-        _updateState(PaymentState.failed);
-        return;
-      }
-
-      final paymentStatus = verificationResult['paymentStatus'] as String;
-      final stripePaymentIntent = verificationResult['paymentIntent'] as String?;
-      final amountTotal = verificationResult['amountTotal'] as int?; // in cents
-      final customerEmail = verificationResult['customerEmail'] as String?;
-
-      if (paymentStatus == 'paid') {
-        // Update Firestore payment status to completed
-        await _paymentService.updatePaymentStatus(
-          paymentId: paymentId,
-          status: 'completed',
-          additionalData: {
-            'stripeSessionId': sessionId, // Store session ID in payment record
-            'stripePaymentIntent': stripePaymentIntent,
-            'amountTotalCents': amountTotal, // Store amount in cents from Stripe
-            'customerEmail': customerEmail,
-            'verifiedAt': FieldValue.serverTimestamp(),
-          },
-        );
-
-        _paymentDetails = { // Store details for HomeViewModel
-          'paymentId': paymentId,
-          'stripeSessionId': sessionId,
-          'stripePaymentIntent': stripePaymentIntent,
-          'amountTotal': amountTotal,
-          'customerEmail': customerEmail,
-        };
-        _updateState(PaymentState.success);
-      } else {
-        // Payment might still be processing or failed on Stripe's side
-        await _paymentService.updatePaymentStatus(
-          paymentId: paymentId,
-          status: 'pending', // Or 'failed' depending on specific Stripe status
-          additionalData: {'stripeStatus': paymentStatus},
-        );
-        _errorMessage = "Payment pending or failed: $paymentStatus";
-        _updateState(PaymentState.processing); // Keep processing or move to failed
-      }
-    } catch (e) {
-      await _paymentService.updatePaymentStatus(
-        paymentId: paymentId,
-        status: 'failed',
-        additionalData: {'error': e.toString()},
-      );
-      _errorMessage = "Verification error: $e";
-      _updateState(PaymentState.failed);
+    // Only update status if payment isn't already completed
+    if (_state == PaymentState.processing) {
+      debugPrint("User cancelled payment. Updating status for $_currentPaymentId");
+      await _paymentService.cancelPayment(_currentPaymentId!);
+      _updateState(PaymentState.cancelled);
     }
+    resetPayment(); // Clean up
   }
 
-  Future<void> handlePaymentCancelled(String paymentId) async {
-    debugPrint("PaymentViewModel: handlePaymentCancelled called for payment $paymentId");
-    await _paymentService.updatePaymentStatus(
-      paymentId: paymentId,
-      status: 'cancelled',
-    );
-    _updateState(PaymentState.cancelled);
-  }
-
+  /// Resets the ViewModel to its initial state for a new payment.
   void resetPayment() {
     _paymentListener?.cancel();
+    _paymentListener = null;
     _state = PaymentState.idle;
     _errorMessage = null;
     _currentPaymentId = null;
-    _paymentDetails = null;
+
     notifyListeners();
   }
 

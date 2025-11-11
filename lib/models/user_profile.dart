@@ -13,6 +13,8 @@ class UserProfile {
   final String profileImageUrl;
   final bool isBlocked;
   final double rating;
+  final bool pushNotificationsEnabled;
+
 
 
   UserProfile({
@@ -25,6 +27,8 @@ class UserProfile {
     this.profileImageUrl = '',
     required this.isBlocked,
     required this.rating,
+    this.pushNotificationsEnabled = true,
+
   });
 
   factory UserProfile.fromFirestore(DocumentSnapshot doc) {
@@ -38,7 +42,9 @@ class UserProfile {
       role: UserRole.fromString(data['role'] ?? 'user'),
       profileImageUrl: data['profileImageUrl'] ?? '',
       isBlocked: data['isBlocked'] ?? false,
-      rating: data['rating']?? 5.0
+      rating: data['rating']?? 5.0,
+      pushNotificationsEnabled: data['pushNotificationsEnabled'] ?? true, // NEW
+
     );
   }
 
@@ -54,6 +60,8 @@ class UserProfile {
     UserRole? role,
     bool? isBlocked,
     double? rating,
+    bool? pushNotificationsEnabled, // NEW
+
   }) {
     return UserProfile(
       uid: uid ?? this.uid,
@@ -65,6 +73,8 @@ class UserProfile {
       role: role ?? this.role,
       isBlocked: isBlocked ?? this.isBlocked,
       rating: rating ?? this.rating,
+      pushNotificationsEnabled: pushNotificationsEnabled ?? this.pushNotificationsEnabled, // NEW
+
     );
   }
 }

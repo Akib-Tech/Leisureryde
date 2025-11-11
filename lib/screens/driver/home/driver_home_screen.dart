@@ -71,13 +71,10 @@ class DriverHomeScreen extends StatelessWidget {
 
             return Stack(
               children: [
-                // --- Google Maps ---
                 _buildMap(context, viewModel),
 
-                // --- Top Header with Online/Offline Toggle ---
                 _buildHeader(context, viewModel),
 
-                // --- Bottom Status Card ---
                 if (viewModel.isOnline)
                   _buildOnlineStatusCard(context, viewModel)
                 else
@@ -90,7 +87,6 @@ class DriverHomeScreen extends StatelessWidget {
     );
   }
 
-  // ========== Google Maps Widget ==========
   Widget _buildMap(BuildContext context, DriverHomeViewModel viewModel) {
     return GoogleMap(
       initialCameraPosition: CameraPosition(
@@ -233,7 +229,7 @@ class DriverHomeScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: viewModel.isOnline
                     ? Colors.green.withOpacity(0.1)
-                    : Colors.grey[200],
+                    : Colors.grey.withOpacity(0.3),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: viewModel.isOnline ? Colors.green : Colors.grey[400]!,
@@ -258,6 +254,8 @@ class DriverHomeScreen extends StatelessWidget {
                               ? "You're Online"
                               : "You're Offline",
                           style: theme.textTheme.titleMedium?.copyWith(
+                            color: Colors.grey[600],
+
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -429,7 +427,6 @@ class DriverHomeScreen extends StatelessWidget {
     );
   }
 
-  // ========== Offline Card ==========
   Widget _buildOfflineCard(BuildContext context, DriverHomeViewModel viewModel) {
     final theme = Theme.of(context);
 

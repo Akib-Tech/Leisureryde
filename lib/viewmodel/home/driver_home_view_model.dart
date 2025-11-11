@@ -9,6 +9,7 @@ import 'package:leisureryde/services/auth_service.dart';
 import 'package:leisureryde/services/database_service.dart';
 import 'package:leisureryde/services/ride_service.dart';
 import '../../services/driver_locator.dart';   // your DriverLocationUpdater helper
+import '../../services/push_notifications_service.dart';
 import '../maps/maps_viewmodel.dart';
 
 class DriverHomeViewModel extends ChangeNotifier {
@@ -46,6 +47,9 @@ class DriverHomeViewModel extends ChangeNotifier {
 
   StreamSubscription? _dailyStatsSub;
   StreamSubscription? _pendingReqSub;
+
+  final NotificationService _notificationService = locator<NotificationService>();
+
 
   // --- Constructor ---
   DriverHomeViewModel() {
@@ -98,26 +102,31 @@ class DriverHomeViewModel extends ChangeNotifier {
   Future<void> toggleOnlineStatus() async {
     if (_driverProfile == null) return;
 
+    // Optimistically update UI
     _isOnline = !_isOnline;
     notifyListeners();
 
     try {
+      // 1. Update driver status in the database
       await _databaseService.updateDriverOnlineStatus(_driverProfile!.uid, _isOnline);
 
+      // 2. Subscribe or unsubscribe from the 'online_drivers' topic
       if (_isOnline) {
+        _notificationService.subscribeToOnlineDriversTopic();
         _startLocationUpdates();
         _startListeningToStats();
       } else {
+        _notificationService.unsubscribeFromOnlineDriversTopic();
         await _stopLocationUpdates();
         _stopListeningToStats();
       }
     } catch (e) {
       debugPrint("Error toggling online: $e");
+      // Revert UI on failure
       _isOnline = !_isOnline;
       notifyListeners();
     }
   }
-
   // ===================================
   // LOCATION UPDATER
   // ===================================
