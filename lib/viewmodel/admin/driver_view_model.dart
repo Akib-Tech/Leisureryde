@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:leisureryde/models/driver_profile.dart';
 import 'package:leisureryde/services/admin_service.dart';
 
+
 class DriversViewModel extends ChangeNotifier {
   final AdminService _adminService = AdminService();
 
@@ -39,6 +40,21 @@ class DriversViewModel extends ChangeNotifier {
       }
     } catch (e) {
       print("Error updating driver approval: $e");
+      // Optionally show an error to the user
+    }
+  }
+
+  // NEW METHOD to handle blocking/unblocking
+  Future<void> updateDriverBlockStatus(String driverId, bool isBlocked) async {
+    try {
+      await _adminService.updateUserBlockStatus(driverId, isBlocked);
+      final index = _drivers.indexWhere((d) => d.uid == driverId);
+      if (index != -1) {
+        _drivers[index] = _drivers[index].copyWith(isBlocked: isBlocked);
+        notifyListeners();
+      }
+    } catch (e) {
+      print("Error updating driver block status: $e");
     }
   }
 }

@@ -58,4 +58,29 @@ class AdminService {
         .get();
     return snapshot.docs.map((doc) => RideRequest.fromFirestore(doc)).toList();
   }
+  // ... inside the AdminService class
+
+  // NEW METHOD
+  Future<List<RideRequest>> getRidesForUser(String userId) async {
+    final snapshot = await _db
+        .collection('rideRequests')
+        .where('userId', isEqualTo: userId)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .get();
+    return snapshot.docs.map((doc) => RideRequest.fromFirestore(doc)).toList();
+  }
+
+  // NEW METHOD
+  Future<List<RideRequest>> getRidesForDriver(String driverId) async {
+    final snapshot = await _db
+        .collection('rideRequests')
+        .where('driverId', isEqualTo: driverId)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .get();
+    return snapshot.docs.map((doc) => RideRequest.fromFirestore(doc)).toList();
+  }
+
+// ... rest of the class
 }

@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:leisureryde/app/service_locator.dart';
+import 'package:leisureryde/screens/admin/ride_history_screen.dart';
+import 'package:leisureryde/screens/admin/users_list_screen.dart';
+import 'package:leisureryde/screens/shared/splash_screen/welcome_screen.dart';
+import 'package:leisureryde/services/auth_service.dart';
 import 'package:provider/provider.dart';
 
 import '../../admin/driver_list.dart';
 import '../../admin/user_list.dart';
 import '../../viewmodel/admin/admin_view_model.dart';
+import 'drivers_earning_screen.dart';
+import 'drivers_list_screen.dart';
 
 class AdminHomePage extends StatelessWidget {
   const AdminHomePage({super.key});
@@ -15,6 +22,40 @@ class AdminHomePage extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Admin Dashboard"),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: "Sign Out",
+              onPressed: () async {
+                // Show a confirmation dialog before signing out
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text("Confirm Sign Out"),
+                    content: const Text("Are you sure you want to sign out?"),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text("Cancel"),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: const Text("Sign Out"),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirmed == true && context.mounted) {
+                  final auth = locator<AuthService>();
+                  await auth.signOut();
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (context) => WelcomePage()),
+                        (Route<dynamic> route) => false, // This predicate removes all previous routes
+                  );                }
+              },
+            ),
+          ],
         ),
         body: Consumer<AdminDashboardViewModel>(
           builder: (context, viewModel, _) {
@@ -48,8 +89,9 @@ class AdminHomePage extends StatelessWidget {
                   const Divider(height: 24),
                   _buildNavigationTile(context, title: "Manage Drivers", icon: Icons.directions_car_outlined, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DriversListScreen()))),
                   _buildNavigationTile(context, title: "Manage Users", icon: Icons.people_outline, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UsersListScreen()))),
-                  _buildNavigationTile(context, title: "Ride History", icon: Icons.receipt_long_outlined, onTap: () {}),
-                  _buildNavigationTile(context, title: "Driver Earnings", icon: Icons.account_balance_wallet_outlined, onTap: () {}),
+                  // --- UPDATED NAVIGATION ---
+                  _buildNavigationTile(context, title: "Ride History", icon: Icons.receipt_long_outlined, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RideHistoryScreen()))),
+                  _buildNavigationTile(context, title: "Driver Earnings", icon: Icons.account_balance_wallet_outlined, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DriverEarningsScreen()))),
                 ],
               ),
             );
