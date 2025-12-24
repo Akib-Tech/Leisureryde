@@ -41,6 +41,7 @@ class LoginViewModel extends ChangeNotifier {
       _showSnackBar(context, "Please enter a valid email address.");
       return;
     }
+
     if (passwordController.text.trim().length < 6) {
       _showSnackBar(context, "Password must be at least 6 characters.");
       return;

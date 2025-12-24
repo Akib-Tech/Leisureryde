@@ -52,7 +52,8 @@ class AdminHomePage extends StatelessWidget {
                   Navigator.of(context).pushAndRemoveUntil(
                     MaterialPageRoute(builder: (context) => WelcomePage()),
                         (Route<dynamic> route) => false, // This predicate removes all previous routes
-                  );                }
+                  );
+                }
               },
             ),
           ],

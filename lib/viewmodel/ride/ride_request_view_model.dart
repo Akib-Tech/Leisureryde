@@ -1,6 +1,7 @@
 // In: lib/viewmodel/ride/ride_request_view_model.dart (or your file path)
 
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:leisureryde/app/service_locator.dart';
 import 'package:leisureryde/models/driver_profile.dart'; // NEW: Import DriverProfile
@@ -23,6 +24,7 @@ class RideRequestsViewModel extends ChangeNotifier {
 
   // NEW: Public getters for the UI to read the state
   bool get isInitializing => _isInitializing;
+
   bool get isDriverApproved => _driverProfile?.isApproved ?? false;
 
   // Your existing stream getter (this remains unchanged)
@@ -59,10 +61,14 @@ class RideRequestsViewModel extends ChangeNotifier {
     if (driverId == null) return;
 
     try {
-      await _rideService.acceptRide(rideId, driverId);
-      if (context.mounted) {
-        Navigator.pop(context); // Go back to the map
-      }
+
+      await _rideService.acceptRide(rideId, driverId).then(
+        (value) {
+          if (context.mounted) {
+            Navigator.pop(context); // Go back to the map
+          }
+        },
+      );
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

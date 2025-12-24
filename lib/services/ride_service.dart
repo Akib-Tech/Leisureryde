@@ -76,16 +76,17 @@ class RideService {
   // ============================================================
 
   Future<void> acceptRide(String rideId, String driverId) async {
-    try {
+
+   // try {
       await _db.collection('rideRequests').doc(rideId).update({
         'driverId': driverId,
         'status': 'accepted',
         'acceptedAt': FieldValue.serverTimestamp(),
       });
-    } catch (e) {
+    /*} catch (e) {
       print("🚨 Error accepting ride: $e");
       rethrow;
-    }
+    }*/
   }
 
   Future<void> declineRide(String rideId) async {

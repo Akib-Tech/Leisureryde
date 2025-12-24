@@ -210,4 +210,31 @@ class DriverHomeViewModel extends ChangeNotifier {
     _pendingReqSub?.cancel();
     super.dispose();
   }
+
+  // ===================================
+  // Refresh
+  // ===================================
+  Future<void> refreshStats() async {
+    if (_driverProfile == null) return;
+
+    try {
+      // Take the first value from the same stream you already use for live updates.
+      final docs = await _databaseService.getTodaysTripsStream(_driverProfile!.uid).first;
+
+      print('TODAYS TRIPS: ${docs.first.data().toString()}');
+      // Update the same private fields you already expose via getters
+      _todayTrips = docs.length;
+      _todayEarnings = docs.fold(0.0, (sum, doc) => sum + (doc['fare'] ?? 0.0));
+      print('TODAYS EARNING: $_todayEarnings');
+      // Recompute hoursOnline too if you want
+      final lastOnlineTimestamp = _driverProfile!.lastWentOnlineAt;
+      if (lastOnlineTimestamp != null) {
+        _hoursOnline = DateTime.now().difference(lastOnlineTimestamp.toDate()).inMinutes / 60.0;
+      }
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error refreshing stats: $e');
+    }
+  }
 }

@@ -114,7 +114,7 @@ class DatabaseService {
     return _db
         .collection('rideRequests')
         .where('driverId', isEqualTo: driverId)
-        .where('status', isEqualTo: 'completed')
+        .where('status', isEqualTo: 'accepted')
         .where('createdAt', isGreaterThanOrEqualTo: startOfDay)
         .snapshots()
         .map((snapshot) => snapshot.docs);

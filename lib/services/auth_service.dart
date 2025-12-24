@@ -31,6 +31,7 @@ class AuthService extends ChangeNotifier {
     if (_localStorageService.isUserLoggedIn) {
     }
   }
+
   Future<UserRole> getCurrentUserRole() async {
     if (_firebaseAuth.currentUser == null) return UserRole.user;
     final doc = await _db.collection('users').doc(_firebaseAuth.currentUser!.uid).get();
@@ -107,8 +108,6 @@ class AuthService extends ChangeNotifier {
   }
 
 
-
-
   Future<void> signUpWithEmail({
     required String email,
     required String password,
@@ -172,4 +171,5 @@ class AuthService extends ChangeNotifier {
       throw Exception("Error deleting account: $e");
     }
   }
+
 }

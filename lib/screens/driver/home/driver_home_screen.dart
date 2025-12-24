@@ -405,7 +405,9 @@ class DriverHomeScreen extends StatelessWidget {
                         MaterialPageRoute(
                           builder: (_) => const RideRequestsScreen(),
                         ),
-                      );
+                      ).then((value) {
+                        viewModel.refreshStats();
+                      },);
                     },
                     icon: const Icon(Icons.list_alt),
                     label: Text(
