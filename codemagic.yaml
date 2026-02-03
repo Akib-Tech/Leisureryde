@@ -1,0 +1,62 @@
+workflows:
+  ios-testflight:
+    name: iOS to TestFlight
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+
+    environment:
+      groups:
+        - appstore_credentials
+      vars:
+        BUNDLE_ID: "com.leisureryde.ride"
+        XCODE_WORKSPACE: "Runner.xcworkspace"
+        XCODE_SCHEME: "Runner"
+        IOS_DEPLOYMENT_TARGET: "14.0"
+        APPLE_TEAM_ID: $apple_team_id
+
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+
+    scripts:
+      - name: 📦 Get Flutter dependencies
+        script: flutter pub get
+
+      - name: 🏗️ Build iOS app (handles pods automatically)
+        script: flutter build ios --release --no-codesign
+
+      - name: 📦 Archive and export IPA
+        script: |
+          ARCHIVE_PATH="$CM_BUILD_DIR/Runner.xcarchive"
+          IPA_PATH="$CM_BUILD_DIR/ipa"
+
+          echo "📦 Archiving app..."
+          xcodebuild -workspace "ios/$XCODE_WORKSPACE" \
+            -scheme "$XCODE_SCHEME" \
+            -archivePath "$ARCHIVE_PATH" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            archive
+
+          echo "📤 Exporting IPA..."
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportOptionsPlist ios/exportOptions.plist \
+            -exportPath "$IPA_PATH" \
+            -allowProvisioningUpdates
+
+    artifacts:
+      - $CM_BUILD_DIR/ipa/*.ipa
+      - build/ios/ipa
+      - build/ios/iphoneos/*.ipa
+
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: true
+
+      email:
+        recipients:
+          - "Ibraheemakin201@gmail.com"
