@@ -217,6 +217,7 @@ class DatabaseService {
       rethrow;
     }
   }
+
   Future<List<RideRequest>> getUpcomingRides(String uid) async {
     try {
       final snapshot = await _db
@@ -247,6 +248,49 @@ class DatabaseService {
     } catch (e) {
       print("Error fetching past rides: $e");
       return [];
+    }
+  }
+
+  Future<String?> getCurrentRide(String uid) async {
+    try {
+      final query = _db
+          .collection('rideRequests')
+          .where('driverId', isEqualTo: uid)
+          .where('status', whereIn: ['pending', 'accepted', 'enroute', 'ongoing'])
+          .orderBy('createdAt', descending: true)
+          .limit(1);
+
+      final snapshot = await query.get();
+
+      if (snapshot.docs.isNotEmpty) {
+        return RideRequest.fromFirestore(snapshot.docs.first).id;
+      }
+
+      return null;
+    } catch (e) {
+      print("Error fetching most recent active ride for user $uid: $e");
+      return null;
+    }
+  }
+
+  Future<String?> getUserCurrentRide(String uid) async {
+    try {
+      final query = _db
+          .collection('rideRequests')
+          .where('userId', isEqualTo: uid)
+          .where('status', whereIn: ['pending', 'accepted', 'enroute', 'ongoing'])
+          .orderBy('createdAt', descending: true)
+          .limit(1);
+
+      final snapshot = await query.get();
+
+      if (snapshot.docs.isNotEmpty) {
+        return RideRequest.fromFirestore(snapshot.docs.first).id;
+      }
+      return null;
+    } catch (e) {
+      print("Error fetching most recent active ride for user $uid: $e");
+      return null;
     }
   }
 

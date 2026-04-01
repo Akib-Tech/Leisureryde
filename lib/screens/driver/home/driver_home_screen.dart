@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:leisureryde/models/ride_request_model.dart';
 
 import 'package:provider/provider.dart';
 
 import '../../../viewmodel/home/driver_home_view_model.dart';
 import '../../../widgets/custom_loading_indicator.dart';
 import '../ride_request/ride_requests_screen.dart';
+import '../../../services/database_service.dart';
 import '../trip/active_trip_bottom_sheet.dart';
 
 class DriverHomeScreen extends StatelessWidget {
+
   const DriverHomeScreen({super.key});
+
 
   @override
   Widget build(BuildContext context) {
@@ -73,13 +77,13 @@ class DriverHomeScreen extends StatelessWidget {
             return Stack(
               children: [
                 _buildMap(context, viewModel),
-
                 _buildHeader(context, viewModel),
-
                 if (viewModel.isOnline)
-                  _buildOnlineStatusCard(context, viewModel)
+                  viewModel.activeRide != null
+                      ? ActiveTripDriverBottomSheet(rideId: viewModel.activeRide!.id)
+                      : _buildOnlineStatusCard(context, viewModel)
                 else
-                  _buildOfflineCard(context, viewModel),
+                  _buildOfflineCard(context, viewModel)
               ],
             );
           },
@@ -310,122 +314,7 @@ class DriverHomeScreen extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Stats Row
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: theme.primaryColor.withOpacity(0.05),
-                borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildStatItem(
-                    context,
-                    icon: Icons.directions_car,
-                    label: "Trips Today",
-                    value: viewModel.todayTrips.toString(),
-                  ),
-                  Container(
-                    width: 1,
-                    height: 40,
-                    color: Colors.grey[300],
-                  ),
-                  _buildStatItem(
-                    context,
-                    icon: Icons.attach_money,
-                    label: "Earned Today",
-                    value: "\$${viewModel.todayEarnings.toStringAsFixed(0)}",
-                  ),
-                  Container(
-                    width: 1,
-                    height: 40,
-                    color: Colors.grey[300],
-                  ),
-                  _buildStatItem(
-                    context,
-                    icon: Icons.access_time,
-                    label: "Hours",
-                    value: "${viewModel.hoursOnline.toStringAsFixed(1)}h",
-                  ),
-                ],
-              ),
-            ),
-
-            // Ride Requests Section
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "Ride Requests",
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      if (viewModel.pendingRequestsCount > 0)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            "${viewModel.pendingRequestsCount} Pending",
-                            style: const TextStyle(
-                              color: Colors.orange,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: theme.primaryColor,
-                      minimumSize: const Size(double.infinity, 54),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const RideRequestsScreen(),
-                        ),
-                      ).then((value) {
-                        viewModel.refreshStats();
-                      },);
-                    },
-                    icon: const Icon(Icons.list_alt),
-                    label: Text(
-                      viewModel.pendingRequestsCount > 0
-                          ? "View Requests (${viewModel.pendingRequestsCount})"
-                          : "View All Requests",
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        child: _buildTripDetails(context, viewModel)
       ),
     );
   }
@@ -498,6 +387,129 @@ class DriverHomeScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+
+
+  Widget _buildTripDetails(BuildContext context, DriverHomeViewModel viewModel) {
+    final theme = Theme.of(context);
+
+    return  Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Stats Row
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: theme.primaryColor.withOpacity(0.05),
+            borderRadius:
+            const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildStatItem(
+                context,
+                icon: Icons.directions_car,
+                label: "Trips Today",
+                value: viewModel.todayTrips.toString(),
+              ),
+              Container(
+                width: 1,
+                height: 40,
+                color: Colors.grey[300],
+              ),
+              _buildStatItem(
+                context,
+                icon: Icons.attach_money,
+                label: "Earned Today",
+                value: "\$${viewModel.todayEarnings.toStringAsFixed(0)}",
+              ),
+              Container(
+                width: 1,
+                height: 40,
+                color: Colors.grey[300],
+              ),
+              _buildStatItem(
+                context,
+                icon: Icons.access_time,
+                label: "Hours",
+                value: "${viewModel.hoursOnline.toStringAsFixed(1)}h",
+              ),
+            ],
+          ),
+        ),
+
+        // Ride Requests Section
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Ride Requests",
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (viewModel.pendingRequestsCount > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        "${viewModel.pendingRequestsCount} Pending",
+                        style: const TextStyle(
+                          color: Colors.orange,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.primaryColor,
+                  minimumSize: const Size(double.infinity, 54),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const RideRequestsScreen(),
+                    ),
+                  ).then((value) {
+                    viewModel.refreshStats();
+                  },);
+                },
+                icon: const Icon(Icons.list_alt),
+                label: Text(
+                  viewModel.pendingRequestsCount > 0
+                      ? "View Requests (${viewModel.pendingRequestsCount})"
+                      : "View All Requests",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
