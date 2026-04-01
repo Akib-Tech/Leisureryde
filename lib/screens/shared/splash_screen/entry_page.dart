@@ -37,7 +37,6 @@ class _EntryPageState extends State<EntryPage> {
                 color: Colors.white,
                 radius: 50,
               ),
-              ActiveTripCard(rideId: "0DytR9vHzgBZmo5JnqSU"),
             ],
           ),
         )));

@@ -109,6 +109,11 @@ class DriverHomeViewModel extends ChangeNotifier {
   // ===================================
   Future<void> toggleOnlineStatus() async {
     if (_driverProfile == null) return;
+    print(driverProfile!.uid);
+    print(_activeRide);
+    print("helol");
+
+    print("driver profile: ${_driverProfile!.uid}");
 
     // Optimistically update UI
     _isOnline = !_isOnline;
@@ -254,17 +259,21 @@ class DriverHomeViewModel extends ChangeNotifier {
 
     _activeRideSubscription?.cancel();
 
+    print("driver profile: ${_driverProfile!.uid}");
     _activeRideSubscription = FirebaseFirestore.instance
-        .collection('ride_requests')
+        .collection('rideRequests')
         .where('driverId', isEqualTo: _driverProfile!.uid)
-        .where('status', whereIn: ['accepted', 'enroute', 'ongoing'])
+        .where('status', whereIn: ['accepted', 'enroute', 'ongoing','pending'])
         .limit(1) // a driver should have max 1 active trip
         .snapshots()
         .listen((snapshot) {
+          print(snapshot.docs.isEmpty);
       if (snapshot.docs.isNotEmpty) {
         _activeRide = RideRequest.fromFirestore(snapshot.docs.first);
+        print(_activeRide);
       } else {
         _activeRide = null;
+        print(_activeRide);
       }
       notifyListeners(); // ← very important
     }, onError: (e) {

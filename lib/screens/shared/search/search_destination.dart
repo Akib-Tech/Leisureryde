@@ -259,8 +259,6 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
             final result = RouteSelectionResult(
               origin: _selectedOrigin!,
               destination: _selectedDestination!,
-
-
             );
             Navigator.of(context).pop(result);
           },

@@ -12,140 +12,164 @@ class ActiveTripDriverBottomSheet extends StatelessWidget {
   const ActiveTripDriverBottomSheet({super.key, required this.rideId});
 
   @override
+
+  @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => ActiveTripDriverViewModel(rideId: rideId),
       child: Consumer<ActiveTripDriverViewModel>(
         builder: (context, vm, _) {
-          if (vm.isLoading) return const CustomLoadingIndicator();
+          if (vm.isLoading) {
+            return const CustomLoadingIndicator();
+          }
+
           if (vm.rideRequest == null || vm.passengerProfile == null) {
-            return Column(children: [Text("Driver assigned"), CircularProgressIndicator()]);
+            return const SizedBox.shrink(); // or a nice loading state
           }
 
           final passenger = vm.passengerProfile!;
           final t = Theme.of(context);
-          print("→ Showing UI with status: ${vm.rideRequest!.status}");
 
-          // Determine which control button to show
           Widget? stateButton;
           switch (vm.rideRequest!.status) {
             case RideStatus.accepted:
-              stateButton = _statusButton(
-                  context, vm, "Arrived at Pickup", vm.markArrived);
+              stateButton = _statusButton(context, vm, "Arrived at Pickup", vm.markArrived);
               break;
             case RideStatus.enroute:
-              stateButton = _statusButton(
-                  context, vm, "Start Trip", vm.startTrip);
+              stateButton = _statusButton(context, vm, "Start Trip", vm.startTrip);
               break;
             case RideStatus.ongoing:
-              stateButton = _statusButton(
-                  context, vm, "End Trip", vm.completeTrip);
-              break;
-            case RideStatus.completed:
-              stateButton = const SizedBox.shrink();
+              stateButton = _statusButton(context, vm, "End Trip", vm.completeTrip);
               break;
             default:
               stateButton = const SizedBox.shrink();
           }
 
-
-          return Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            padding: const EdgeInsets.all(20),
-            child: ListView(
-              children: [
-                Center(
-                  child: Container(
+          return Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 20,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Drag Handle
+                  Container(
+                    margin: const EdgeInsets.only(top: 12),
                     width: 40,
                     height: 5,
-                    margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
                       color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(5),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                ),
-                Center(
-                  child: Text(
-                    vm.statusLabel,
-                    style: t.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: t.primaryColor),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ListTile(
-                  leading: CircleAvatar(
-                    radius: 28,
-                    backgroundImage: passenger.profileImageUrl.isNotEmpty
-                        ? NetworkImage(passenger.profileImageUrl)
-                        : null,
-                    child: passenger.profileImageUrl.isEmpty
-                        ? Text(
-                      passenger.firstName[0].toUpperCase(),
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    )
-                        : null,
-                  ),
-                  title: Text(passenger.fullName,
-                      style: t.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold)),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        Icon(Icons.star,
-                            size: 16, color: t.primaryColor),
-                        Text(passenger.rating.toStringAsFixed(1))
-                      ]),
-                      Text(passenger.email,
-                          style: TextStyle(color: Colors.grey[600])),
-                    ],
-                  ),
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                          icon: const Icon(Icons.call, color: Colors.green),
-                          onPressed: () => vm.makeCall()),
-                      IconButton(
-                          icon: const Icon(Icons.chat, color: Colors.blue),
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ChatScreen(
-                                  rideId: rideId,
-                                  otherUserId: passenger.uid,
-                                  otherUserName: passenger.fullName,
-                                  otherUserImageUrl:
-                                  passenger.profileImageUrl),
+
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                    child: Column(
+                      children: [
+                        // Status Label
+                        Center(
+                          child: Text(
+                            vm.statusLabel,
+                            style: t.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: t.primaryColor,
                             ),
-                          )),
-                    ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Passenger Info
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            radius: 28,
+                            backgroundImage: passenger.profileImageUrl.isNotEmpty
+                                ? NetworkImage(passenger.profileImageUrl)
+                                : null,
+                            child: passenger.profileImageUrl.isEmpty
+                                ? Text(passenger.firstName[0].toUpperCase(),
+                                style: const TextStyle(fontWeight: FontWeight.bold))
+                                : null,
+                          ),
+                          title: Text("${passenger.firstName} ${passenger.lastName}",
+                            style: TextStyle(color: Colors.grey[900])),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                const Icon(Icons.star, size: 16, color: Colors.amber),
+                                const SizedBox(width: 4),
+                                Text(passenger.rating.toStringAsFixed(1)),
+                              ]),
+                              Text(passenger.email, style: TextStyle(color: Colors.grey[600])),
+                            ],
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(icon: const Icon(Icons.call, color: Colors.green), onPressed: vm.makeCall),
+                              IconButton(
+                                icon: const Icon(Icons.chat, color: Colors.blue),
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ChatScreen(
+                                      rideId: rideId,
+                                      otherUserId: passenger.uid,
+                                      otherUserName: passenger.fullName,
+                                      otherUserImageUrl: passenger.profileImageUrl,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Action Button
+                        if (stateButton != null) stateButton,
+
+                        const SizedBox(height: 12),
+
+                        // Cancel Button
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            side: const BorderSide(color: Colors.red),
+                            minimumSize: const Size(double.infinity, 54),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: vm.cancelRide,
+                          icon: const Icon(Icons.cancel_outlined),
+                          label: const Text("Cancel Ride", style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                stateButton,
-                const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red)),
-                  onPressed: vm.cancelRide,
-                  icon: const Icon(Icons.cancel_outlined),
-                  label: const Text("Cancel Ride"),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },
       ),
     );
   }
-
   Widget _statusButton(BuildContext ctx, ActiveTripDriverViewModel vm,
       String label, Future<void> Function() action) {
     final theme = Theme.of(ctx);

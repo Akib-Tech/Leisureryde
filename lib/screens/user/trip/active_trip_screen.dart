@@ -30,7 +30,6 @@ class ActiveTripCard extends StatelessWidget {
             }
             final driver = vm.driverProfile!;
             final String label = _statusLabel(vm.tripStatus);
-            print("TRIP STATUS: ${vm.tripStatus}");
             return Container(
               margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.all(20),
@@ -100,7 +99,7 @@ class ActiveTripCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      Column(
+                      Row(
                         children: [
                           IconButton(
                             icon: const Icon(Icons.call, color: Colors.green),

@@ -64,7 +64,7 @@ class RideRequestsViewModel extends ChangeNotifier {
       await _rideService.acceptRide(rideId, driverId).then(
         (value) {
           if (context.mounted) {
-            Navigator.pop(context); // Go back to the map
+            Navigator.popUntil(context, (route) => route.isFirst); // Go back to the map
           }
         },
       );

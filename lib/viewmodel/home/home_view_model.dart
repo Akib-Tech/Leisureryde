@@ -16,6 +16,7 @@ import 'package:leisureryde/services/fare_calculation_service.dart';
 import 'package:leisureryde/services/place_service.dart';
 import 'package:leisureryde/services/ride_service.dart';
 import 'package:leisureryde/viewmodel/maps/maps_viewmodel.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../screens/user/payment/stripe_checkout.dart';
 import '../payment/payment.dart';
@@ -74,6 +75,65 @@ class HomeViewModel extends ChangeNotifier {
     // _paymentViewModel.addListener(_onPaymentStateChanged);
   }
 
+// Add these constants
+  static const String _kCurrentStep = 'home_current_step';
+  static const String _kCurrentRideId = 'home_current_ride_id';
+
+// Helper to convert enum to string
+  String _enumToString(HomeStep step) => step.name;
+
+// Helper to convert string back to enum
+  HomeStep _stringToHomeStep(String? value) {
+    if (value == null) return HomeStep.initial;
+    return HomeStep.values.firstWhere(
+          (step) => step.name == value,
+      orElse: () => HomeStep.initial,
+    );
+  }
+
+// Save current state
+  Future<void> _saveCurrentState() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString(_kCurrentStep, _enumToString(_currentStep));
+
+    if (_rideId != null) {
+      await prefs.setString(_kCurrentRideId, _rideId!);
+    } else {
+      await prefs.remove(_kCurrentRideId);
+    }
+  }
+
+  Future<void> _restoreCurrentState() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final savedStepString = prefs.getString(_kCurrentStep);
+    final savedRideId = prefs.getString(_kCurrentRideId);
+
+    bool stateChanged = false;
+
+    if (savedStepString != null) {
+      final restoredStep = _stringToHomeStep(savedStepString);
+      if (restoredStep != _currentStep) {
+        _currentStep = restoredStep;
+        stateChanged = true;
+      }
+    }
+
+    if (savedRideId != null && savedRideId.isNotEmpty) {
+      if (_rideId != savedRideId) {
+        _rideId = savedRideId;
+        _listenForRideStatus(savedRideId);
+        stateChanged = true;
+      }
+    }
+
+    if (stateChanged) {
+      debugPrint("🔄 Restored state → Step: ${_currentStep.name} | Ride: $_rideId");
+      notifyListeners();        // ← Force rebuild
+    }
+  }
+
   Future<void> _initialize() async {
     _isLoading = true;
     notifyListeners();
@@ -94,6 +154,8 @@ class HomeViewModel extends ChangeNotifier {
       _userProfile = results[0] as UserProfile;
       _savedPlaces = results[1] as List<SavedPlace>;
       _recentDestinations = results[2] as List<RideDestination>;
+      await _restoreCurrentState();
+      await _checkForActiveRide();
       _listenToOnlineDrivers();
     } catch (e) {
       debugPrint("Error initializing HomeViewModel: $e");
@@ -378,6 +440,25 @@ class HomeViewModel extends ChangeNotifier {
     final ui.FrameInfo fi = await codec.getNextFrame();
     final byteData = await fi.image.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
+  }
+
+  Future<void> _checkForActiveRide() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+
+    final activeRideId = await _db.getUserCurrentRide(uid);
+
+    if (activeRideId != null) {
+      _rideId = activeRideId;
+      _listenForRideStatus(activeRideId);
+      notifyListeners();           // ← This is key
+      await _saveCurrentState();
+      debugPrint("✅ Found active ride on startup: $activeRideId");
+    }else{
+      debugPrint("✅ Found active ride on startup last: $activeRideId");
+      _currentStep = HomeStep.initial;
+    }
+    debugPrint("✅ Found active ride on startup last: $activeRideId : $uid");
   }
 
   @override
