@@ -56,24 +56,20 @@ class RideRequestsViewModel extends ChangeNotifier {
   }
 
   // Your existing methods (these remain unchanged)
-  Future<void> acceptRide(String rideId, BuildContext context) async {
+  Future<bool> acceptRide(String rideId, BuildContext context) async {
     final driverId = _authService.currentUser?.uid;
-    if (driverId == null) return;
+    if (driverId == null) return false;
 
     try {
-      await _rideService.acceptRide(rideId, driverId).then(
-        (value) {
-          if (context.mounted) {
-            Navigator.popUntil(context, (route) => route.isFirst); // Go back to the map
-          }
-        },
-      );
+      await _rideService.acceptRide(rideId, driverId);
+      return true;
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Failed to accept ride: $e")),
         );
       }
+      return false;
     }
   }
 

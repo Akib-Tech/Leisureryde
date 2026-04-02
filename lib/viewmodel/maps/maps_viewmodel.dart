@@ -184,6 +184,8 @@ class MapViewModel extends ChangeNotifier {
     // If you call clearRoute from outside getDirections, you might need notifyListeners.
   }
 
+
+
   @override
   void dispose() {
     debugPrint("MapViewModel: Disposing MapViewModel.");

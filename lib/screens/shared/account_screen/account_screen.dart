@@ -138,7 +138,7 @@ class _AccountScreenState extends State<AccountScreen> {
         //   ),
         // ),
         const _Divider(),
-        _SettingsTile(
+     /*   _SettingsTile(
           icon: Icons.help_outline,
           title: 'Help & Support',
           onTap: () => viewModel.launchUrlHelper('https://leisureryde.com/help', context),
@@ -149,6 +149,8 @@ class _AccountScreenState extends State<AccountScreen> {
           title: 'Legal',
           onTap: () => viewModel.launchUrlHelper('https://leisureryde.com/legal/terms', context),
         ),
+
+      */
       ],
     );
   }

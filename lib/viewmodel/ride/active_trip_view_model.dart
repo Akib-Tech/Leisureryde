@@ -15,7 +15,7 @@ import '../../services/ride_service.dart';
 import '../payment/payment.dart';
 
 class ActiveTripViewModel extends ChangeNotifier {
-  final String rideId;
+  final String? rideId;
   final RideService _rideService = locator<RideService>();
   final DatabaseService _databaseService = locator<DatabaseService>();
   late StreamSubscription<DocumentSnapshot> _rideSubscription;
@@ -50,16 +50,21 @@ class ActiveTripViewModel extends ChangeNotifier {
 
   String get tripStatus => _rideData?['status'] ?? 'loading';
 
-  ActiveTripViewModel({required this.rideId}) {
+  ActiveTripViewModel({this.rideId}) {
     _initialize();
   }
 
   void _initialize() {
+    if (rideId == null || rideId!.trim().isEmpty) {
+      _isLoading = false;
+      notifyListeners();
+      return;                    // ← STOP here! Don't crash
+    }
     _listenToRideUpdates();
   }
 
   void _listenToRideUpdates() {
-    _rideSubscription = _rideService.getRideStream(rideId).listen((snapshot) async {
+    _rideSubscription = _rideService.getRideStream(rideId!).listen((snapshot) async {
       if (!snapshot.exists) return;
 
       _rideData = snapshot;
@@ -201,7 +206,8 @@ class ActiveTripViewModel extends ChangeNotifier {
   }
 
   Future<void> cancelTrip() async {
-    await _rideService.cancelRide(rideId, cancelledBy: 'user');
+    if (rideId == null || rideId!.isEmpty) return;
+    await _rideService.cancelRide(rideId!, cancelledBy: 'user');
   }
 
 
