@@ -63,7 +63,7 @@ class DriverHomeScreen extends StatelessWidget {
                       ElevatedButton.icon(
                         onPressed: () {
                           // Retry getting location
-                          viewModel.mapViewModel.dispose();
+                          viewModel.requestLocationPermission();
                         },
                         icon: const Icon(Icons.refresh),
                         label: const Text("Retry"),

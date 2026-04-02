@@ -192,7 +192,29 @@ class _RideRequestCard extends StatelessWidget {
         Expanded(
           flex: 2,
           child: ElevatedButton(
-            onPressed: () => viewModel.acceptRide(request.id, context),
+            onPressed: () async{
+              final success = await viewModel.acceptRide(request.id,context);
+
+              if (success && context.mounted) {
+                // Go back to DriverHomeScreen
+                Navigator.pop(context);
+
+                // Nice feedback
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Ride accepted successfully!"),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }else if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Failed to accept ride. Please try again."),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).primaryColor,
               padding: const EdgeInsets.symmetric(vertical: 12),

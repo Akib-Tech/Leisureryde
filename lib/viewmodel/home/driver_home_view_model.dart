@@ -288,5 +288,34 @@ class DriverHomeViewModel extends ChangeNotifier {
     _activeRide = null;
   }
 
+  /// Re-requests location permission and refreshes the map
+  Future<void> requestLocationPermission() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      // Re-initialize the map (this should trigger permission request again)
+      await mapViewModel.initialize();
+
+      // If permission is now granted, refresh driver profile and start listeners
+      if (mapViewModel.currentPosition != null) {
+        final user = _authService.currentUser;
+        if (user != null) {
+          _driverProfile = await _databaseService.getDriverProfile(user.uid);
+
+          if (_driverProfile?.isApproved == true && _isOnline) {
+            _startLocationUpdates();
+            _startListeningToStats();
+            _startListeningToActiveRide();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Error requesting location permission: $e");
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
 }

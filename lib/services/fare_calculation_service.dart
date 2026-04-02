@@ -1,23 +1,26 @@
 import 'dart:math';
 
 class FareCalculationService {
-  static const double _baseFare = 0.75;
-  static const double _perMile = 0.7125;
-  static const double _perMinute = 0.0975;
-  static const double _minTripEarnings = 3.22;
+  static const double _baseFare = 2.75;
+  static const double _perMile = 1.25;           // Good base for Comfort
+  static const double _perMinute = 0.28;
+  static const double _bookingFee = 4.25;
+  static const double _minTripEarnings = 6.50;
 
-  // Vehicle type multipliers (example)
+  // Vehicle type multipliers - optimized for Uber-like pricing
   static const double _leisureComfortMultiplier = 1.0;
-  static const double _leisurePlusMultiplier = 1.5; // e.g., 50% more expensive
-  static const double _leisureExecMultiplier = 2.0; // e.g., 100% more expensive
+  static const double _leisurePlusMultiplier = 1.45;   // ~45% premium (realistic for Comfort/Plus tier)
+  static const double _leisureExecMultiplier = 2.65;   // ~165% premium (closer to Uber Black / Exec)
 
   CalculatedFare calculateFare(int distanceInMeters, int durationInSeconds) {
     double distanceInMiles = distanceInMeters * 0.000621371;
     double durationInMinutes = durationInSeconds / 60;
 
+    // Standard calculation + booking fee
     double standardFare = _baseFare +
         (distanceInMiles * _perMile) +
-        (durationInMinutes * _perMinute);
+        (durationInMinutes * _perMinute) +
+        _bookingFee;
 
     // Calculate fare for each vehicle type
     double comfortFare = standardFare * _leisureComfortMultiplier;
@@ -26,8 +29,8 @@ class FareCalculationService {
 
     return CalculatedFare(
       leisureComfort: max(comfortFare, _minTripEarnings),
-      leisurePlus: max(plusFare, _minTripEarnings * _leisurePlusMultiplier),
-      leisureExec: max(execFare, _minTripEarnings * _leisureExecMultiplier),
+      leisurePlus: max(plusFare, _minTripEarnings * 1.8),
+      leisureExec: max(execFare, _minTripEarnings * 3.2),
     );
   }
 }
@@ -44,7 +47,6 @@ class CalculatedFare {
   });
 
   /// Retrieves the fare for a specific vehicle type.
-  /// This method was missing and caused the error.
   double getFareForVehicle(String vehicleType) {
     switch (vehicleType) {
       case 'Leisure Comfort':
@@ -54,8 +56,6 @@ class CalculatedFare {
       case 'Leisure Exec':
         return leisureExec;
       default:
-      // Handle unexpected vehicle type gracefully, e.g., throw error or return comfort fare
-      // For robustness, you might log this or throw a more specific exception.
         return leisureComfort;
     }
   }

@@ -63,8 +63,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildMessageBubble(Map<String, dynamic> msg) {
     final bool isMe = msg['senderId'] == _currentUserId;
-    final Timestamp timestamp = msg['timestamp'];
-    final time = timestamp.toDate();
+    final Timestamp? timestamp = msg['timestamp'];
+    final DateTime time = timestamp?.toDate() ?? DateTime.now();
     final formattedTime =
         "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
 
@@ -199,7 +199,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     borderSide: BorderSide.none,
                   ),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: Colors.black,
                   contentPadding: const EdgeInsets.symmetric(
                       horizontal: 20, vertical: 10),
                 ),

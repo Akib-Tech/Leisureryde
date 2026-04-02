@@ -112,27 +112,39 @@ class HomeViewModel extends ChangeNotifier {
 
     bool stateChanged = false;
 
+    // Restore step
     if (savedStepString != null) {
       final restoredStep = _stringToHomeStep(savedStepString);
       if (restoredStep != _currentStep) {
         _currentStep = restoredStep;
         stateChanged = true;
+        debugPrint("✅ Restored step: $_currentStep");
       }
     }
 
+    // Restore rideId and re-attach listener (most important part)
     if (savedRideId != null && savedRideId.isNotEmpty) {
       if (_rideId != savedRideId) {
         _rideId = savedRideId;
+        debugPrint("✅ Restored rideId: $_rideId");
+
+        // Re-attach the real-time listener
         _listenForRideStatus(savedRideId);
         stateChanged = true;
+      } else if (_rideId == savedRideId && _currentStep == HomeStep.activeTrip) {
+        // RideId is already set but listener might have died → re-attach
+        _listenForRideStatus(savedRideId);
       }
     }
 
-    if (stateChanged) {
+    // Force rebuild if anything changed
+    if (stateChanged || _currentStep == HomeStep.activeTrip) {
       debugPrint("🔄 Restored state → Step: ${_currentStep.name} | Ride: $_rideId");
-      notifyListeners();        // ← Force rebuild
+      notifyListeners();
     }
   }
+
+
 
   Future<void> _initialize() async {
     _isLoading = true;
@@ -403,19 +415,46 @@ class HomeViewModel extends ChangeNotifier {
     }
   }
 
-  void _listenForRideStatus(String id) {
-    _rideListener?.cancel();
+  void _listenForRideStatus(String id) async{
+    _rideListener?.cancel(); // Cancel any old listener first
+
     _rideListener = _rideService.getRideStream(id).listen((snap) {
-      if (!snap.exists) return;
+      if (!snap.exists) {
+        _resetRide();
+        return;
+      }
+
       final data = snap.data() as Map<String, dynamic>;
-      final status = RideStatus.fromString(data['status']);
+      final status = RideStatus.fromString(data['status'] ?? 'pending');
+
+      print("Hello RideStatus.${status.name}"); // Keep your debug log
+
       if (status.isTerminal) {
         _resetRide();
-      } else if (status != RideStatus.pending) {
-        _currentStep = HomeStep.activeTrip;
+      } else if (status == RideStatus.ongoing ||
+          status == RideStatus.enroute ||
+          status == RideStatus.accepted) {
+        if (_currentStep != HomeStep.activeTrip) {
+          _currentStep = HomeStep.activeTrip;
+          _rideId = id; // Ensure rideId is set
+          _saveCurrentState(); // Persist the new step
+          notifyListeners();
+        }
       }
-      notifyListeners();
+    }, onError: (error) async {
+
+      debugPrint("Ride listener error: $error");
     });
+  }
+
+
+  Future<void> refreshActiveTripState() async {
+    if (_rideId != null && _currentStep == HomeStep.activeTrip) {
+      // Re-attach listener in case it was cancelled
+      _listenForRideStatus(_rideId!);
+      notifyListeners();
+      debugPrint("🔄 Refreshed active trip state for ride: $_rideId");
+    }
   }
 
   Future<void> cancelRide() async {
@@ -426,11 +465,14 @@ class HomeViewModel extends ChangeNotifier {
   }
 
   void _resetRide() {
+    _rideListener?.cancel();
+    _rideListener = null;
     _rideId = null;
     _selectedVehicle = null;
     mapViewModel.clearRoute();
     _currentStep = HomeStep.initial;
     _paymentViewModel.resetPayment();
+    _saveCurrentState(); // Save the reset state
     notifyListeners();
   }
 

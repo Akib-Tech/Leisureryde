@@ -28,6 +28,12 @@ class HomeScreen extends StatelessWidget {
           builder: (context, viewModel, child) {
             debugPrint("🟢 [HomeScreen] Rebuilding. Current step is: ${viewModel.currentStep}");
 
+            if (viewModel.currentStep == HomeStep.activeTrip) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                viewModel.refreshActiveTripState();
+              });
+            }
+
             if (viewModel.isLoading || viewModel.mapViewModel.isLoading) {
               return const CustomLoadingIndicator();
             }
