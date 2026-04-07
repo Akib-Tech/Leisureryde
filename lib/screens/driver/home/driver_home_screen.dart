@@ -424,7 +424,7 @@ class DriverHomeScreen extends StatelessWidget {
                 context,
                 icon: Icons.attach_money,
                 label: "Earned Today",
-                value: "\$${viewModel.todayEarnings.toStringAsFixed(0)}",
+                value: "\$${viewModel.todayEarnings.toStringAsFixed(1)}",
               ),
               Container(
                 width: 1,

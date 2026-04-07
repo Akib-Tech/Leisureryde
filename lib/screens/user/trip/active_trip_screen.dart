@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:leisureryde/screens/shared/timer/timer.dart';
 import 'package:provider/provider.dart';
 import '../../../viewmodel/ride/active_trip_view_model.dart';
 import '../../../widgets/custom_loading_indicator.dart';
@@ -134,6 +135,16 @@ class ActiveTripCard extends StatelessWidget {
                   ],
                 ),
 
+                const SizedBox(height: 20),
+
+                if(vm.tripStatus == "ongoing")
+                 TripEndTimer(
+                  destination: vm.userDestination,
+                  driverLocationStream: vm.driverLoc, // e.g., Firebase stream of driver position
+                  onTripAlmostEnded: () {
+                    // Show "Almost there!" banner or notification
+                  },
+                ),
                 const SizedBox(height: 20),
 
                 // Cancel Button with conditional logic

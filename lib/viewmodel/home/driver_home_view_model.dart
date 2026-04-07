@@ -165,8 +165,15 @@ class DriverHomeViewModel extends ChangeNotifier {
         .getTodaysTripsStream(_driverProfile!.uid)
         .listen((docs) {
       _todayTrips = docs.length;
-      _todayEarnings =
-          docs.fold(0.0, (sum, doc) => sum + (doc['fare'] ?? 0.0));
+      _todayEarnings = docs.fold(0.0, (sum, doc) {
+        final fare = doc['fare'];
+
+        if (fare is int) return sum + fare.toDouble();
+        if (fare is double) return sum + fare;
+        if (fare is String) return sum + (double.tryParse(fare) ?? 0.0);
+
+        return sum;
+      });
       notifyListeners();
     });
 

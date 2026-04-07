@@ -6,6 +6,7 @@ import '../models/driver_profile.dart';
 import '../models/ride_request_model.dart';
 import '../models/saved_places.dart';
 import '../models/user_profile.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -107,6 +108,25 @@ class DatabaseService {
     return _db.collection('drivers').doc(driverId).snapshots();
   }
 
+  Stream<LatLng> getDriverLatLngStream(String? driverId) {
+    return getDriverLocationStream(driverId!).map((DocumentSnapshot snapshot) {
+      if (!snapshot.exists) {
+        throw Exception('Driver location document not found');
+      }
+
+      final data = snapshot.data() as Map<String, dynamic>? ?? {};
+
+      // Adjust field names according to how you store location in Firestore
+      final geoPoint = LatLng(data["latitude"],data["longitude"]);
+
+      if (geoPoint == null) {
+        throw Exception('Location field missing in driver document');
+      }
+
+      return LatLng(geoPoint.latitude, geoPoint.longitude);
+    });
+  }
+
   Stream<List<DocumentSnapshot>> getTodaysTripsStream(String driverId) {
     final now = DateTime.now();
     final startOfDay = Timestamp.fromDate(DateTime(now.year, now.month, now.day));
@@ -114,7 +134,7 @@ class DatabaseService {
     return _db
         .collection('rideRequests')
         .where('driverId', isEqualTo: driverId)
-        .where('status', isEqualTo: 'accepted')
+        .where('status', isEqualTo: 'completed')
         .where('createdAt', isGreaterThanOrEqualTo: startOfDay)
         .snapshots()
         .map((snapshot) => snapshot.docs);
