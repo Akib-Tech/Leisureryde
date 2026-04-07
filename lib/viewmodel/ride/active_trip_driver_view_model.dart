@@ -82,7 +82,7 @@ class ActiveTripDriverViewModel extends ChangeNotifier {
       print("Status update failed: $e");
     }
     // Force UI refresh even if DB call fails or is slow
-    notifyListeners();
+    //notifyListeners();
   }
 
   Future<void> makeCall() async {

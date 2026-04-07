@@ -52,22 +52,26 @@ class HomeScreen extends StatelessWidget {
                   left: 0,
                   right: 0,
                   child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
-                    switchInCurve: Curves.easeInOut,
-                    switchOutCurve: Curves.easeInOut,
-                    transitionBuilder: (child, animation) {
+                    duration: const Duration(milliseconds: 350),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (Widget child, Animation<double> animation) {
                       return FadeTransition(
                         opacity: animation,
                         child: SlideTransition(
                           position: Tween<Offset>(
-                            begin: const Offset(0, 0.2), // Slide up slightly from bottom
+                            begin: const Offset(0, 0.25),
                             end: Offset.zero,
                           ).animate(animation),
                           child: child,
                         ),
                       );
                     },
-                    child: _buildBottomCardContent(context, viewModel),
+                    // === THIS IS THE KEY FIX ===
+                    child: KeyedSubtree(
+                      key: ValueKey(viewModel.currentStep),   // Force rebuild on step change
+                      child: _buildBottomCardContent(context, viewModel),
+                    ),
                   ),
                 ),
               ],
@@ -195,9 +199,10 @@ class HomeScreen extends StatelessWidget {
       case HomeStep.payment:
         return _buildPaymentCardContent(context, viewModel);
       case HomeStep.findingDriver:
-        return FindingDriverCard(key: const ValueKey('FindingDriverCard'), onCancel: viewModel.cancelRide);
+        return FindingDriverCard(key: const ValueKey(HomeStep.findingDriver), onCancel: viewModel.cancelRide);
       case HomeStep.activeTrip:
-        return ActiveTripCard(key: const ValueKey('ActiveTripCard'), rideId: viewModel.currentRideId ?? '');
+        debugPrint("Page already in active trip mode");
+        return ActiveTripCard(key: const ValueKey(HomeStep.activeTrip), rideId: viewModel.currentRideId ?? '');
     }
   }
 

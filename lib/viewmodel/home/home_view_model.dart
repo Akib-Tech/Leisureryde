@@ -414,39 +414,55 @@ class HomeViewModel extends ChangeNotifier {
       // Do NOT reset payment here. _resetRide handles it on failure/cancellation.
     }
   }
+  void _listenForRideStatus(String id) {
+    _rideListener?.cancel();
+    _rideListener = null;
 
-  void _listenForRideStatus(String id) async{
-    _rideListener?.cancel(); // Cancel any old listener first
+    debugPrint("🎧 Starting ride listener for rideId: $id");
 
     _rideListener = _rideService.getRideStream(id).listen((snap) {
       if (!snap.exists) {
+        debugPrint("❌ Ride document no longer exists");
         _resetRide();
         return;
       }
 
       final data = snap.data() as Map<String, dynamic>;
-      final status = RideStatus.fromString(data['status'] ?? 'pending');
+      final rawStatus = data['status'] ?? 'pending';
+      final status = RideStatus.fromString(rawStatus);
 
-      print("Hello RideStatus.${status.name}"); // Keep your debug log
+      debugPrint("🔥 RIDE STATUS UPDATE → Raw: '$rawStatus' | Enum: ${status.name} | Current Step: ${_currentStep.name}");
 
       if (status.isTerminal) {
+        debugPrint("🛑 Terminal status → resetting ride");
         _resetRide();
-      } else if (status == RideStatus.ongoing ||
+        return;
+      }
+
+      // Broader condition to catch "accepted"
+      if (status == RideStatus.accepted ||
           status == RideStatus.enroute ||
-          status == RideStatus.accepted) {
+          status == RideStatus.ongoing ||
+          rawStatus.toLowerCase().contains('accept')) {   // safety net
+
         if (_currentStep != HomeStep.activeTrip) {
+          debugPrint("✅ SWITCHING TO ACTIVETRIPCARD NOW!");
           _currentStep = HomeStep.activeTrip;
-          _rideId = id; // Ensure rideId is set
-          _saveCurrentState(); // Persist the new step
-          notifyListeners();
+          _rideId = id;
+          _saveCurrentState();
+
+          // Small delay to let "Driver Accepted!" message be visible
+          Future.delayed(const Duration(milliseconds: 1200), () {
+            notifyListeners();
+          });
+        } else {
+          debugPrint("Already in activeTrip step");
         }
       }
-    }, onError: (error) async {
-
-      debugPrint("Ride listener error: $error");
+    }, onError: (error) {
+      debugPrint("❌ Ride listener ERROR: $error");
     });
   }
-
 
   Future<void> refreshActiveTripState() async {
     if (_rideId != null && _currentStep == HomeStep.activeTrip) {

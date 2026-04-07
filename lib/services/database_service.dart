@@ -284,12 +284,17 @@ class DatabaseService {
 
       final snapshot = await query.get();
 
+      print("✅ Query succeeded. Docs found: ${snapshot.docs.length}");
       if (snapshot.docs.isNotEmpty) {
-        return RideRequest.fromFirestore(snapshot.docs.first).id;
+        final ride = RideRequest.fromFirestore(snapshot.docs.first);
+        print("✅ Active ride found: ${ride.id}");
+        return ride.id;
       }
+      print("✅ No active ride found");
       return null;
-    } catch (e) {
-      print("Error fetching most recent active ride for user $uid: $e");
+    } catch (e, stack) {
+      print("❌ getUserCurrentRide failed: $e");
+      print("Stack: $stack");
       return null;
     }
   }

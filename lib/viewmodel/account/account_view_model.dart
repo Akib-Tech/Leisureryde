@@ -10,6 +10,7 @@ import 'package:leisureryde/screens/shared/splash_screen/welcome_screen.dart';
 import 'package:leisureryde/services/auth_service.dart';
 import 'package:leisureryde/services/database_service.dart';
 import 'package:leisureryde/services/storage_service.dart';
+import 'package:leisureryde/viewmodel/home/driver_home_view_model.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/push_notifications_service.dart';
@@ -204,6 +205,19 @@ class AccountViewModel extends ChangeNotifier {
   }
 
   Future<void> signOut(BuildContext context) async {
+    final uid = _authService.currentUser?.uid;
+    debugPrint("Status changed to false $uid");
+    // First, set driver offline if it was a driver
+    if (uid != null) {
+      try {
+        await _databaseService.updateDriverOnlineStatus(uid, false);
+        debugPrint("Status changed to false");// or directly set isOnline = false
+      } catch (e) {
+        // Ignore permission errors during sign-out
+        debugPrint("Ignored error while setting offline on sign-out: $e");
+      }
+    }
+
     await _authService.signOut();
     if (context.mounted) {
       Navigator.of(context).pushAndRemoveUntil(
