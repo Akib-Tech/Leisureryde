@@ -378,7 +378,7 @@ class HomeScreen extends StatelessWidget {
               children: [
                 _buildRouteInfo(context, icon: Icons.access_time, label: "Trip ETA", value: etaTime),
                 _buildRouteInfo(context, icon: Icons.directions_car, label: "Duration", value: directions.duration ?? 'N/A'),
-                _buildRouteInfo(context, icon: Icons.straighten, label: "Distance", value: directions.distance ?? 'N/A'),
+                _buildRouteInfo(context, icon: Icons.straighten, label: "Distance", value:  directions.distance ?? 'N/A'),
               ],
             ),
           ),

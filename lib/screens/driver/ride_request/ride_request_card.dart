@@ -129,13 +129,6 @@ class _RideRequestCardState extends State<RideRequestCard> {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton(
-                  onPressed: () => widget.onDecline(widget.request.id),
-                  child: const Text("Decline"),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
                 flex: 2,
                 child: ElevatedButton(
                   onPressed: () => widget.onAccept(widget.request.id),

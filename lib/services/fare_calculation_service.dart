@@ -23,9 +23,9 @@ class FareCalculationService {
         _bookingFee;
 
     // Calculate fare for each vehicle type
-    double comfortFare = standardFare * _leisureComfortMultiplier;
-    double plusFare = standardFare * _leisurePlusMultiplier;
-    double execFare = standardFare * _leisureExecMultiplier;
+    double comfortFare = (standardFare * _leisureComfortMultiplier) + (0.07 * (standardFare * _leisureComfortMultiplier));
+    double plusFare = standardFare * _leisurePlusMultiplier  + (0.07 * (standardFare * _leisurePlusMultiplier));
+    double execFare = standardFare * _leisureExecMultiplier + (0.07 * (standardFare * _leisureExecMultiplier));
 
     return CalculatedFare(
       leisureComfort: max(comfortFare, _minTripEarnings),

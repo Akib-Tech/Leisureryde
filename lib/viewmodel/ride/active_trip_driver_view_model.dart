@@ -20,6 +20,12 @@ class ActiveTripDriverViewModel extends ChangeNotifier {
   RideRequest? _ride;
   RideRequest? get rideRequest => _ride;
 
+  LatLng? _destination;
+  LatLng? get userDestination => _destination;
+
+  Stream<LatLng>? _driverLocation;
+  Stream<LatLng>? get driverLoc => _driverLocation;
+
   UserProfile? _passenger;
   UserProfile? get passengerProfile => _passenger;
 
@@ -51,9 +57,19 @@ class ActiveTripDriverViewModel extends ChangeNotifier {
       if (_ride!.userId.isNotEmpty && _passenger == null) {
         _passenger = await _db.getUserProfile(_ride!.userId);
       }
+
+      if (_ride!.driverId != null){
+        _driverLocation = _db.getDriverLatLngStream(_ride!.driverId);
+
+        _destination = _ride!.destinationLocation;
+      }
+
       _loading = false;
       notifyListeners();
     });
+
+
+
   }
 
   Future<void> markArrived() async {
@@ -91,6 +107,7 @@ class ActiveTripDriverViewModel extends ChangeNotifier {
     final uri = Uri.parse('tel:$phone');
     await launchUrl(uri);
   }
+
 
   @override
   void dispose() {

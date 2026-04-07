@@ -38,6 +38,13 @@ class ActiveTripViewModel extends ChangeNotifier {
   LatLng? _driverLocation;
   LatLng? get driverLocation => _driverLocation;
 
+
+  Stream<LatLng>? _streamDriverLocation;
+  Stream<LatLng>? get driverLoc => _streamDriverLocation;
+
+  LatLng? _destination;
+  LatLng? get userDestination => _destination;
+
   DirectionsResult? _liveDirections;
   DirectionsResult? get liveDirections => _liveDirections;
 
@@ -81,6 +88,8 @@ class ActiveTripViewModel extends ChangeNotifier {
         _driverProfile = await _databaseService.getDriverProfile(_rideRequest!.driverId!);
         _listenToDriverLocation(_rideRequest!.driverId!);
 
+        _destination = _rideRequest!.destinationLocation;
+
         _isLoading = false;
         notifyListeners();           // ← VERY IMPORTANT: this makes driver info appear
       }
@@ -96,7 +105,7 @@ class ActiveTripViewModel extends ChangeNotifier {
             snapshot) async {
           if (snapshot.exists) {
             final data = snapshot.data() as Map<String, dynamic>;
-            _driverLocation = LatLng(data['latitude'], data['longitude']);
+            _streamDriverLocation = _databaseService.getDriverLatLngStream(_rideRequest!.driverId);
             await _updateTripDirections();
             notifyListeners();
           }
