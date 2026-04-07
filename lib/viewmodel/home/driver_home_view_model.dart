@@ -109,11 +109,6 @@ class DriverHomeViewModel extends ChangeNotifier {
   // ===================================
   Future<void> toggleOnlineStatus() async {
     if (_driverProfile == null) return;
-    print(driverProfile!.uid);
-    print(_activeRide);
-    print("helol");
-
-    print("driver profile: ${_driverProfile!.uid}");
 
     // Optimistically update UI
     _isOnline = !_isOnline;
