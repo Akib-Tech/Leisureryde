@@ -12,6 +12,17 @@ class MapViewModel extends ChangeNotifier {
   Position? _currentPosition;
   DirectionsResult? _directionsResult;
 
+// Current driver position (latest value from the stream)
+  LatLng? _driverPosition;
+  LatLng? get driverPosition => _driverPosition;
+
+  bool _isFollowingDriver = false;
+  bool get isFollowingDriver => _isFollowingDriver;
+
+// Hold the subscription so you can cancel it later
+  StreamSubscription<LatLng>? _driverStreamSubscription;
+
+
   bool _isLoading = true;
   bool get isLoading => _isLoading;
 
@@ -182,6 +193,87 @@ class MapViewModel extends ChangeNotifier {
     _directionsResult = null;
     // No notifyListeners here, as getDirections will call it in its finally block.
     // If you call clearRoute from outside getDirections, you might need notifyListeners.
+  }
+
+  /// Call this when entering activeTrip step (from HomeViewModel)
+  Future<void> moveToDriver(LatLng driverLocation) async {
+    _driverPosition = driverLocation;
+    _isFollowingDriver = true;
+    notifyListeners();
+
+    if (_mapController != null) {
+      await _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(driverLocation, 16.5),
+      );
+      debugPrint("MapViewModel: Moved camera to driver position: $driverLocation");
+    } else {
+      debugPrint("MapViewModel: mapController is null, cannot move to driver yet.");
+    }
+  }
+
+  /// Optional: Smooth follow with padding (shows driver + route or destination)
+  Future<void> fitDriverAndDestination(LatLng driverLoc, LatLng destination) async {
+    if (_mapController == null) return;
+
+    final bounds = LatLngBounds(
+      southwest: LatLng(
+        driverLoc.latitude < destination.latitude ? driverLoc.latitude : destination.latitude,
+        driverLoc.longitude < destination.longitude ? driverLoc.longitude : destination.longitude,
+      ),
+      northeast: LatLng(
+        driverLoc.latitude > destination.latitude ? driverLoc.latitude : destination.latitude,
+        driverLoc.longitude > destination.longitude ? driverLoc.longitude : destination.longitude,
+      ),
+    );
+
+    await _mapController!.animateCamera(
+      CameraUpdate.newLatLngBounds(bounds, 80), // padding in pixels
+    );
+  }
+
+  /// Call this when leaving activeTrip or cancelling
+  void stopFollowingDriver() {
+    _isFollowingDriver = false;
+    _driverPosition = null;
+    notifyListeners();
+  }
+
+  /// Update driver position in realtime (called from HomeViewModel listener)
+  void updateDriverPosition(LatLng newPosition) {
+    _driverPosition = newPosition;
+
+    if (_isFollowingDriver && _mapController != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLng(newPosition),
+      );
+    }
+    notifyListeners();
+  }
+
+
+
+
+  /// Call this when you enter activeTrip and have a stream of driver location
+  void startFollowingDriver(Stream<LatLng> driverLocationStream) {
+    _driverStreamSubscription?.cancel(); // cancel old one if any
+
+    _isFollowingDriver = true;
+    notifyListeners();
+
+    _driverStreamSubscription = driverLocationStream.listen((newPosition) {
+      _driverPosition = newPosition;
+
+      // Auto-move the camera to the driver in real-time
+      if (_mapController != null) {
+        _mapController!.animateCamera(
+          CameraUpdate.newLatLngZoom(newPosition, 16.5), // or newLatLng() for smoother following
+        );
+      }
+
+      notifyListeners();
+    }, onError: (e) {
+      debugPrint("Driver location stream error: $e");
+    });
   }
 
 
