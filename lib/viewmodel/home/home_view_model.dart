@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:leisureryde/app/service_locator.dart';
 import 'package:leisureryde/models/ride_request_model.dart';
-import 'package:leisureryde/models/route_selection.dart';
 import 'package:leisureryde/models/saved_places.dart';
 import 'package:leisureryde/models/user_profile.dart';
 import 'package:leisureryde/screens/shared/account_screen/saved_places_screen.dart';
@@ -451,10 +450,13 @@ class HomeViewModel extends ChangeNotifier {
           _rideId = id;
           _saveCurrentState();
 
-          // Small delay to let "Driver Accepted!" message be visible
-          Future.delayed(const Duration(milliseconds: 1200), () {
-            notifyListeners();
-          });
+          final String? driverId  = data["driverId"];
+          final driverLocation = _db.getDriverLatLngStream(driverId);
+
+         mapViewModel.startFollowingDriver(driverLocation);
+
+          notifyListeners();
+
         } else {
           debugPrint("Already in activeTrip step");
         }
