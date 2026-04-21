@@ -1,9 +1,12 @@
 // lib/pages/search/search_destination_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:leisureryde/app/service_locator.dart';
 
 import '../../../models/route_selection.dart';
 import '../../../services/place_service.dart';
+import '../../../viewmodel/maps/maps_viewmodel.dart';           // ← your existing MapViewModel
 
 class SearchDestinationScreen extends StatefulWidget {
   final PlaceDetails? initialPickup;
@@ -16,6 +19,8 @@ class SearchDestinationScreen extends StatefulWidget {
 
 class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
   final _placesService = PlacesService();
+  final _mapViewModel = MapViewModel();   // ← fully reusable
+
   final _originController = TextEditingController();
   final _destinationController = TextEditingController();
   final _originFocus = FocusNode();
@@ -27,30 +32,18 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
 
   PlaceDetails? _selectedOrigin;
   PlaceDetails? _selectedDestination;
-  String? _activeField; // "origin" or "destination"
+  String? _activeField;
 
   @override
   void initState() {
     super.initState();
-
-    /// Pre‑fill with pickup only if we actually have one.
-    if (widget.initialPickup != null &&
-        widget.initialPickup!.address.isNotEmpty) {
+    if (widget.initialPickup != null && widget.initialPickup!.address.isNotEmpty) {
       _selectedOrigin = widget.initialPickup;
       _originController.text = widget.initialPickup!.address;
     }
 
-    /// Listen for focus changes
-    _originFocus.addListener(() {
-      if (_originFocus.hasFocus) {
-        _activeField = 'origin';
-      }
-    });
-    _destinationFocus.addListener(() {
-      if (_destinationFocus.hasFocus) {
-        _activeField = 'destination';
-      }
-    });
+    _originFocus.addListener(() => _activeField = 'origin');
+    _destinationFocus.addListener(() => _activeField = 'destination');
   }
 
   @override
@@ -63,6 +56,47 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
     super.dispose();
   }
 
+  // ==================== REUSABLE CURRENT LOCATION ====================
+  Future<void> _useCurrentLocation() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // 1. Reuse your exact MapViewModel logic
+      final Position? position = await _mapViewModel.getCurrentUserLocation();
+
+      if (position == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not get current location')),
+          );
+        }
+        return;
+      }
+
+      // 2. Get real address using the new reusable method
+      final PlaceDetails? currentPlace =
+      await _placesService.getPlaceFromCoordinates(position.latitude,position.longitude);
+
+      if (currentPlace != null && mounted) {
+        _selectedOrigin = currentPlace;
+        _originController.text = currentPlace.address;
+
+        // Nice UX: auto-focus destination
+        FocusScope.of(context).requestFocus(_destinationFocus);
+        setState(() {});
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Location error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ==================== YOUR EXISTING METHODS (unchanged) ====================
   void _onSearchChanged(String input) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 400), () async {
@@ -128,19 +162,24 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final canConfirm =
-        _selectedOrigin != null && _selectedDestination != null;
+    final canConfirm = _selectedOrigin != null && _selectedDestination != null;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Set Your Route',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('Set Your Route', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
       ),
       backgroundColor: theme.scaffoldBackgroundColor,
+
+      // Floating button at bottom-right
+      floatingActionButton: FloatingActionButton(
+        onPressed: _useCurrentLocation,
+        backgroundColor: theme.primaryColor,
+        child: const Icon(Icons.my_location, color: Colors.white),
+        tooltip: 'Use my current location',
+      ),
+
       body: Column(
         children: [
           Container(
@@ -152,12 +191,8 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
                 Column(
                   children: [
                     Icon(Icons.trip_origin, color: theme.primaryColor, size: 28),
-                    SizedBox(
-                      height: 40,
-                      child: DashedLine(color: Colors.grey.shade400),
-                    ),
-                    Icon(Icons.location_on,
-                        color: Colors.red.shade400, size: 28),
+                    SizedBox(height: 40, child: DashedLine(color: Colors.grey.shade400)),
+                    Icon(Icons.location_on, color: Colors.red.shade400, size: 28),
                   ],
                 ),
                 const SizedBox(width: 12),
@@ -170,20 +205,14 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
                         onChanged: _onSearchChanged,
                         textInputAction: TextInputAction.next,
                         decoration: InputDecoration(
-                          hintText: _selectedOrigin == null
-                              ? 'Your current location'
-                              : 'Pickup location',
+                          hintText: _selectedOrigin == null ? 'Your current location' : 'Pickup location',
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 14,
-                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
                         ),
                       ),
-                      SizedBox(height: 4,),
+                      const SizedBox(height: 4),
                       const Divider(height: 1),
-                      SizedBox(height: 4,),
-
+                      const SizedBox(height: 4),
                       TextField(
                         controller: _destinationController,
                         focusNode: _destinationFocus,
@@ -192,10 +221,7 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
                         decoration: const InputDecoration(
                           hintText: 'Where to?',
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 14,
-                          ),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 14),
                         ),
                       ),
                     ],
@@ -216,26 +242,19 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
           Expanded(
             child: ListView.separated(
               itemCount: _suggestions.length,
-              separatorBuilder: (_, __) =>
-              const Divider(height: 1, indent: 72),
+              separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
               itemBuilder: (context, index) {
                 final suggestion = _suggestions[index];
                 final parts = suggestion.description.split(',');
                 final mainText = parts[0];
-                final secondaryText = parts.length > 1
-                    ? parts.sublist(1).join(',').trim()
-                    : '';
+                final secondaryText = parts.length > 1 ? parts.sublist(1).join(',').trim() : '';
 
                 return ListTile(
                   leading: CircleAvatar(
                     backgroundColor: theme.primaryColor.withOpacity(0.15),
-                    child: Icon(Icons.location_on,
-                        color: theme.primaryColor, size: 18),
+                    child: Icon(Icons.location_on, color: theme.primaryColor, size: 18),
                   ),
-                  title: Text(
-                    mainText,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                  title: Text(mainText, style: const TextStyle(fontWeight: FontWeight.w600)),
                   subtitle: Text(secondaryText),
                   onTap: () => _onSuggestionTapped(suggestion),
                 );
@@ -244,14 +263,14 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
           ),
         ],
       ),
+
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(16.0),
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: theme.primaryColor,
             padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           onPressed: !canConfirm
               ? null
@@ -262,17 +281,14 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
             );
             Navigator.of(context).pop(result);
           },
-          child: const Text(
-            'Confirm Route',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
+          child: const Text('Confirm Route', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         ),
       ),
     );
   }
 }
 
-/// Helper widget for dashed line between the origin and destination icons
+// DashedLine helper (unchanged)
 class DashedLine extends StatelessWidget {
   final double height;
   final Color color;
@@ -281,7 +297,7 @@ class DashedLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
+      builder: (context, constraints) {
         final boxHeight = constraints.constrainHeight();
         const dashWidth = 5.0;
         final dashHeight = height;

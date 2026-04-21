@@ -57,6 +57,32 @@ class PlacesService {
     }
     return null;
   }
+
+
+  // Inside your PlacesService class
+  Future<PlaceDetails?> getPlaceFromCoordinates(double lat, double lng) async {
+    final url = Uri.parse(
+      'https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$_apiKey',
+    );
+
+    final response = await http.get(url);   // you already use http in this service
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data['status'] == 'OK' && data['results'].isNotEmpty) {
+        final result = data['results'][0];
+        return PlaceDetails(
+          name: result['place_id'] ?? '',
+          address: result['formatted_address'] ?? 'Current Location',
+          location: LatLng(lat, lng),
+          // Add any other fields your PlaceDetails model requires
+        );
+      }
+    }
+    return null;
+  }
+
+
 }
 
 class PlaceSuggestion {

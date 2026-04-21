@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../viewmodel/auth/login_view_model.dart';
 import '../../../widgets/custom_loading_indicator.dart';
 import 'signup_screen.dart';
-
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -70,9 +70,9 @@ class LoginScreen extends StatelessWidget {
                         icon: Icons.lock,
                         isPassword: true,
                       ),
-                      const SizedBox(height: 30),
-
-                      // Login Button
+                      const SizedBox(height: 12),
+                      _buildForgotPasswordLink(context, theme),   // ← Added
+                      const SizedBox(height: 20),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -184,6 +184,26 @@ class LoginScreen extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildForgotPasswordLink(BuildContext context, ThemeData theme) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: GestureDetector(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+          );
+        },
+        child: Text(
+          "Forgot Password?",
+          style: TextStyle(
+            color: theme.primaryColor,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
     );
   }
 }

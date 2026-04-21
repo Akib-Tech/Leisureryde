@@ -16,8 +16,46 @@ import '../../shared/search/search_destination.dart';
 import '../trip/active_trip_screen.dart';
 import '../trip/finding_driver.dart'; // Your FindingDriverCard
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  bool _didScheduleInitialRefresh = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didScheduleInitialRefresh) return;
+    _didScheduleInitialRefresh = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await context.read<HomeViewModel>().refreshOnScreenResume();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      context.read<HomeViewModel>().refreshOnScreenResume();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,12 +65,6 @@ class HomeScreen extends StatelessWidget {
         body: Consumer<HomeViewModel>(
           builder: (context, viewModel, child) {
             debugPrint("🟢 [HomeScreen] Rebuilding. Current step is: ${viewModel.currentStep}");
-
-            if (viewModel.currentStep == HomeStep.activeTrip) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                viewModel.refreshActiveTripState();
-              });
-            }
 
             if (viewModel.isLoading || viewModel.mapViewModel.isLoading) {
               return const CustomLoadingIndicator();
