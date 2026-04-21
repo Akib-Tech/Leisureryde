@@ -172,4 +172,7 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  Future<void> sendPasswordResetEmail({required String email}) async {
+    await _firebaseAuth.sendPasswordResetEmail(email: email);
+  }
 }

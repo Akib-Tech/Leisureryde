@@ -47,6 +47,8 @@ class HomeViewModel extends ChangeNotifier {
   bool _isRequestingRide = false;
   bool get isRequestingRide => _isRequestingRide;
 
+  bool _isRefreshing = false;
+
   HomeStep _currentStep = HomeStep.initial;
   HomeStep get currentStep => _currentStep;
 
@@ -129,15 +131,17 @@ class HomeViewModel extends ChangeNotifier {
 
         // Re-attach the real-time listener
         _listenForRideStatus(savedRideId);
+
+        print("I am truly signing up a page 2");
         stateChanged = true;
       } else if (_rideId == savedRideId && _currentStep == HomeStep.activeTrip) {
         // RideId is already set but listener might have died → re-attach
         _listenForRideStatus(savedRideId);
+
+        print("I am truly signing up a page 3");
       }
     }
-
-    // Force rebuild if anything changed
-    if (stateChanged || _currentStep == HomeStep.activeTrip) {
+    if (stateChanged) {
       debugPrint("🔄 Restored state → Step: ${_currentStep.name} | Ride: $_rideId");
       notifyListeners();
     }
@@ -146,6 +150,8 @@ class HomeViewModel extends ChangeNotifier {
 
 
   Future<void> _initialize() async {
+
+    print("I am truly signing up a page 1");
     _isLoading = true;
     notifyListeners();
     await mapViewModel.initialize();
@@ -165,8 +171,7 @@ class HomeViewModel extends ChangeNotifier {
       _userProfile = results[0] as UserProfile;
       _savedPlaces = results[1] as List<SavedPlace>;
       _recentDestinations = results[2] as List<RideDestination>;
-      await _restoreCurrentState();
-      await _checkForActiveRide();
+      await refreshOnScreenResume();
       _listenToOnlineDrivers();
     } catch (e) {
       debugPrint("Error initializing HomeViewModel: $e");
@@ -214,6 +219,7 @@ class HomeViewModel extends ChangeNotifier {
         break;
     }
   }
+
   void _listenToOnlineDrivers() {
     _driverSub?.cancel();
     _driverSub = _db.getOnlineDriversStream().listen((snapshot) {
@@ -420,11 +426,13 @@ class HomeViewModel extends ChangeNotifier {
     debugPrint("🎧 Starting ride listener for rideId: $id");
 
     _rideListener = _rideService.getRideStream(id).listen((snap) {
+
       if (!snap.exists) {
         debugPrint("❌ Ride document no longer exists");
         _resetRide();
         return;
       }
+
 
       final data = snap.data() as Map<String, dynamic>;
       final rawStatus = data['status'] ?? 'pending';
@@ -455,7 +463,9 @@ class HomeViewModel extends ChangeNotifier {
 
          mapViewModel.startFollowingDriver(driverLocation);
 
-          notifyListeners();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            notifyListeners();
+          });
 
         } else {
           debugPrint("Already in activeTrip step");
@@ -521,6 +531,28 @@ class HomeViewModel extends ChangeNotifier {
     debugPrint("✅ Found active ride on startup last: $activeRideId : $uid");
   }
 
+
+  Future<void> refreshOnScreenResume() async {
+    debugPrint("🔄 refreshOnScreenResume() called");
+
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+
+    // Prevent multiple rapid calls
+    if (_isRefreshing) return;
+    _isRefreshing = true;
+
+    try {
+      await _restoreCurrentState();
+
+      // Only check for active ride if we don't already have a listener running
+      if (_rideListener == null || _currentStep == HomeStep.findingDriver) {
+        await _checkForActiveRide();
+      }
+    } finally {
+      _isRefreshing = false;
+    }
+  }
   @override
   void dispose() {
     mapViewModel.dispose();

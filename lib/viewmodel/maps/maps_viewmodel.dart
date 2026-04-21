@@ -88,6 +88,11 @@ class MapViewModel extends ChangeNotifier {
     debugPrint("MapViewModel: GoogleMapController set.");
   }
 
+  Future<Position?> getCurrentUserLocation() async {
+    await _getCurrentLocation();
+    return _currentPosition;
+  }
+
   Future<void> getDirections(LatLng origin, LatLng destination) async {
     debugPrint("MapViewModel: Requesting directions from $origin to $destination");
     clearRoute(); // This also clears the old error message
