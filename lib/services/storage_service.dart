@@ -11,8 +11,7 @@ class StorageService {
       final snapshot = await uploadTask.whenComplete(() => {});
       final downloadUrl = await snapshot.ref.getDownloadURL();
       return downloadUrl;
-    } on FirebaseException catch (e) {
-      print("File Upload Error: $e");
+    } on FirebaseException {
       rethrow;
     }
   }

@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:leisureryde/admin/home.dart';
 import 'package:leisureryde/screens/shared/main_screen/main_screen.dart';
 import 'package:leisureryde/screens/shared/splash_screen/welcome_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:leisureryde/services/auth_service.dart';
-import 'package:leisureryde/screens/shared/splash_screen/splash_screen.dart';
 
 import '../../../app/enums.dart';
-import '../../../widgets/custom_loading_indicator.dart';
 import '../../admin/admin_home_page.dart';
 import 'entry_page.dart';
 

@@ -33,7 +33,6 @@ class RideRequestsScreen extends StatelessWidget {
                   return const CustomLoadingIndicator();
                 }
                 if (snapshot.hasError) {
-                  print('Ride Requests Stream Error: ${snapshot.error}');
                   return const Center(child: Text('An error occurred. Please try again.'));
                 }
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {

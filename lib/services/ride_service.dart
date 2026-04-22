@@ -44,7 +44,6 @@ class RideService {
       });
       return docRef.id;
     } catch (e) {
-      print("🚨 Error creating ride request: $e");
       rethrow;
     }
   }
@@ -84,7 +83,6 @@ class RideService {
         'acceptedAt': FieldValue.serverTimestamp(),
       });
     /*} catch (e) {
-      print("🚨 Error accepting ride: $e");
       rethrow;
     }*/
   }
@@ -96,7 +94,6 @@ class RideService {
         'declinedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      print("🚨 Error declining ride: $e");
       rethrow;
     }
   }
@@ -114,7 +111,6 @@ class RideService {
         'cancelledAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      print("🚨 Error cancelling ride $rideId: $e");
       rethrow;
     }
   }
@@ -138,7 +134,6 @@ class RideService {
 
       await _db.collection('rideRequests').doc(rideId).update(update);
     } catch (e) {
-      print("🚨 Error updating ride status: $e");
       rethrow;
     }
   }
@@ -151,7 +146,6 @@ class RideService {
     try {
       await _db.collection('rideRequests').doc(rideId).delete();
     } catch (e) {
-      print("🚨 Error deleting ride: $e");
       rethrow;
     }
   }

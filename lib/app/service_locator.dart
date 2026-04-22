@@ -16,7 +16,6 @@ import '../services/ride_service.dart';
 import '../services/storage_service.dart';
 import '../viewmodel/home/home_view_model.dart';
 import '../viewmodel/theme_view_model.dart';
-import 'app_theme.dart';
 
 GetIt locator = GetIt.instance;
 

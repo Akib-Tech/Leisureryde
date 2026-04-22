@@ -10,7 +10,6 @@ import 'package:leisureryde/screens/shared/splash_screen/welcome_screen.dart';
 import 'package:leisureryde/services/auth_service.dart';
 import 'package:leisureryde/services/database_service.dart';
 import 'package:leisureryde/services/storage_service.dart';
-import 'package:leisureryde/viewmodel/home/driver_home_view_model.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/push_notifications_service.dart';
@@ -71,7 +70,6 @@ class AccountViewModel extends ChangeNotifier {
           ? await _databaseService.getDriverProfile(uid)
           : await _databaseService.getUserProfile(uid);
     } catch (e) {
-      print("Failed to load profile: $e");
     }
   }
 
@@ -79,7 +77,6 @@ class AccountViewModel extends ChangeNotifier {
     try {
       _savedPlaces = await _databaseService.getSavedPlaces(uid);
     } catch (e) {
-      print("Error loading saved places: $e");
     }
   }
 
@@ -98,7 +95,6 @@ class AccountViewModel extends ChangeNotifier {
         _userProfile = _userProfile!.copyWith(profileImageUrl: downloadUrl);
       }
     } catch (e) {
-      print("Failed to upload profile picture: $e");
     } finally {
       _isUploading = false;
       notifyListeners();
@@ -117,7 +113,6 @@ class AccountViewModel extends ChangeNotifier {
       _userProfile = driverProfile!.copyWith(carModel: carModel, licensePlate: licensePlate);
       notifyListeners();
     } catch (e) {
-      print("Failed to update vehicle information: $e");
     }
   }
 
@@ -152,7 +147,6 @@ class AccountViewModel extends ChangeNotifier {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Document uploaded successfully!')));
       }
     } catch (e) {
-      print("Failed to upload document: $e");
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
       }
@@ -200,7 +194,6 @@ class AccountViewModel extends ChangeNotifier {
       _savedPlaces.removeWhere((place) => place.name == placeName);
       notifyListeners();
     } catch (e) {
-      print("Error deleting saved place: $e");
     }
   }
 
@@ -277,7 +270,6 @@ class AccountViewModel extends ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      print("Failed to update notification preference: $e");
       // Optionally, revert the switch state and show an error
     }
   }

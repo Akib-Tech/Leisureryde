@@ -7,16 +7,17 @@ import 'package:leisureryde/models/driver_profile.dart';
 import 'package:leisureryde/models/ride_request_model.dart';
 import 'package:leisureryde/services/auth_service.dart';
 import 'package:leisureryde/services/database_service.dart';
+import 'package:leisureryde/services/directions_service.dart';
 import 'package:leisureryde/services/ride_service.dart';
-import '../../services/driver_locator.dart';   // your DriverLocationUpdater helper
+import '../../services/driver_locator.dart';
 import '../../services/push_notifications_service.dart';
 import '../maps/maps_viewmodel.dart';
 
 class DriverHomeViewModel extends ChangeNotifier {
-  // --- Services ---
   final AuthService _authService = locator<AuthService>();
   final DatabaseService _databaseService = locator<DatabaseService>();
   final RideService _rideService = locator<RideService>();
+  final DirectionsService _directionsService = locator<DirectionsService>();
 
   RideRequest? _activeRide;
   RideRequest? get activeRide => _activeRide;
@@ -24,24 +25,24 @@ class DriverHomeViewModel extends ChangeNotifier {
   bool get hasActiveTrip => _activeRide != null;
 
   StreamSubscription<QuerySnapshot>? _activeRideSubscription;
+  StreamSubscription<DocumentSnapshot>? _driverLocationSubscription;
 
-  // --- Map + State ---
   bool _isLoading = true;
   bool get isLoading => _isLoading;
 
   late final MapViewModel mapViewModel;
 
-  // --- Driver Info ---
   DriverProfile? _driverProfile;
   DriverProfile? get driverProfile => _driverProfile;
 
   bool _isOnline = false;
   bool get isOnline => _isOnline;
 
-  // --- Live location updater ---
   DriverLocationUpdater? _locUpdater;
 
-  // --- Live data ---
+  // The driver's own current position — updated from their GPS.
+  LatLng? _driverCurrentPosition;
+
   int _todayTrips = 0;
   double _todayEarnings = 0.0;
   double _hoursOnline = 0.0;
@@ -57,24 +58,17 @@ class DriverHomeViewModel extends ChangeNotifier {
 
   final NotificationService _notificationService = locator<NotificationService>();
 
-
-  // --- Constructor ---
   DriverHomeViewModel() {
     mapViewModel = MapViewModel();
     initializeDriverHome();
   }
 
-  // ===================================
-  // INITIALIZATION
-  // ===================================
   Future<void> initializeDriverHome() async {
     _isLoading = true;
     notifyListeners();
 
-    // ✅ Step 1: initialize map first
     await mapViewModel.initialize();
 
-    // ✅ Step 2: load driver profile
     final user = _authService.currentUser;
     if (user == null) {
       _isLoading = false;
@@ -85,111 +79,92 @@ class DriverHomeViewModel extends ChangeNotifier {
     try {
       _driverProfile = await _databaseService.getDriverProfile(user.uid);
 
-      // If approved, check online status
       if (_driverProfile?.isApproved == true) {
         _isOnline = _driverProfile!.isOnline;
         if (_isOnline) {
           _startLocationUpdates();
           _startListeningToStats();
-          _startListeningToActiveRide();
+          await _startListeningToActiveRide();
         }
       } else {
         _isOnline = false;
       }
-    } catch (e) {
-      debugPrint("Driver profile load error: $e");
+    } catch (error) {
+      debugPrint("DriverHomeViewModel: Profile load error: $error");
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  // ===================================
-  // ONLINE / OFFLINE TOGGLE
-  // ===================================
   Future<void> toggleOnlineStatus() async {
     if (_driverProfile == null) return;
 
-    // Optimistically update UI
     _isOnline = !_isOnline;
     notifyListeners();
 
     try {
-      // 1. Update driver status in the database
       await _databaseService.updateDriverOnlineStatus(_driverProfile!.uid, _isOnline);
 
-      // 2. Subscribe or unsubscribe from the 'online_drivers' topic
       if (_isOnline) {
         _notificationService.subscribeToOnlineDriversTopic();
         _startLocationUpdates();
         _startListeningToStats();
-        _startListeningToActiveRide();
+        await _startListeningToActiveRide();
       } else {
         _notificationService.unsubscribeFromOnlineDriversTopic();
         await _stopLocationUpdates();
         _stopListeningToStats();
         _stopListeningToActiveRide();
+        mapViewModel.clearRoute();
       }
-    } catch (e) {
-      debugPrint("Error toggling online: $e");
-      // Revert UI on failure
+    } catch (error) {
+      debugPrint("DriverHomeViewModel: Toggle online error: $error");
       _isOnline = !_isOnline;
       notifyListeners();
     }
   }
-  // ===================================
-  // LOCATION UPDATER
-  // ===================================
+
   Future<void> _startLocationUpdates() async {
     if (_driverProfile == null) return;
     _locUpdater ??= DriverLocationUpdater(_driverProfile!.uid);
-    await _locUpdater!.start(); // starts continuous GPS->Firestore update
+    await _locUpdater!.start();
   }
 
   Future<void> _stopLocationUpdates() async {
     await _locUpdater?.stop();
   }
 
-  // ===================================
-  // FIRESTORE LIVE STATS
-  // ===================================
   void _startListeningToStats() {
     if (_driverProfile == null) return;
 
-    // Cancel any old listeners first
     _dailyStatsSub?.cancel();
     _pendingReqSub?.cancel();
 
-    // Daily trips + earnings
     _dailyStatsSub = _databaseService
         .getTodaysTripsStream(_driverProfile!.uid)
         .listen((docs) {
       _todayTrips = docs.length;
       _todayEarnings = docs.fold(0.0, (sum, doc) {
         final fare = doc['fare'];
-
         if (fare is int) return sum + fare.toDouble();
         if (fare is double) return sum + fare;
         if (fare is String) return sum + (double.tryParse(fare) ?? 0.0);
-
         return sum;
       });
       notifyListeners();
     });
 
-    // Pending ride requests count
     _pendingReqSub = _rideService.getRideRequestsStream().listen((rides) {
-      // Ideally filter by status == 'pending'
       _pendingRequestsCount = rides
-          .where((r) => r.status == RideStatus.pending.toString())
+          .where((rideRequest) => rideRequest.status == RideStatus.pending)
           .length;
       notifyListeners();
     });
 
     final lastOnlineTimestamp = _driverProfile!.lastWentOnlineAt;
     if (lastOnlineTimestamp != null) {
-      final duration =
-      DateTime.now().difference(lastOnlineTimestamp.toDate());
+      final duration = DateTime.now().difference(lastOnlineTimestamp.toDate());
       _hoursOnline = duration.inMinutes / 60.0;
     }
   }
@@ -197,7 +172,6 @@ class DriverHomeViewModel extends ChangeNotifier {
   void _stopListeningToStats() {
     _dailyStatsSub?.cancel();
     _pendingReqSub?.cancel();
-
     _todayTrips = 0;
     _todayEarnings = 0;
     _hoursOnline = 0;
@@ -205,9 +179,6 @@ class DriverHomeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ===================================
-  // RIDE REQUESTS ACTIONS
-  // ===================================
   Future<void> acceptRide(String rideId) async {
     if (_driverProfile == null) return;
     await _rideService.acceptRide(rideId, _driverProfile!.uid);
@@ -217,89 +188,174 @@ class DriverHomeViewModel extends ChangeNotifier {
     await _rideService.declineRide(rideId);
   }
 
-  // ===================================
-  // CLEANUP
-  // ===================================
-  @override
-  void dispose() {
-    mapViewModel.dispose();
-    _dailyStatsSub?.cancel();
-    _pendingReqSub?.cancel();
+  Future<void> _startListeningToActiveRide() async {
+    if (_driverProfile?.uid == null) return;
+
     _activeRideSubscription?.cancel();
-    super.dispose();
+
+    debugPrint("DriverHomeViewModel: Listening to active ride for driver: ${_driverProfile!.uid}");
+
+    _activeRideSubscription = FirebaseFirestore.instance
+        .collection('rideRequests')
+        .where('driverId', isEqualTo: _driverProfile!.uid)
+        .where('status', whereIn: ['accepted', 'enroute', 'ongoing', 'pending'])
+        .limit(1)
+        .snapshots()
+        .listen((snapshot) async {
+      if (snapshot.docs.isNotEmpty) {
+        final updatedRide = RideRequest.fromFirestore(snapshot.docs.first);
+        final bool rideChanged = _activeRide?.id != updatedRide.id ||
+            _activeRide?.status != updatedRide.status;
+
+        _activeRide = updatedRide;
+        notifyListeners();
+
+        // Redraw the route whenever the ride or its status changes.
+        if (rideChanged) {
+          await _drawRouteForActiveRide();
+        }
+      } else {
+        _activeRide = null;
+        // No active ride — clear the map route.
+        mapViewModel.clearRoute();
+        notifyListeners();
+      }
+    }, onError: (error) {
+      debugPrint("DriverHomeViewModel: Active ride stream error: $error");
+    });
+
+    // Also listen to the driver's own GPS position so we can update
+    // the route as the driver moves.
+    _listenToOwnLocation();
   }
 
-  // ===================================
-  // Refresh
-  // ===================================
+  /// Listens to the driver's own real-time GPS from Firestore
+  /// (written there by DriverLocationUpdater) and redraws the route
+  /// each time they move.
+  void _listenToOwnLocation() {
+    if (_driverProfile == null) return;
+
+    _driverLocationSubscription?.cancel();
+
+    _driverLocationSubscription = _databaseService
+        .getDriverLocationStream(_driverProfile!.uid)
+        .listen((snapshot) async {
+      if (!snapshot.exists) return;
+
+      final data = snapshot.data() as Map<String, dynamic>;
+      final latitude = data['latitude'] as double?;
+      final longitude = data['longitude'] as double?;
+
+      if (latitude == null || longitude == null) return;
+
+      _driverCurrentPosition = LatLng(latitude, longitude);
+
+      // Redraw the live route from the updated driver position.
+      await _drawRouteForActiveRide();
+    });
+  }
+
+  /// Draws the correct polyline into mapViewModel based on ride status:
+  ///
+  /// - accepted / enroute  → driver current position → passenger pickup
+  /// - ongoing             → driver current position → passenger destination
+  /// - anything else       → clear the route
+  ///
+  /// Because this writes into mapViewModel (which the GoogleMap widget reads),
+  /// the polyline persists even when the driver navigates away and returns —
+  /// the data lives in mapViewModel, not in a widget that can be disposed.
+  Future<void> _drawRouteForActiveRide() async {
+    if (_activeRide == null || _driverCurrentPosition == null) return;
+
+    LatLng routeDestination;
+
+    switch (_activeRide!.status) {
+      case RideStatus.accepted:
+      case RideStatus.enroute:
+        routeDestination = _activeRide!.pickupLocation;
+        break;
+
+      case RideStatus.ongoing:
+        routeDestination = _activeRide!.destinationLocation;
+        break;
+
+      default:
+        mapViewModel.clearLiveRoute();
+        return;
+    }
+
+    final result = await _directionsService.getDirections(
+      origin: _driverCurrentPosition!,
+      destination: routeDestination,
+    );
+
+    if (result != null) {
+      // Write the polyline directly into mapViewModel.
+      // The GoogleMap widget in DriverHomeScreen reads mapViewModel.polylines,
+      // so this is what actually makes the line appear on screen.
+      mapViewModel.setLiveRoutePolyline(result.polylinePoints);
+
+      // Also update the destination marker so the driver knows where to go.
+      _updateDestinationMarker(routeDestination);
+    }
+  }
+
+  void _updateDestinationMarker(LatLng destination) {
+    mapViewModel.markers.removeWhere(
+          (marker) => marker.markerId == const MarkerId('destination'),
+    );
+    mapViewModel.markers.add(
+      Marker(
+        markerId: const MarkerId('destination'),
+        position: destination,
+        infoWindow: InfoWindow(
+          title: _activeRide!.status == RideStatus.ongoing ? 'Destination' : 'Pickup',
+        ),
+        icon: BitmapDescriptor.defaultMarkerWithHue(
+          _activeRide!.status == RideStatus.ongoing
+              ? BitmapDescriptor.hueRed
+              : BitmapDescriptor.hueGreen,
+        ),
+      ),
+    );
+    mapViewModel.notifyListeners();
+  }
+
+  void _stopListeningToActiveRide() {
+    _activeRideSubscription?.cancel();
+    _activeRideSubscription = null;
+    _driverLocationSubscription?.cancel();
+    _driverLocationSubscription = null;
+    _activeRide = null;
+    _driverCurrentPosition = null;
+  }
+
   Future<void> refreshStats() async {
     if (_driverProfile == null) return;
 
     try {
-      // Take the first value from the same stream you already use for live updates.
       final docs = await _databaseService.getTodaysTripsStream(_driverProfile!.uid).first;
-
-      print('TODAYS TRIPS: ${docs.first.data().toString()}');
-      // Update the same private fields you already expose via getters
       _todayTrips = docs.length;
       _todayEarnings = docs.fold(0.0, (sum, doc) => sum + (doc['fare'] ?? 0.0));
-      print('TODAYS EARNING: $_todayEarnings');
-      // Recompute hoursOnline too if you want
+
       final lastOnlineTimestamp = _driverProfile!.lastWentOnlineAt;
       if (lastOnlineTimestamp != null) {
         _hoursOnline = DateTime.now().difference(lastOnlineTimestamp.toDate()).inMinutes / 60.0;
       }
 
       notifyListeners();
-    } catch (e) {
-      debugPrint('Error refreshing stats: $e');
+    } catch (error) {
+      debugPrint("DriverHomeViewModel: Error refreshing stats: $error");
     }
   }
 
-  Future<void> _startListeningToActiveRide() async {
-    if (_driverProfile?.uid == null) return;
-
-    _activeRideSubscription?.cancel();
-
-    print("driver profile: ${_driverProfile!.uid}");
-    _activeRideSubscription = FirebaseFirestore.instance
-        .collection('rideRequests')
-        .where('driverId', isEqualTo: _driverProfile!.uid)
-        .where('status', whereIn: ['accepted', 'enroute', 'ongoing','pending'])
-        .limit(1) // a driver should have max 1 active trip
-        .snapshots()
-        .listen((snapshot) {
-          print(snapshot.docs.isEmpty);
-      if (snapshot.docs.isNotEmpty) {
-        _activeRide = RideRequest.fromFirestore(snapshot.docs.first);
-        print(_activeRide);
-      } else {
-        _activeRide = null;
-        print(_activeRide);
-      }
-      notifyListeners(); // ← very important
-    }, onError: (e) {
-      debugPrint("Active ride stream error: $e");
-    });
-  }
-
-  // ── Add this cleanup method ──
-  void _stopListeningToActiveRide() {
-    _activeRideSubscription?.cancel();
-    _activeRideSubscription = null;
-    _activeRide = null;
-  }
-
-  /// Re-requests location permission and refreshes the map
   Future<void> requestLocationPermission() async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      // Re-initialize the map (this should trigger permission request again)
       await mapViewModel.initialize();
 
-      // If permission is now granted, refresh driver profile and start listeners
       if (mapViewModel.currentPosition != null) {
         final user = _authService.currentUser;
         if (user != null) {
@@ -308,16 +364,25 @@ class DriverHomeViewModel extends ChangeNotifier {
           if (_driverProfile?.isApproved == true && _isOnline) {
             _startLocationUpdates();
             _startListeningToStats();
-            _startListeningToActiveRide();
+            await _startListeningToActiveRide();
           }
         }
       }
-    } catch (e) {
-      debugPrint("Error requesting location permission: $e");
+    } catch (error) {
+      debugPrint("DriverHomeViewModel: Location permission error: $error");
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
+  @override
+  void dispose() {
+    mapViewModel.dispose();
+    _dailyStatsSub?.cancel();
+    _pendingReqSub?.cancel();
+    _activeRideSubscription?.cancel();
+    _driverLocationSubscription?.cancel();
+    super.dispose();
+  }
 }

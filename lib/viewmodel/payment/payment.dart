@@ -64,7 +64,7 @@ class PaymentViewModel extends ChangeNotifier {
       debugPrint("❌ Payment initialization failed!");
       debugPrint("   Error Type: ${e.runtimeType}");
       debugPrint("   Error Message: $e");
-      debugPrint("   Full Stack Trace: ${e is Exception ? (e as Exception).toString() : 'N/A'}");
+      debugPrint("   Full Stack Trace: ${e is Exception ? e.toString() : 'N/A'}");
 
       _errorMessage = "Failed to create payment session. Please try again.";
       _updateState(PaymentState.failed);

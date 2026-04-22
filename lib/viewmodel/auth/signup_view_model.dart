@@ -82,12 +82,10 @@ class SignupViewModel extends ChangeNotifier {
       return;
     }
 
-    print('[SIGN UP] Validation passed. Setting loading state to TRUE.');
     _setLoading(true);
 
     try {
       if (_signupType == SignupType.user) {
-        print('[SIGN UP] Awaiting AuthService.signUpWithEmail...');
         await _authService.signUpWithEmail(
           email: emailController.text.trim(),
           password: passwordController.text.trim(),
@@ -95,9 +93,7 @@ class SignupViewModel extends ChangeNotifier {
           lastName: lastNameController.text.trim(),
           phone: phoneController.text.trim(),
         );
-        print('[SIGN UP] SUCCESS: User account created.');
       } else { // It's a driver
-        print('[SIGN UP] Awaiting AuthService.signUpAsDriver...');
         await _authService.signUpAsDriver(
           email: emailController.text.trim(),
           password: passwordController.text.trim(),
@@ -106,7 +102,6 @@ class SignupViewModel extends ChangeNotifier {
           phone: phoneController.text.trim(),
           licenseFile: _selectedLicenseFile!,
         );
-        print('[SIGN UP] SUCCESS: Driver account created.');
       }
 
       // =======================================================================
@@ -114,32 +109,26 @@ class SignupViewModel extends ChangeNotifier {
       // We update the UI state to turn OFF the loader *before* we destroy this
       // screen's context with the navigation call.
       // =======================================================================
-      print('[SIGN UP] State Update: Setting loading state to FALSE.');
       _setLoading(false);
 
 
       // Now that the loader is off, we can safely navigate.
       if (context.mounted) {
-        print('[SIGN UP] Navigation: Navigating to MainScreen and removing all previous routes.');
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const MainScreen()),
               (route) => false,
         );
       } else {
         // This is unlikely to happen here but is good practice.
-        print('[SIGN UP] WARNING: Context was not mounted after sign-up. Cannot navigate.');
       }
 
     } catch (e) {
-      print('[SIGN UP] ERROR: An exception was caught: ${e.toString()}');
       _showSnackBar(context, "Sign-up Failed: ${e.toString()}");
     } finally {
       // The 'finally' block ensures that no matter what happens (success or error),
       // we make one final check to turn off the loader. This is now a safeguard
       // primarily for the 'catch' block scenario.
-      print('[SIGN UP] Finally Block: Running final check to ensure loading is false.');
       if (_isLoading) {
-        print('[SIGN UP] Finally Block: Loader was still on, turning it off now.');
         _setLoading(false);
       }
     }

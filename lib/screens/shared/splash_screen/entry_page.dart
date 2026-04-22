@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import '../../user/trip/active_trip_screen.dart';
 class EntryPage extends StatefulWidget {
   const EntryPage({super.key});
 

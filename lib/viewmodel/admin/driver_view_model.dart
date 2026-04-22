@@ -23,7 +23,6 @@ class DriversViewModel extends ChangeNotifier {
     try {
       _drivers = await _adminService.getDrivers();
     } catch (e) {
-      print("Error fetching drivers: $e");
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -39,7 +38,6 @@ class DriversViewModel extends ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      print("Error updating driver approval: $e");
       // Optionally show an error to the user
     }
   }
@@ -54,7 +52,6 @@ class DriversViewModel extends ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      print("Error updating driver block status: $e");
     }
   }
 }

@@ -21,7 +21,6 @@ class TripETAService {
 
 
 
-    print("travelling $origin,$dest");
     final url = Uri.parse(
       'https://maps.googleapis.com/maps/api/distancematrix/json'
           '?origins=$origin'
@@ -79,8 +78,7 @@ class TripETAService {
         'isAtDestination': false,
       };
 
-    } catch (e, stack) {
-      print('ETA Calculation Exception: $e');
+    } catch (e) {
       return _errorResult("Error here: ${e.toString()}");
     }
   }

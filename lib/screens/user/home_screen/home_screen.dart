@@ -10,8 +10,6 @@ import '../../../models/user_profile.dart';
 import '../../../services/place_service.dart'; // For PlaceDetails
 import '../../../viewmodel/home/home_view_model.dart'; // Your HomeViewModel
 import '../../../widgets/custom_loading_indicator.dart';
-import '../../driver/trip/active_trip_bottom_sheet.dart';
-import '../../shared/account_screen/saved_places_screen.dart'; // For AddSavedPlaceScreen
 import '../../shared/search/search_destination.dart';
 import '../trip/active_trip_screen.dart';
 import '../trip/finding_driver.dart'; // Your FindingDriverCard
@@ -274,20 +272,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 MaterialPageRoute(builder: (_) => SearchDestinationScreen(initialPickup: initialPickup)),
               );
               if (result != null) {
-                // When SearchDestinationScreen returns a result, it should ideally
-                // provide the full route details (duration, distance, etc.) if it
-                // computed them. If not, HomeViewModel.selectRoute will call
-                // mapViewModel.getDirections to get these.
-                final actualResult = RouteSelectionResult(
-                  origin: result.origin, // Always use current location as origin
-                  destination: result.destination,
-                  duration: result.duration,
-                  distance: result.distance,
-                  durationValue: result.durationValue,
-                  distanceValue: result.distanceValue,
-                  eta: result.eta,
-                  polylinePoints: result.polylinePoints,
-                );
                 viewModel.selectRoute(result.origin, result.destination);
               }
             },

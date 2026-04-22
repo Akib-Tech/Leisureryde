@@ -21,7 +21,6 @@ class UsersViewModel extends ChangeNotifier {
     try {
       _users = await _adminService.getUsers();
     } catch (e) {
-      print("Error fetching users: $e");
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -37,7 +36,6 @@ class UsersViewModel extends ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      print("Error updating user block status: $e");
     }
   }
 }

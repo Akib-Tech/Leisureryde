@@ -93,9 +93,7 @@ class ActiveTripDriverViewModel extends ChangeNotifier {
     //await _rideService.updateRideStatus(rideId, newStatus);
     try {
       await _rideService.updateRideStatus(rideId, newStatus);
-      print("Status updated to $newStatus in DB");
     } catch (e) {
-      print("Status update failed: $e");
     }
     // Force UI refresh even if DB call fails or is slow
     //notifyListeners();

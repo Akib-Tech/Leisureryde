@@ -48,7 +48,6 @@ class RideRequestsViewModel extends ChangeNotifier {
     try {
       _driverProfile = await _databaseService.getDriverProfile(uid);
     } catch (e) {
-      print("Error fetching driver profile in RideRequestsViewModel: $e");
     } finally {
       _isInitializing = false;
       notifyListeners();
@@ -77,7 +76,6 @@ class RideRequestsViewModel extends ChangeNotifier {
     try {
       await _rideService.declineRide(rideId);
     } catch (e) {
-      print("Failed to decline ride: $e");
     }
   }
 }

@@ -29,7 +29,6 @@ enum HomeStep {
   activeTrip,
 }
 
-
 class HomeViewModel extends ChangeNotifier {
   final _auth = locator<AuthService>();
   final _db = locator<DatabaseService>();
@@ -57,6 +56,7 @@ class HomeViewModel extends ChangeNotifier {
 
   List<SavedPlace> _savedPlaces = [];
   List<SavedPlace> get savedPlaces => _savedPlaces;
+
   List<RideDestination> _recentDestinations = [];
   List<RideDestination> get recentDestinations => _recentDestinations;
 
@@ -71,97 +71,42 @@ class HomeViewModel extends ChangeNotifier {
 
   PaymentViewModel get paymentViewModel => _paymentViewModel;
 
-  HomeViewModel() {
-    _initialize();
-    // _paymentViewModel.addListener(_onPaymentStateChanged);
-  }
-
-// Add these constants
-  static const String _kCurrentStep = 'home_current_step';
+  // SharedPreferences key — only used to persist the rideId across cold starts.
+  // The step is ALWAYS derived from Firestore, never from SharedPreferences.
   static const String _kCurrentRideId = 'home_current_ride_id';
 
-// Helper to convert enum to string
-  String _enumToString(HomeStep step) => step.name;
-
-// Helper to convert string back to enum
-  HomeStep _stringToHomeStep(String? value) {
-    if (value == null) return HomeStep.initial;
-    return HomeStep.values.firstWhere(
-          (step) => step.name == value,
-      orElse: () => HomeStep.initial,
-    );
+  HomeViewModel() {
+    _initialize();
   }
 
-// Save current state
-  Future<void> _saveCurrentState() async {
+  Future<void> _saveRideId(String? rideId) async {
     final prefs = await SharedPreferences.getInstance();
-
-    await prefs.setString(_kCurrentStep, _enumToString(_currentStep));
-
-    if (_rideId != null) {
-      await prefs.setString(_kCurrentRideId, _rideId!);
+    if (rideId != null) {
+      await prefs.setString(_kCurrentRideId, rideId);
     } else {
       await prefs.remove(_kCurrentRideId);
     }
   }
 
-  Future<void> _restoreCurrentState() async {
+  Future<String?> _loadSavedRideId() async {
     final prefs = await SharedPreferences.getInstance();
-
-    final savedStepString = prefs.getString(_kCurrentStep);
-    final savedRideId = prefs.getString(_kCurrentRideId);
-
-    bool stateChanged = false;
-
-    // Restore step
-    if (savedStepString != null) {
-      final restoredStep = _stringToHomeStep(savedStepString);
-      if (restoredStep != _currentStep) {
-        _currentStep = restoredStep;
-        stateChanged = true;
-        debugPrint("✅ Restored step: $_currentStep");
-      }
-    }
-
-    // Restore rideId and re-attach listener (most important part)
-    if (savedRideId != null && savedRideId.isNotEmpty) {
-      if (_rideId != savedRideId) {
-        _rideId = savedRideId;
-        debugPrint("✅ Restored rideId: $_rideId");
-
-        // Re-attach the real-time listener
-        _listenForRideStatus(savedRideId);
-
-        print("I am truly signing up a page 2");
-        stateChanged = true;
-      } else if (_rideId == savedRideId && _currentStep == HomeStep.activeTrip) {
-        // RideId is already set but listener might have died → re-attach
-        _listenForRideStatus(savedRideId);
-
-        print("I am truly signing up a page 3");
-      }
-    }
-    if (stateChanged) {
-      debugPrint("🔄 Restored state → Step: ${_currentStep.name} | Ride: $_rideId");
-      notifyListeners();
-    }
+    return prefs.getString(_kCurrentRideId);
   }
 
-
-
   Future<void> _initialize() async {
-
-    print("I am truly signing up a page 1");
     _isLoading = true;
     notifyListeners();
+
     await mapViewModel.initialize();
     await _initializeIcons();
+
     final uid = _auth.currentUser?.uid;
     if (uid == null) {
       _isLoading = false;
       notifyListeners();
       return;
     }
+
     try {
       final results = await Future.wait([
         _db.getUserProfile(uid),
@@ -171,21 +116,24 @@ class HomeViewModel extends ChangeNotifier {
       _userProfile = results[0] as UserProfile;
       _savedPlaces = results[1] as List<SavedPlace>;
       _recentDestinations = results[2] as List<RideDestination>;
-      await refreshOnScreenResume();
+
       _listenToOnlineDrivers();
-    } catch (e) {
-      debugPrint("Error initializing HomeViewModel: $e");
+
+      // On cold start, check Firestore first.
+      // If Firestore finds nothing, fall back to SharedPreferences rideId
+      // to handle the edge case where Firestore is slow.
+      await _checkForActiveRide();
+    } catch (error) {
+      debugPrint("Error initializing HomeViewModel: $error");
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  // --- METHOD THAT WAS MISSING ---
   Future<void> refresh() async {
     await _initialize();
   }
-  // --- END OF MISSING METHOD ---
 
   Future<void> _initializeIcons() async {
     _greenCarIcon = await getMarkerIcon('assets/icons/bluecar.png', 96);
@@ -196,25 +144,18 @@ class HomeViewModel extends ChangeNotifier {
 
     switch (_paymentViewModel.state) {
       case PaymentState.success:
-      // CRITICAL CHANGE: Don't call the async method directly.
-      // Just change the step. The UI will react and show the "FindingDriverCard".
         _currentStep = HomeStep.findingDriver;
         notifyListeners();
-        // We swill create the ride request from the UI widget instead.
         break;
       case PaymentState.failed:
-      // Go back to the previous step so the user can see the error and retry.
         _currentStep = HomeStep.vehicleSelection;
         notifyListeners();
         break;
       case PaymentState.cancelled:
-      // Go back to the previous step.
         _currentStep = HomeStep.vehicleSelection;
         notifyListeners();
         break;
       default:
-      // For states like 'loading' or 'processing', we might not need to change
-      // the home step, but we still need to rebuild the UI to show loaders.
         notifyListeners();
         break;
     }
@@ -228,17 +169,19 @@ class HomeViewModel extends ChangeNotifier {
         final data = doc.data() as Map<String, dynamic>;
         if (data['latitude'] == null || data['longitude'] == null) continue;
         final id = doc.id;
-        final pos = LatLng(data['latitude'], data['longitude']);
+        final position = LatLng(data['latitude'], data['longitude']);
         markers[id] = Marker(
           markerId: MarkerId(id),
-          position: pos,
+          position: position,
           icon: _greenCarIcon ?? BitmapDescriptor.defaultMarker,
           rotation: (data['heading'] ?? 0.0).toDouble(),
           flat: true,
           anchor: const Offset(0.5, 0.5),
         );
       }
-      _driverMarkers..clear()..addAll(markers);
+      _driverMarkers
+        ..clear()
+        ..addAll(markers);
       notifyListeners();
     });
   }
@@ -246,7 +189,12 @@ class HomeViewModel extends ChangeNotifier {
   Future<void> selectSavedPlace(BuildContext context, String placeName) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
-    var place = _savedPlaces.firstWhere((p) => p.name == placeName, orElse: () => SavedPlace.empty());
+
+    var place = _savedPlaces.firstWhere(
+          (savedPlace) => savedPlace.name == placeName,
+      orElse: () => SavedPlace.empty(),
+    );
+
     if (place.id.isEmpty) {
       final newPlace = await Navigator.push<SavedPlace>(
         context,
@@ -259,23 +207,26 @@ class HomeViewModel extends ChangeNotifier {
         return;
       }
     }
-    final origin = PlaceDetails.fromCurrentPosition(LatLng(mapViewModel.currentPosition!.latitude, mapViewModel.currentPosition!.longitude));
+
+    final origin = PlaceDetails.fromCurrentPosition(
+      LatLng(mapViewModel.currentPosition!.latitude, mapViewModel.currentPosition!.longitude),
+    );
     final destination = PlaceDetails.fromSavedPlace(place);
     await selectRoute(origin, destination);
   }
 
-  // --- METHOD THAT WAS MISSING ---
-  Future<void> selectRecentDestination(RideDestination dest) async {
+  Future<void> selectRecentDestination(RideDestination destination) async {
     if (mapViewModel.currentPosition == null) return;
-    final origin = PlaceDetails.fromCurrentPosition(LatLng(mapViewModel.currentPosition!.latitude, mapViewModel.currentPosition!.longitude));
-    final destination = PlaceDetails(
-      name: dest.address.split(',').first,
-      address: dest.address,
-      location: LatLng(dest.latitude, dest.longitude),
+    final origin = PlaceDetails.fromCurrentPosition(
+      LatLng(mapViewModel.currentPosition!.latitude, mapViewModel.currentPosition!.longitude),
     );
-    await selectRoute(origin, destination);
+    final placeDetails = PlaceDetails(
+      name: destination.address.split(',').first,
+      address: destination.address,
+      location: LatLng(destination.latitude, destination.longitude),
+    );
+    await selectRoute(origin, placeDetails);
   }
-  // --- END OF MISSING METHOD ---
 
   Future<void> selectRoute(PlaceDetails origin, PlaceDetails destination) async {
     await mapViewModel.getDirections(origin.location, destination.location);
@@ -313,21 +264,20 @@ class HomeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-
   Future<void> proceedToPayment(BuildContext context) async {
     if (_selectedVehicle == null || _userProfile == null || mapViewModel.directionsResult == null) return;
 
     _currentStep = HomeStep.payment;
     notifyListeners();
 
-    final d = mapViewModel.directionsResult!;
-    if (d.distanceValue == null || d.durationValue == null) {
+    final directionsResult = mapViewModel.directionsResult!;
+    if (directionsResult.distanceValue == null || directionsResult.durationValue == null) {
       _currentStep = HomeStep.routePreview;
       notifyListeners();
       return;
     }
 
-    final fares = fareService.calculateFare(d.distanceValue!, d.durationValue!);
+    final fares = fareService.calculateFare(directionsResult.distanceValue!, directionsResult.durationValue!);
     final estimatedFare = fares.getFareForVehicle(_selectedVehicle!);
     final bookingId = 'ride_${_userProfile!.uid}_${DateTime.now().millisecondsSinceEpoch}';
 
@@ -338,7 +288,6 @@ class HomeViewModel extends ChangeNotifier {
     );
 
     if (sessionData != null && sessionData['checkoutUrl'] != null && context.mounted) {
-      // Await the result from the StripeCheckoutScreen.
       final bool? paymentResult = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder: (_) => StripeCheckoutScreen(
@@ -347,23 +296,18 @@ class HomeViewModel extends ChangeNotifier {
         ),
       );
 
-      // --- THIS IS THE NEW, DIRECT LOGIC ---
       if (paymentResult == true) {
-        // Payment was successful!
         debugPrint("✅ Payment successful. Creating ride request...");
-        _paymentViewModel.handlePaymentSuccess(sessionData['paymentId']); // Update payment state
+        _paymentViewModel.handlePaymentSuccess(sessionData['paymentId']);
 
-        // Change the UI state to show the finding driver screen *immediately*.
         _currentStep = HomeStep.findingDriver;
         notifyListeners();
 
-        // Now, create the ride request on the backend.
         await _createRideRequestAfterPayment();
       } else {
-        // Payment was cancelled or failed.
         debugPrint("🟡 Payment was cancelled or failed.");
-        _paymentViewModel.handlePaymentCancelled(); // Update payment state
-        _currentStep = HomeStep.vehicleSelection; // Go back to vehicle selection
+        _paymentViewModel.handlePaymentCancelled();
+        _currentStep = HomeStep.vehicleSelection;
         notifyListeners();
       }
     } else if (context.mounted) {
@@ -375,20 +319,23 @@ class HomeViewModel extends ChangeNotifier {
     }
   }
 
-  // Renamed from 'confirmAndRequestRide'. This is now a private helper.
   Future<void> _createRideRequestAfterPayment() async {
     _isRequestingRide = true;
     notifyListeners();
 
     try {
-      if (_selectedVehicle == null || _userProfile == null || mapViewModel.directionsResult == null ||
-          mapViewModel.currentPosition == null || _paymentViewModel.currentPaymentId == null) {
+      if (_selectedVehicle == null ||
+          _userProfile == null ||
+          mapViewModel.directionsResult == null ||
+          mapViewModel.currentPosition == null ||
+          _paymentViewModel.currentPaymentId == null) {
         throw Exception("Missing critical data for ride request.");
       }
 
-      final d = mapViewModel.directionsResult!;
-      final fares = fareService.calculateFare(d.distanceValue!, d.durationValue!);
+      final directionsResult = mapViewModel.directionsResult!;
+      final fares = fareService.calculateFare(directionsResult.distanceValue!, directionsResult.durationValue!);
       final fare = fares.getFareForVehicle(_selectedVehicle!);
+
       final rideRequest = RideRequest(
         id: '',
         userId: _userProfile!.uid,
@@ -397,92 +344,84 @@ class HomeViewModel extends ChangeNotifier {
         passengerName: _userProfile!.fullName,
         passengerRating: _userProfile!.rating,
         pickupLocation: LatLng(mapViewModel.currentPosition!.latitude, mapViewModel.currentPosition!.longitude),
-        destinationLocation: d.endLocation,
-        pickupAddress: d.startAddress,
-        destinationAddress: d.endAddress,
+        destinationLocation: directionsResult.endLocation,
+        pickupAddress: directionsResult.startAddress,
+        destinationAddress: directionsResult.endAddress,
         fare: fare,
-        distance: d.distanceValue! / 1000.0,
+        distance: directionsResult.distanceValue! / 1000.0,
         createdAt: DateTime.now(),
         paymentId: _paymentViewModel.currentPaymentId!,
       );
+
       final newRideId = await _db.createRideRequest(rideRequest);
       _rideId = newRideId;
-      _listenForRideStatus(newRideId!);
 
-    } catch (e) {
-      debugPrint("Error creating ride request: $e");
-      // If creating the ride fails, reset everything.
+      // Save the rideId to SharedPreferences immediately.
+      // This is our cold-start safety net.
+      await _saveRideId(newRideId);
+
+      _listenForRideStatus(newRideId!);
+    } catch (error) {
+      debugPrint("Error creating ride request: $error");
       _resetRide();
     } finally {
       _isRequestingRide = false;
       notifyListeners();
-      // Do NOT reset payment here. _resetRide handles it on failure/cancellation.
     }
   }
-  void _listenForRideStatus(String id) {
+
+  void _listenForRideStatus(String rideId) {
+    // Always cancel the old listener before attaching a new one.
+    // This prevents duplicate listeners stacking up on resume.
     _rideListener?.cancel();
     _rideListener = null;
 
-    debugPrint("🎧 Starting ride listener for rideId: $id");
+    debugPrint("🎧 Attaching ride listener for rideId: $rideId");
 
-    _rideListener = _rideService.getRideStream(id).listen((snap) {
-
-      if (!snap.exists) {
-        debugPrint("❌ Ride document no longer exists");
-        _resetRide();
-        return;
-      }
-
-
-      final data = snap.data() as Map<String, dynamic>;
-      final rawStatus = data['status'] ?? 'pending';
-      final status = RideStatus.fromString(rawStatus);
-
-      debugPrint("🔥 RIDE STATUS UPDATE → Raw: '$rawStatus' | Enum: ${status.name} | Current Step: ${_currentStep.name}");
-
-      if (status.isTerminal) {
-        debugPrint("🛑 Terminal status → resetting ride");
-        _resetRide();
-        return;
-      }
-
-      // Broader condition to catch "accepted"
-      if (status == RideStatus.accepted ||
-          status == RideStatus.enroute ||
-          status == RideStatus.ongoing ||
-          rawStatus.toLowerCase().contains('accept')) {   // safety net
-
-        if (_currentStep != HomeStep.activeTrip) {
-          debugPrint("✅ SWITCHING TO ACTIVETRIPCARD NOW!");
-          _currentStep = HomeStep.activeTrip;
-          _rideId = id;
-          _saveCurrentState();
-
-          final String? driverId  = data["driverId"];
-          final driverLocation = _db.getDriverLatLngStream(driverId);
-
-         mapViewModel.startFollowingDriver(driverLocation);
-
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            notifyListeners();
-          });
-
-        } else {
-          debugPrint("Already in activeTrip step");
+    _rideListener = _rideService.getRideStream(rideId).listen(
+          (snapshot) {
+        if (!snapshot.exists) {
+          debugPrint("❌ Ride document no longer exists — resetting.");
+          _resetRide();
+          return;
         }
-      }
-    }, onError: (error) {
-      debugPrint("❌ Ride listener ERROR: $error");
-    });
-  }
 
-  Future<void> refreshActiveTripState() async {
-    if (_rideId != null && _currentStep == HomeStep.activeTrip) {
-      // Re-attach listener in case it was cancelled
-      _listenForRideStatus(_rideId!);
-      notifyListeners();
-      debugPrint("🔄 Refreshed active trip state for ride: $_rideId");
-    }
+        final data = snapshot.data() as Map<String, dynamic>;
+        final rawStatus = data['status'] ?? 'pending';
+        final status = RideStatus.fromString(rawStatus);
+
+        debugPrint("🔥 RIDE STATUS → Raw: '$rawStatus' | Enum: ${status.name} | Step: ${_currentStep.name}");
+
+        if (status.isTerminal) {
+          debugPrint("🛑 Terminal status — resetting ride.");
+          _resetRide();
+          return;
+        }
+
+        // Driver accepted or trip is underway → switch to ActiveTrip card.
+        if (status == RideStatus.accepted ||
+            status == RideStatus.enroute ||
+            status == RideStatus.ongoing) {
+          if (_currentStep != HomeStep.activeTrip) {
+            debugPrint("✅ Switching to ActiveTripCard.");
+            _currentStep = HomeStep.activeTrip;
+            _rideId = rideId;
+
+            final String? driverId = data['driverId'];
+            final driverLocationStream = _db.getDriverLatLngStream(driverId);
+            mapViewModel.startFollowingDriver(driverLocationStream);
+
+            // Safe notify — schedule after current build frame completes.
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!_isDisposed) notifyListeners();
+            });
+          }
+        }
+      },
+      onError: (error) {
+        debugPrint("❌ Ride listener error: $error");
+      },
+    );
   }
 
   Future<void> cancelRide() async {
@@ -500,61 +439,85 @@ class HomeViewModel extends ChangeNotifier {
     mapViewModel.clearRoute();
     _currentStep = HomeStep.initial;
     _paymentViewModel.resetPayment();
-    _saveCurrentState(); // Save the reset state
-    notifyListeners();
-  }
-
-  Future<BitmapDescriptor> getMarkerIcon(String path, int width) async {
-    final ByteData data = await rootBundle.load(path);
-    final ui.Codec codec = await ui.instantiateImageCodec(data.buffer.asUint8List(), targetWidth: width);
-    final ui.FrameInfo fi = await codec.getNextFrame();
-    final byteData = await fi.image.toByteData(format: ui.ImageByteFormat.png);
-    return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
+    _saveRideId(null); // Clear persisted rideId
+    if (!_isDisposed) notifyListeners();
   }
 
   Future<void> _checkForActiveRide() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
 
-    final activeRideId = await _db.getUserCurrentRide(uid);
+    // Step 1: Ask Firestore if there's an active ride for this user right now.
+    String? activeRideId = await _db.getUserCurrentRide(uid);
 
-    if (activeRideId != null) {
-      _rideId = activeRideId;
-      _listenForRideStatus(activeRideId);
-      notifyListeners();           // ← This is key
-      await _saveCurrentState();
-      debugPrint("✅ Found active ride on startup: $activeRideId");
-    }else{
-      debugPrint("✅ Found active ride on startup last: $activeRideId");
-      _currentStep = HomeStep.initial;
+    // Step 2: If Firestore returns nothing, fall back to the saved rideId.
+    // This handles the edge case where the app was killed mid-ride and
+    // Firestore hasn't been queried yet.
+    if (activeRideId == null || activeRideId.isEmpty) {
+      activeRideId = await _loadSavedRideId();
+      debugPrint("🔁 Firestore had no active ride. SharedPrefs fallback: $activeRideId");
     }
-    debugPrint("✅ Found active ride on startup last: $activeRideId : $uid");
+
+    if (activeRideId != null && activeRideId.isNotEmpty) {
+      // There's an active ride — always re-attach the listener.
+      // Do NOT trust the saved step. Let the Firestore listener determine
+      // the correct step based on the real ride status.
+      _rideId = activeRideId;
+      await _saveRideId(activeRideId);
+      _listenForRideStatus(activeRideId);
+
+      // Show FindingDriver while we wait for the listener to fire.
+      // The listener will immediately update to activeTrip if already accepted.
+      if (_currentStep == HomeStep.initial) {
+        _currentStep = HomeStep.findingDriver;
+        notifyListeners();
+      }
+
+      debugPrint("✅ Active ride found: $activeRideId");
+    } else {
+      // No active ride anywhere — make sure we're on the initial screen.
+      // But only reset if we're not mid-booking (selecting route/vehicle/payment).
+      if (_currentStep == HomeStep.findingDriver || _currentStep == HomeStep.activeTrip) {
+        _currentStep = HomeStep.initial;
+        notifyListeners();
+      }
+      debugPrint("ℹ️ No active ride found.");
+    }
   }
 
-
+  /// Called when the app comes back from background or the user returns to this screen.
   Future<void> refreshOnScreenResume() async {
     debugPrint("🔄 refreshOnScreenResume() called");
 
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
 
-    // Prevent multiple rapid calls
     if (_isRefreshing) return;
     _isRefreshing = true;
 
     try {
-      await _restoreCurrentState();
-
-      // Only check for active ride if we don't already have a listener running
-      if (_rideListener == null || _currentStep == HomeStep.findingDriver) {
-        await _checkForActiveRide();
-      }
+      // Firestore is the single source of truth.
+      // Always re-check and re-attach the listener — never rely on in-memory state
+      // alone because the stream may have died while the app was backgrounded.
+      await _checkForActiveRide();
     } finally {
       _isRefreshing = false;
     }
   }
+
+  Future<BitmapDescriptor> getMarkerIcon(String path, int width) async {
+    final ByteData data = await rootBundle.load(path);
+    final ui.Codec codec = await ui.instantiateImageCodec(data.buffer.asUint8List(), targetWidth: width);
+    final ui.FrameInfo frameInfo = await codec.getNextFrame();
+    final byteData = await frameInfo.image.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
+  }
+
+  bool _isDisposed = false;
+
   @override
   void dispose() {
+    _isDisposed = true;
     mapViewModel.dispose();
     _driverSub?.cancel();
     _rideListener?.cancel();

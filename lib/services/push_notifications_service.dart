@@ -37,12 +37,10 @@ class NotificationService {
 
   void subscribeToUserTopic(String userId) {
     _fcm.subscribeToTopic('user_$userId');
-    print('Subscribed to topic: user_$userId');
   }
 
   void unsubscribeFromUserTopic(String userId) {
     _fcm.unsubscribeFromTopic('user_$userId');
-    print('Unsubscribed from topic: user_$userId');
   }
 
   Future<void> updateUserPushNotificationPreference(String userId, bool enable) async {
@@ -56,11 +54,9 @@ class NotificationService {
 
   void subscribeToOnlineDriversTopic() {
     _fcm.subscribeToTopic('online_drivers');
-    print('Subscribed to topic: online_drivers');
   }
 
   void unsubscribeFromOnlineDriversTopic() {
     _fcm.unsubscribeFromTopic('online_drivers');
-    print('Unsubscribed from topic: online_drivers');
   }
 }

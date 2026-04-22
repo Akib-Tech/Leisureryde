@@ -90,10 +90,9 @@ class AuthService extends ChangeNotifier {
           licenseUrl: licenseUrl,
         );
       }
-    } on FirebaseAuthException catch (e) {
-      // ... (same error handling as before)
+    } on FirebaseAuthException {
       rethrow;
-    } catch (e) {
+    } catch (_) {
       rethrow;
     }
   }

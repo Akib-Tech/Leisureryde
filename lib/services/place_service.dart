@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
@@ -30,7 +29,6 @@ class PlacesService {
         }
       }
     } catch (e) {
-      print("Autocomplete error: $e");
     }
     return [];
   }
@@ -53,7 +51,6 @@ class PlacesService {
         }
       }
     } catch (e) {
-      print("Place details error: $e");
     }
     return null;
   }

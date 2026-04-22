@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:leisureryde/models/ride_request_model.dart';
 
 import 'package:provider/provider.dart';
 
 import '../../../viewmodel/home/driver_home_view_model.dart';
 import '../../../widgets/custom_loading_indicator.dart';
 import '../ride_request/ride_requests_screen.dart';
-import '../../../services/database_service.dart';
 import '../trip/active_trip_bottom_sheet.dart';
 
 class DriverHomeScreen extends StatelessWidget {
