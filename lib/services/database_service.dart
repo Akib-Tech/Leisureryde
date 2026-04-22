@@ -28,7 +28,6 @@ class DatabaseService {
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      print("Error creating user profile: $e");
       rethrow;
     }
   }
@@ -54,7 +53,6 @@ class DatabaseService {
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      print("Error creating driver profile: $e");
       rethrow;
     }
   }
@@ -68,7 +66,6 @@ class DatabaseService {
         throw Exception("User profile not found!");
       }
     } catch (e) {
-      print("Error fetching user profile: $e");
       rethrow;
     }
   }
@@ -82,7 +79,6 @@ class DatabaseService {
         throw Exception("Driver profile not found!");
       }
     } catch (e) {
-      print("Error fetching driver profile: $e");
       rethrow;
     }
   }
@@ -98,7 +94,6 @@ class DatabaseService {
 
       await _db.collection('users').doc(uid).update(updateData);
     } catch (e) {
-      print("Error updating driver status: $e");
       rethrow;
     }
   }
@@ -144,7 +139,6 @@ class DatabaseService {
     try {
       await _db.collection('users').doc(uid).update(data);
     } catch (e) {
-      print("Error updating user profile data: $e");
       rethrow;
     }
   }
@@ -153,7 +147,6 @@ class DatabaseService {
     try {
       await _db.collection('users').doc(uid).delete();
     } catch (e) {
-      print("Error deleting user profile from Firestore: $e");
       rethrow;
     }
   }
@@ -164,7 +157,6 @@ class DatabaseService {
       final snapshot = await _db.collection('users').doc(uid).collection('savedPlaces').get();
       return snapshot.docs.map((doc) => SavedPlace.fromMap(doc.id, doc.data())).toList();
     } catch (e) {
-      print("Error getting saved places: $e");
       return [];
     }
   }
@@ -174,7 +166,6 @@ class DatabaseService {
       // FIX: Used _db.collection('users') directly.
       await _db.collection('users').doc(uid).collection('savedPlaces').doc(place.name).set(place.toMap());
     } catch (e) {
-      print("Error adding/updating saved place: $e");
       rethrow;
     }
   }
@@ -184,7 +175,6 @@ class DatabaseService {
       // FIX: Used _db.collection('users') directly.
       await _db.collection('users').doc(uid).collection('savedPlaces').doc(placeName).delete();
     } catch (e) {
-      print("Error deleting saved place: $e");
       rethrow;
     }
   }
@@ -223,7 +213,6 @@ class DatabaseService {
       return uniqueDestinations.values.take(3).toList();
 
     } catch (e) {
-      print("Error fetching recent destinations: $e");
       return [];
     }
   }
@@ -233,7 +222,6 @@ class DatabaseService {
       final docRef = await _db.collection('rideRequests').add(rideRequest.toMap());
       return docRef.id; // Return the ID of the new ride document
     } catch (e) {
-      print("Error creating ride request: $e");
       rethrow;
     }
   }
@@ -249,7 +237,6 @@ class DatabaseService {
 
       return snapshot.docs.map((doc) => RideRequest.fromFirestore(doc)).toList();
     } catch (e) {
-      print("Error fetching upcoming rides: $e");
       return [];
     }
   }
@@ -266,7 +253,6 @@ class DatabaseService {
 
       return snapshot.docs.map((doc) => RideRequest.fromFirestore(doc)).toList();
     } catch (e) {
-      print("Error fetching past rides: $e");
       return [];
     }
   }
@@ -288,7 +274,6 @@ class DatabaseService {
 
       return null;
     } catch (e) {
-      print("Error fetching most recent active ride for user $uid: $e");
       return null;
     }
   }
@@ -304,17 +289,12 @@ class DatabaseService {
 
       final snapshot = await query.get();
 
-      print("✅ Query succeeded. Docs found: ${snapshot.docs.length}");
       if (snapshot.docs.isNotEmpty) {
         final ride = RideRequest.fromFirestore(snapshot.docs.first);
-        print("✅ Active ride found: ${ride.id}");
         return ride.id;
       }
-      print("✅ No active ride found");
       return null;
-    } catch (e, stack) {
-      print("❌ getUserCurrentRide failed: $e");
-      print("Stack: $stack");
+    } catch (_) {
       return null;
     }
   }

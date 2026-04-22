@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../app/service_locator.dart';
 import '../../models/ride_request_model.dart';
 import '../../models/driver_profile.dart';
@@ -73,7 +72,7 @@ class EarningsViewModel extends ChangeNotifier {
 
       _totalTrips = completed.docs.length;
       _totalEarnings = completed.docs.fold(
-          0.0, (sum, doc) => sum + (doc['fare'] ?? 0.0) as double);
+          0.0, (sum, doc) => sum + ((doc['fare'] ?? 0.0) as num).toDouble());
 
       // Simple hours logic — based on driver's last online entry
       if (_driverProfile?.lastWentOnlineAt != null) {

@@ -1,44 +1,51 @@
 import 'package:flutter/material.dart';
-import 'package:leisureryde/screens/shared/timer/timer.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../../models/ride_request_model.dart';
+import '../../../viewmodel/home/home_view_model.dart';
 import '../../../viewmodel/ride/active_trip_view_model.dart';
 import '../../../widgets/custom_loading_indicator.dart';
 import '../../shared/chat/chat_screen.dart';
 
+/// The user-facing active trip card shown at the bottom of HomeScreen.
+///
+/// IMPORTANT: We pass the shared [MapViewModel] from [HomeViewModel] into
+/// [ActiveTripViewModel] so that all polylines and markers are drawn into
+/// the same [GoogleMap] widget that HomeScreen is already displaying.
+/// If we let ActiveTripViewModel create its own MapViewModel, it would draw
+/// into a separate, invisible instance and nothing would appear on screen.
 class ActiveTripCard extends StatelessWidget {
   final String rideId;
+
   const ActiveTripCard({super.key, required this.rideId});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    // Read the shared HomeViewModel to get its MapViewModel.
+    final homeViewModel = context.read<HomeViewModel>();
 
     return ChangeNotifierProvider(
-      create: (_) => ActiveTripViewModel(rideId: rideId),
+      // Pass the SHARED mapViewModel so polylines go to the right place.
+      create: (_) => ActiveTripViewModel(
+        rideId: rideId,
+        mapViewModel: homeViewModel.mapViewModel,
+      ),
       child: Consumer<ActiveTripViewModel>(
-        builder: (context, vm, _) {
-          if (vm.isLoading) return const CustomLoadingIndicator();
-
-          if (vm.driverProfile == null || vm.rideRequest == null) {
-            return Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: const [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text("Connecting to driver..."),
-                ],
-              ),
-            );
+        builder: (context, viewModel, child) {
+          if (viewModel.isLoading) {
+            return const CustomLoadingIndicator();
           }
 
-          final driver = vm.driverProfile!;
-          final String label = _statusLabel(vm.tripStatus);
-          final bool isOngoing = vm.tripStatus == 'accepted' || vm.tripStatus == 'ongoing' || vm.tripStatus == 'enroute' ;
-          final bool canCancel = vm.tripStatus == 'pending' ;
+          if (viewModel.rideRequest == null) {
+            return const SizedBox.shrink();
+          }
+
+          final theme = Theme.of(context);
+          final rideRequest = viewModel.rideRequest!;
+
           return Container(
             margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: theme.scaffoldBackgroundColor,
               borderRadius: BorderRadius.circular(20),
@@ -53,162 +60,126 @@ class ActiveTripCard extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Drag handle
                 Container(
+                  margin: const EdgeInsets.only(top: 12),
                   width: 40,
                   height: 5,
-                  margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
-                    color: theme.dividerColor,
-                    borderRadius: BorderRadius.circular(5),
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                Text(
-                  label,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: theme.primaryColor,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
 
-                // Driver Info
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    CircleAvatar(
-                      radius: 28,
-                      backgroundImage: driver.profileImageUrl.isNotEmpty
-                          ? NetworkImage(driver.profileImageUrl)
-                          : null,
-                      child: driver.profileImageUrl.isEmpty
-                          ? Text(
-                        driver.firstName[0].toUpperCase(),
-                        style: const TextStyle(
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                  child: Column(
+                    children: [
+                      // Status label
+                      Text(
+                        _statusLabel(rideRequest.status),
+                        style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          fontSize: 20,
+                          color: theme.primaryColor,
                         ),
-                      )
-                          : null,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(driver.fullName,
-                              style: theme.textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold)),
-                          Row(children: [
-                            Icon(Icons.star, size: 16, color: theme.primaryColor),
-                            Text(driver.rating.toStringAsFixed(1)),
-                          ]),
-                          Text('${driver.carModel} • ${driver.licensePlate}',
-                              style: theme.textTheme.bodySmall
-                                  ?.copyWith(color: Colors.grey[600])),
-                        ],
                       ),
-                    ),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.call, color: Colors.green),
-                          onPressed: vm.makePhoneCall,
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.chat, color: Colors.blue),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ChatScreen(
-                                  rideId: rideId,
-                                  otherUserId: driver.uid,
-                                  otherUserName: driver.fullName,
-                                  otherUserImageUrl: driver.profileImageUrl,
+
+                      const SizedBox(height: 16),
+
+                      // Driver info
+                      if (viewModel.driverProfile != null) ...[
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            radius: 28,
+                            backgroundImage: viewModel.driverProfile!.profileImageUrl.isNotEmpty
+                                ? NetworkImage(viewModel.driverProfile!.profileImageUrl)
+                                : null,
+                            child: viewModel.driverProfile!.profileImageUrl.isEmpty
+                                ? Text(
+                              viewModel.driverProfile!.firstName[0].toUpperCase(),
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            )
+                                : null,
+                          ),
+                          title: Text(
+                            viewModel.driverProfile!.fullName,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Row(
+                            children: [
+                              const Icon(Icons.star, size: 14, color: Colors.amber),
+                              const SizedBox(width: 4),
+                              Text(viewModel.driverProfile!.rating.toStringAsFixed(1)),
+                            ],
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.call, color: Colors.green),
+                                onPressed: () => _callDriver(viewModel.driverProfile!.phone),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.chat, color: Colors.blue),
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ChatScreen(
+                                      rideId: rideId,
+                                      otherUserId: viewModel.driverProfile!.uid,
+                                      otherUserName: viewModel.driverProfile!.fullName,
+                                      otherUserImageUrl: viewModel.driverProfile!.profileImageUrl,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
-
-                if(vm.tripStatus == "ongoing")
-                 TripEndTimer(
-                  destination: vm.userDestination,
-                  driverLocationStream: vm.driverLoc, // e.g., Firebase stream of driver position
-                  onTripAlmostEnded: () {
-                    // Show "Almost there!" banner or notification
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                // Cancel Button with conditional logic
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: canCancel
-                        ? theme.colorScheme.error
-                        : Colors.grey,
-                    side: BorderSide(
-                      color: canCancel
-                          ? theme.colorScheme.error
-                          : Colors.grey,
-                    ),
-                    minimumSize: const Size(double.infinity, 50),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: canCancel
-                      ? () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text("Cancel Trip?"),
-                        content: const Text(
-                            'Are you sure you want to cancel this trip?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('No'),
+                            ],
                           ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text("Yes"),
+                        ),
+
+                        const SizedBox(height: 12),
+                      ],
+
+                      // Destination row
+                      Row(
+                        children: [
+                          Icon(Icons.location_on, color: theme.primaryColor, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              rideRequest.destinationAddress,
+                              style: theme.textTheme.bodyMedium,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ],
                       ),
-                    );
-                    if (confirm == true && context.mounted) {
-                      await vm.cancelTrip();
-                    }
-                  }
-                      : null,   // Button disabled when cannot cancel
 
-                  icon: const Icon(Icons.cancel_outlined),
-                  label: Text(
-                    isOngoing ? 'Cannot Cancel - Trip in Progress' : 'Cancel Trip',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                      const SizedBox(height: 16),
+
+                      // Cancel button — only shown before trip is ongoing
+                      if (rideRequest.status == RideStatus.pending)
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            side: const BorderSide(color: Colors.red),
+                            minimumSize: const Size(double.infinity, 48),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () => viewModel.cancelTrip(),
+                          icon: const Icon(Icons.cancel_outlined),
+                          label: const Text(
+                            "Cancel Ride",
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-
-                // Optional helpful message when trip is ongoing
-                if (isOngoing)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text(
-                      "You can no longer cancel once the trip has started.\n"
-                          "Please contact the driver if needed.",
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.grey[600],
-                        fontStyle: FontStyle.italic,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
               ],
             ),
           );
@@ -217,18 +188,23 @@ class ActiveTripCard extends StatelessWidget {
     );
   }
 
-  String _statusLabel(String? code) {
-    switch (code) {
-      case 'accepted':
-        return 'Driver is on the way';
-      case 'enroute':
-        return 'Driver arriving';
-      case 'ongoing':
-        return 'Trip in progress';
-      case 'completed':
-        return 'Trip completed';
+  String _statusLabel(RideStatus status) {
+    switch (status) {
+      case RideStatus.accepted:
+        return "Driver is on the way";
+      case RideStatus.enroute:
+        return "Driver is arriving";
+      case RideStatus.ongoing:
+        return "Trip in progress";
       default:
-        return 'Connecting...';
+        return "Finding your driver...";
+    }
+  }
+
+  Future<void> _callDriver(String phone) async {
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
     }
   }
 }

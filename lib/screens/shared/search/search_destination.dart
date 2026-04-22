@@ -2,7 +2,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:leisureryde/app/service_locator.dart';
 
 import '../../../models/route_selection.dart';
 import '../../../services/place_service.dart';

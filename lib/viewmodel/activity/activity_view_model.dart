@@ -1,17 +1,12 @@
 
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:leisureryde/app/service_locator.dart';
 import 'package:leisureryde/services/auth_service.dart';
 import 'package:leisureryde/services/database_service.dart';
 
-import '../../models/driver_profile.dart';
 import '../../models/ride_request_model.dart';
-import '../../services/directions_service.dart';
-import '../../services/ride_service.dart';
 
 
 
@@ -54,7 +49,6 @@ class ActivityViewModel extends ChangeNotifier {
       _upcomingRides = results[0];
       _pastRides = results[1];
     } catch (e) {
-      print("Error fetching activity: $e");
     } finally {
       _isLoading = false;
       notifyListeners();

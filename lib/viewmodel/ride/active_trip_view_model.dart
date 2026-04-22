@@ -3,29 +3,29 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:leisureryde/app/service_locator.dart';
-
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/driver_profile.dart';
 import '../../models/ride_request_model.dart';
-import '../../screens/user/payment/stripe_checkout.dart';
 import '../../services/database_service.dart';
 import '../../services/directions_service.dart';
 import '../../services/ride_service.dart';
-import '../payment/payment.dart';
+import '../maps/maps_viewmodel.dart';
 
 class ActiveTripViewModel extends ChangeNotifier {
   final String? rideId;
+
+  // Injected from HomeViewModel so we draw into the SAME MapViewModel
+  // that the GoogleMap widget on screen is reading from.
+  final MapViewModel mapViewModel;
+
   final RideService _rideService = locator<RideService>();
   final DatabaseService _databaseService = locator<DatabaseService>();
+  final DirectionsService _directionsService = locator<DirectionsService>();
+
   late StreamSubscription<DocumentSnapshot> _rideSubscription;
   StreamSubscription<DocumentSnapshot>? _driverLocationSubscription;
-  final DirectionsService _directionsService = locator<
-      DirectionsService>(); // Add this
 
-
-
-  // State
   bool _isLoading = true;
   bool get isLoading => _isLoading;
 
@@ -38,26 +38,19 @@ class ActiveTripViewModel extends ChangeNotifier {
   LatLng? _driverLocation;
   LatLng? get driverLocation => _driverLocation;
 
-
-  Stream<LatLng>? _streamDriverLocation;
-  Stream<LatLng>? get driverLoc => _streamDriverLocation;
-
   LatLng? _destination;
   LatLng? get userDestination => _destination;
 
-  DirectionsResult? _liveDirections;
-  DirectionsResult? get liveDirections => _liveDirections;
-
-  Set<Polyline> _polylines = {};
-  Set<Polyline> get polylines => _polylines;
+  // We no longer maintain a separate _polylines set here.
+  // All polylines are written directly into mapViewModel so the
+  // GoogleMap widget on HomeScreen actually renders them.
 
   DocumentSnapshot? _rideData;
-
   DocumentSnapshot? get rideData => _rideData;
 
   String get tripStatus => _rideData?['status'] ?? 'loading';
 
-  ActiveTripViewModel({this.rideId}) {
+  ActiveTripViewModel({required this.rideId, required this.mapViewModel}) {
     _initialize();
   }
 
@@ -65,7 +58,7 @@ class ActiveTripViewModel extends ChangeNotifier {
     if (rideId == null || rideId!.trim().isEmpty) {
       _isLoading = false;
       notifyListeners();
-      return;                    // ← STOP here! Don't crash
+      return;
     }
     _listenToRideUpdates();
   }
@@ -75,143 +68,105 @@ class ActiveTripViewModel extends ChangeNotifier {
       if (!snapshot.exists) return;
 
       _rideData = snapshot;
-
       _rideRequest = RideRequest.fromFirestore(snapshot);
 
-      // Early notification (good UX)
       notifyListeners();
 
       if (_driverProfile == null && _rideRequest?.driverId != null) {
         _isLoading = true;
-        notifyListeners(); // ← show loading while fetching driver
+        notifyListeners();
 
         _driverProfile = await _databaseService.getDriverProfile(_rideRequest!.driverId!);
-        _listenToDriverLocation(_rideRequest!.driverId!);
-
         _destination = _rideRequest!.destinationLocation;
 
+        // Start listening to driver location — this writes the driver
+        // marker into mapViewModel so it appears on the shared map.
+        _listenToDriverLocation(_rideRequest!.driverId!);
+
         _isLoading = false;
-        notifyListeners();           // ← VERY IMPORTANT: this makes driver info appear
+        notifyListeners();
       }
 
-      await _updateTripDirections();
-      notifyListeners();
+      // Recalculate and draw the polyline into the shared MapViewModel.
+      await _updateLiveRoute();
     });
   }
 
   void _listenToDriverLocation(String driverId) {
-    _driverLocationSubscription =
-        _databaseService.getDriverLocationStream(driverId).listen((
-            snapshot) async {
-          if (snapshot.exists) {
-            final data = snapshot.data() as Map<String, dynamic>;
-            _streamDriverLocation = _databaseService.getDriverLatLngStream(_rideRequest!.driverId);
-            await _updateTripDirections();
-            notifyListeners();
-          }
-        });
+    _driverLocationSubscription?.cancel();
+
+    _driverLocationSubscription = _databaseService
+        .getDriverLocationStream(driverId)
+        .listen((snapshot) async {
+      if (!snapshot.exists) return;
+
+      final data = snapshot.data() as Map<String, dynamic>;
+      final latitude = data['latitude'] as double?;
+      final longitude = data['longitude'] as double?;
+
+      if (latitude == null || longitude == null) return;
+
+      _driverLocation = LatLng(latitude, longitude);
+
+      // Write driver marker and move camera via the shared MapViewModel.
+      // This is the key: we update the SAME mapViewModel the GoogleMap reads.
+      mapViewModel.updateDriverPosition(_driverLocation!);
+
+      // Recalculate the live route every time the driver moves.
+      await _updateLiveRoute();
+    });
   }
 
-  Future<void> _updateTripDirections() async {
+  /// Calculates the route from driver to the correct destination based on
+  /// the current ride status, then writes it into the shared MapViewModel.
+  ///
+  /// - accepted / enroute  → driver to passenger pickup
+  /// - ongoing             → driver to passenger destination
+  /// - anything else       → clear the live route polyline
+  Future<void> _updateLiveRoute() async {
     if (_rideRequest == null || _driverLocation == null) return;
 
-    LatLng origin;
-    LatLng destination;
+    LatLng routeOrigin;
+    LatLng routeDestination;
 
     switch (_rideRequest!.status) {
       case RideStatus.accepted:
       case RideStatus.enroute:
-        origin = _driverLocation!;
-        destination = _rideRequest!.pickupLocation;
+        routeOrigin = _driverLocation!;
+        routeDestination = _rideRequest!.pickupLocation;
         break;
+
       case RideStatus.ongoing:
-      // STATE C: Show route from Driver/User's current location to Destination
-        origin = _driverLocation!;
-        destination = _rideRequest!.destinationLocation;
+        routeOrigin = _driverLocation!;
+        routeDestination = _rideRequest!.destinationLocation;
         break;
+
       default:
-      // For pending, completed, or cancelled, we don't need a live route
-        _polylines.clear();
-        _liveDirections = null;
-        notifyListeners();  // ← Add this
+      // Terminal or unknown status — clear the live polyline.
+        mapViewModel.clearLiveRoute();
+        notifyListeners();
         return;
     }
 
-    final result = await _directionsService.getDirections(origin: origin, destination: destination);
-
-    if (result != null) {
-      _liveDirections = result;
-      _polylines = {
-        Polyline(
-          polylineId: const PolylineId('live_route'),
-          points: result.polylinePoints,
-          color: Colors.blue,
-          width: 5,
-        ),
-      };
-      notifyListeners();
-    }
-  }
-  Future<void> _fetchDriverProfile(String driverId) async {
-    try {
-      _driverProfile = await _databaseService.getDriverProfile(driverId);
-    } catch (e) {
-      print("Error fetching driver profile: $e");
-    }
-  }
-
-
-  Future<void> _updateRoute() async {
-    if (_driverLocation == null || _rideData == null) return;
-
-    final data = _rideData!.data() as Map<String, dynamic>;
-    LatLng destination;
-
-    // Determine the route's destination based on the trip status
-    if (tripStatus == 'accepted' || tripStatus == 'enroute') {
-      final pickup = data['pickup'] as Map<String, dynamic>;
-      destination = LatLng(pickup['latitude'], pickup['longitude']);
-    } else if (tripStatus == 'ongoing') {
-      final dest = data['destination'] as Map<String, dynamic>;
-      destination = LatLng(dest['latitude'], dest['longitude']);
-    } else {
-      _polylines.clear();
-      notifyListeners();
-      return;
-    }
-
-    final directions = await _directionsService.getDirections(
-      origin: _driverLocation!,
-      destination: destination,
+    final result = await _directionsService.getDirections(
+      origin: routeOrigin,
+      destination: routeDestination,
     );
 
-    if (directions != null) {
-      _polylines = {
-        Polyline(
-          polylineId: const PolylineId('live_route'),
-          points: directions.polylinePoints,
-          color: const Color(0xFFD4AF37),
-          width: 5,
-        ),
-      };
+    if (result != null) {
+      // Write the live polyline directly into the shared MapViewModel.
+      // The GoogleMap widget will re-render automatically because
+      // MapViewModel calls notifyListeners().
+      mapViewModel.setLiveRoutePolyline(result.polylinePoints);
     }
+
     notifyListeners();
   }
 
-
-
   Future<void> makePhoneCall() async {
-    if (_driverProfile != null) {
-      final Uri launchUri = Uri(
-        scheme: 'tel',
-        path: _driverProfile!.phone,
-      );
-      if (await canLaunchUrl(launchUri)) {
-        await launchUrl(launchUri);
-      } else {
-        throw 'Could not launch $launchUri';
-      }
-    }
+    if (_driverProfile == null) return;
+    final uri = Uri(scheme: 'tel', path: _driverProfile!.phone);
+    await launchUrl(uri);
   }
 
   Future<void> cancelTrip() async {
@@ -219,12 +174,15 @@ class ActiveTripViewModel extends ChangeNotifier {
     await _rideService.cancelRide(rideId!, cancelledBy: 'user');
   }
 
-
-
   @override
   void dispose() {
     _rideSubscription.cancel();
     _driverLocationSubscription?.cancel();
+    // Do NOT clear the polyline from mapViewModel here.
+    // HomeViewModel owns mapViewModel and will clear it when appropriate
+    // (e.g. when _resetRide() is called). Clearing here would erase the
+    // polyline every time the widget rebuilds, which is exactly the
+    // "leaves screen → polyline disappears" bug.
     super.dispose();
   }
 }

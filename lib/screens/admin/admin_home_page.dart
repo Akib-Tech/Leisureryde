@@ -6,8 +6,6 @@ import 'package:leisureryde/screens/shared/splash_screen/welcome_screen.dart';
 import 'package:leisureryde/services/auth_service.dart';
 import 'package:provider/provider.dart';
 
-import '../../admin/driver_list.dart';
-import '../../admin/user_list.dart';
 import '../../viewmodel/admin/admin_view_model.dart';
 import 'drivers_earning_screen.dart';
 import 'drivers_list_screen.dart';

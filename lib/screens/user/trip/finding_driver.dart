@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
-import 'package:leisureryde/viewmodel/home/home_view_model.dart'; // --- ADDED ---
-import 'package:provider/provider.dart'; // --- ADDED ---
 
 class FindingDriverCard extends StatefulWidget {
   // --- REMOVED ---

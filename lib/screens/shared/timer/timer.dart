@@ -26,6 +26,7 @@ class _TripEndTimerState extends State<TripEndTimer> {
   bool _isNearDestination = false;
   Timer? _refreshTimer;
   StreamSubscription<LatLng>? _locationSub;
+  LatLng? _lastKnownDriverLocation;
 
   @override
   void initState() {
@@ -36,14 +37,16 @@ class _TripEndTimerState extends State<TripEndTimer> {
 
   void _listenToDriverLocation() {
     _locationSub = widget.driverLocationStream?.listen((newLocation) async {
+      _lastKnownDriverLocation = newLocation;
       await _updateETA(newLocation);
     });
   }
 
   void _startPeriodicRefresh() {
     _refreshTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
-      // Fallback refresh in case stream is slow
-      if (_locationSub == null) return;
+      if (_lastKnownDriverLocation != null) {
+        await _updateETA(_lastKnownDriverLocation!);
+      }
     });
   }
 
@@ -53,7 +56,6 @@ class _TripEndTimerState extends State<TripEndTimer> {
       destination: widget.destination,
     );
 
-    print("hi $result");
     if (result['status'] == 'OK') {
       setState(() {
         _timeLeft = result['remainingTimeSeconds']  as int;
@@ -68,10 +70,10 @@ class _TripEndTimerState extends State<TripEndTimer> {
   }
 
   String _formatTime(int seconds) {
-    if (seconds <= 0) return "0:01";
+    if (seconds <= 0) return "0:00";
     final min = seconds ~/ 60;
     final sec = seconds % 60;
-    return '$min:${sec.toString()}';
+    return '$min:${sec.toString().padLeft(2, '0')}';
   }
 
   @override

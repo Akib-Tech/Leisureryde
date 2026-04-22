@@ -1,11 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:leisureryde/models/user_profile.dart';
-import 'package:provider/provider.dart';
-
-import '../../viewmodel/admin/user_view_model.dart';
-
-import 'package:flutter/material.dart';
-import 'package:leisureryde/models/user_profile.dart';
 import 'package:leisureryde/screens/admin/user_ride_history_screen.dart';
 import 'package:provider/provider.dart';
 

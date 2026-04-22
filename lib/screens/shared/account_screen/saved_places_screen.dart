@@ -61,7 +61,6 @@ class _AddSavedPlaceScreenState extends State<AddSavedPlaceScreen> {
         });
       }
     } catch (e) {
-      print("Error fetching autocomplete: $e");
       // Optionally show a snackbar here
     }
   }
@@ -95,7 +94,6 @@ class _AddSavedPlaceScreenState extends State<AddSavedPlaceScreen> {
         }
       }
     } catch (e) {
-      print("Error getting place details: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('An error occurred: $e')),

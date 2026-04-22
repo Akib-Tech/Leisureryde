@@ -1,4 +1,3 @@
-import 'dart:math';
 
 class DriveInfo{
 
@@ -16,7 +15,6 @@ class DriveInfo{
     }
 
     String getDestination(){
-      print(destination);
       return destination;
     }
 

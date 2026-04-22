@@ -22,7 +22,6 @@ class AdminDashboardViewModel extends ChangeNotifier {
     try {
       _summary = await _adminService.getDashboardSummary();
     } catch (e) {
-      print("Error fetching admin summary: $e");
     } finally {
       _isLoading = false;
       notifyListeners();

@@ -1,12 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:leisureryde/models/driver_profile.dart';
-import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
-
-import '../../viewmodel/admin/driver_view_model.dart';
-
-import 'package:flutter/material.dart';
-import 'package:leisureryde/models/driver_profile.dart';
 import 'package:leisureryde/screens/admin/user_ride_history_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';

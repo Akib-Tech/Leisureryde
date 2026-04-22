@@ -1,19 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:leisureryde/screens/shared/timer/timer.dart';
 import 'package:provider/provider.dart';
 import '../../../models/ride_request_model.dart';
 import '../../../viewmodel/ride/active_trip_driver_view_model.dart';
 import '../../../widgets/custom_loading_indicator.dart';
 import '../../shared/chat/chat_screen.dart';
-import '../../../services/database_service.dart';
 
 class ActiveTripDriverBottomSheet extends StatelessWidget {
   final String rideId;
   const ActiveTripDriverBottomSheet({super.key, required this.rideId});
-
-  @override
 
   @override
   Widget build(BuildContext context) {

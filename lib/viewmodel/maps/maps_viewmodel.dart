@@ -12,16 +12,13 @@ class MapViewModel extends ChangeNotifier {
   Position? _currentPosition;
   DirectionsResult? _directionsResult;
 
-// Current driver position (latest value from the stream)
   LatLng? _driverPosition;
   LatLng? get driverPosition => _driverPosition;
 
   bool _isFollowingDriver = false;
   bool get isFollowingDriver => _isFollowingDriver;
 
-// Hold the subscription so you can cancel it later
   StreamSubscription<LatLng>? _driverStreamSubscription;
-
 
   bool _isLoading = true;
   bool get isLoading => _isLoading;
@@ -29,11 +26,18 @@ class MapViewModel extends ChangeNotifier {
   Position? get currentPosition => _currentPosition;
   DirectionsResult? get directionsResult => _directionsResult;
 
+  // Two separate polyline IDs so booking route and live driver route
+  // never overwrite each other.
+  static const PolylineId _bookingRouteId = PolylineId('booking_route');
+  static const PolylineId _liveRouteId = PolylineId('live_route');
+  static const MarkerId _driverMarkerId = MarkerId('driver');
+
   Set<Marker> _markers = {};
   Set<Polyline> _polylines = {};
 
   Set<Marker> get markers => _markers;
   Set<Polyline> get polylines => _polylines;
+
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
@@ -43,43 +47,32 @@ class MapViewModel extends ChangeNotifier {
     notifyListeners();
     await _getCurrentLocation();
     _isLoading = false;
-    debugPrint("MapViewModel: Initialization complete. Current location: ${_currentPosition?.latitude}, ${_currentPosition?.longitude}");
+    debugPrint("MapViewModel: Ready. Position: ${_currentPosition?.latitude}, ${_currentPosition?.longitude}");
     notifyListeners();
   }
 
   Future<void> _getCurrentLocation() async {
-    debugPrint("MapViewModel: Getting current location...");
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        debugPrint("MapViewModel: Location services are disabled.");
-        throw Exception('Location services are disabled.');
-      }
-      debugPrint("MapViewModel: Location services enabled.");
+      if (!serviceEnabled) throw Exception('Location services are disabled.');
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
-        debugPrint("MapViewModel: Location permission denied, requesting...");
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          debugPrint("MapViewModel: Location permission still denied after request.");
-          throw Exception('Location permissions are denied');
+          throw Exception('Location permissions are denied.');
         }
       }
-      debugPrint("MapViewModel: Location permission status: $permission");
 
       if (permission == LocationPermission.deniedForever) {
-        debugPrint("MapViewModel: Location permissions permanently denied.");
-        throw Exception('Location permissions are permanently denied, we cannot request permissions.');
+        throw Exception('Location permissions are permanently denied.');
       }
 
       _currentPosition = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high // Request high accuracy
+        desiredAccuracy: LocationAccuracy.high,
       );
-      debugPrint("MapViewModel: Current location fetched: ${_currentPosition?.latitude}, ${_currentPosition?.longitude}");
-    } catch (e) {
-      debugPrint("MapViewModel: Error getting current location: $e");
-      // Consider adding a user-facing notification here, like a SnackBar
+    } catch (error) {
+      debugPrint("MapViewModel: Error getting location: $error");
     }
   }
 
@@ -93,9 +86,11 @@ class MapViewModel extends ChangeNotifier {
     return _currentPosition;
   }
 
+  /// Fetches and draws the booking route (origin → destination).
+  /// Used during route preview and vehicle selection steps.
   Future<void> getDirections(LatLng origin, LatLng destination) async {
-    debugPrint("MapViewModel: Requesting directions from $origin to $destination");
-    clearRoute(); // This also clears the old error message
+    debugPrint("MapViewModel: Requesting directions $origin → $destination");
+    clearRoute();
     notifyListeners();
 
     try {
@@ -105,85 +100,104 @@ class MapViewModel extends ChangeNotifier {
       );
 
       if (result != null) {
-        debugPrint("MapViewModel: DirectionsService returned a valid result.");
         _directionsResult = result;
-        _createRoutePolyline(result.polylinePoints);
-        _addMarkers(origin, destination);
+        _setBookingRoutePolyline(result.polylinePoints);
+        _addRouteMarkers(origin, destination);
         _moveCameraToRoute(result.polylinePoints);
-        debugPrint("MapViewModel: Route, markers, and camera updated successfully.");
       } else {
-        // THIS IS THE KEY CHANGE
-        debugPrint("MapViewModel: DirectionsService returned NULL. Route not found or API error.");
-        _directionsResult = null; // Ensure it's null
-        // SET A USER-FRIENDLY ERROR MESSAGE
-        _errorMessage = "Could not find a route for the selected locations. Please try different points.";
+        _directionsResult = null;
+        _errorMessage = "Could not find a route. Please try different locations.";
       }
-    } catch (e) {
-      debugPrint("MapViewModel: Error during getDirections: $e");
-      _directionsResult = null; // Ensure it's null on error
+    } catch (error) {
+      debugPrint("MapViewModel: getDirections error: $error");
+      _directionsResult = null;
       _errorMessage = "An unexpected error occurred. Please try again.";
     } finally {
-      notifyListeners(); // Always notify to update UI (show route or show error)
+      notifyListeners();
     }
   }
 
-  void _createRoutePolyline(List<LatLng> points) {
-    debugPrint("MapViewModel: Creating route polyline with ${points.length} points.");
-    final polyline = Polyline(
-      polylineId: const PolylineId('route'),
-      points: points,
-      color: Colors.blue,
-      width: 5,
+  void _setBookingRoutePolyline(List<LatLng> points) {
+    _polylines.removeWhere((polyline) => polyline.polylineId == _bookingRouteId);
+    _polylines.add(
+      Polyline(
+        polylineId: _bookingRouteId,
+        points: points,
+        color: Colors.blue,
+        width: 5,
+      ),
     );
-    _polylines.clear(); // Clear existing polylines
-    _polylines.add(polyline);
   }
 
-  void _addMarkers(LatLng origin, LatLng destination) {
-    debugPrint("MapViewModel: Adding origin and destination markers.");
-    _markers.clear(); // Clear existing markers
-    _markers = {
-      Marker(
-        markerId: const MarkerId('origin'),
-        position: origin,
-        infoWindow: const InfoWindow(title: 'Pickup'),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+  /// Writes the live driver→pickup or driver→destination polyline into
+  /// the shared polylines set so the GoogleMap widget renders it immediately.
+  ///
+  /// Called by ActiveTripViewModel every time the driver moves or the
+  /// ride status changes. Drawing here (not in ActiveTripViewModel) is
+  /// what makes the polyline survive screen navigation — it lives in the
+  /// same object the GoogleMap widget reads from.
+  void setLiveRoutePolyline(List<LatLng> points) {
+    _polylines.removeWhere((polyline) => polyline.polylineId == _liveRouteId);
+    _polylines.add(
+      Polyline(
+        polylineId: _liveRouteId,
+        points: points,
+        color: Colors.deepOrange,
+        width: 6,
+        patterns: [PatternItem.dash(20), PatternItem.gap(10)],
       ),
-      Marker(
-        markerId: const MarkerId('destination'),
-        position: destination,
-        infoWindow: const InfoWindow(title: 'Destination'),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed), // Added hue for destination
-      ),
-    };
+    );
+    notifyListeners();
+  }
+
+  /// Removes only the live route polyline without touching the booking route.
+  void clearLiveRoute() {
+    _polylines.removeWhere((polyline) => polyline.polylineId == _liveRouteId);
+    notifyListeners();
+  }
+
+  void _addRouteMarkers(LatLng origin, LatLng destination) {
+    _markers
+      ..removeWhere((marker) =>
+      marker.markerId == const MarkerId('origin') ||
+          marker.markerId == const MarkerId('destination'))
+      ..add(
+        Marker(
+          markerId: const MarkerId('origin'),
+          position: origin,
+          infoWindow: const InfoWindow(title: 'Pickup'),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        ),
+      )
+      ..add(
+        Marker(
+          markerId: const MarkerId('destination'),
+          position: destination,
+          infoWindow: const InfoWindow(title: 'Destination'),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        ),
+      );
   }
 
   void _moveCameraToRoute(List<LatLng> points) {
-    debugPrint("MapViewModel: Moving camera to route bounds.");
-    if (_mapController == null || points.isEmpty) {
-      debugPrint("MapViewModel: _mapController is null or points are empty. Cannot move camera.");
-      return;
-    }
-
+    if (_mapController == null || points.isEmpty) return;
     final bounds = _createBounds(points);
     _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100.0));
-    debugPrint("MapViewModel: Camera animation requested.");
   }
 
   LatLngBounds _createBounds(List<LatLng> positions) {
-    debugPrint("MapViewModel: Creating LatLngBounds for ${positions.length} positions.");
     double? minLat, maxLat, minLon, maxLon;
-    for (var p in positions) {
-      if (minLat == null || p.latitude < minLat) minLat = p.latitude;
-      if (maxLat == null || p.latitude > maxLat) maxLat = p.latitude;
-      if (minLon == null || p.longitude < minLon) minLon = p.longitude;
-      if (maxLon == null || p.longitude > maxLon) maxLon = p.longitude;
+    for (final position in positions) {
+      if (minLat == null || position.latitude < minLat) minLat = position.latitude;
+      if (maxLat == null || position.latitude > maxLat) maxLat = position.latitude;
+      if (minLon == null || position.longitude < minLon) minLon = position.longitude;
+      if (maxLon == null || position.longitude > maxLon) maxLon = position.longitude;
     }
     if (minLat == null || maxLat == null || minLon == null || maxLon == null) {
-      // This should ideally not happen if points is not empty.
-      debugPrint("MapViewModel: Error creating bounds, some min/max values are null.");
-      // Fallback to a default small bound or throw. For now, returning a default.
-      return LatLngBounds(southwest: LatLng(0,0), northeast: LatLng(0.1,0.1));
+      return LatLngBounds(
+        southwest: const LatLng(0, 0),
+        northeast: const LatLng(0.1, 0.1),
+      );
     }
     return LatLngBounds(
       southwest: LatLng(minLat, minLon),
@@ -191,101 +205,92 @@ class MapViewModel extends ChangeNotifier {
     );
   }
 
+  /// Clears everything — both polylines, all markers, stops driver following.
+  /// Only call this on full ride reset (back to HomeStep.initial).
   void clearRoute() {
-    debugPrint("MapViewModel: Clearing route, markers, and directions result.");
     _polylines.clear();
-    _markers.clear();
     _directionsResult = null;
-    // No notifyListeners here, as getDirections will call it in its finally block.
-    // If you call clearRoute from outside getDirections, you might need notifyListeners.
+    _errorMessage = null;
+    _markers.removeWhere((marker) =>
+    marker.markerId == const MarkerId('origin') ||
+        marker.markerId == const MarkerId('destination'));
+    stopFollowingDriver();
   }
 
-  /// Call this when entering activeTrip step (from HomeViewModel)
-  Future<void> moveToDriver(LatLng driverLocation) async {
-    _driverPosition = driverLocation;
+  /// Starts following a driver via a LatLng stream.
+  /// Used by HomeViewModel the moment a ride is accepted.
+  void startFollowingDriver(Stream<LatLng> driverLocationStream) {
+    _driverStreamSubscription?.cancel();
     _isFollowingDriver = true;
     notifyListeners();
 
-    if (_mapController != null) {
-      await _mapController!.animateCamera(
-        CameraUpdate.newLatLngZoom(driverLocation, 16.5),
-      );
-      debugPrint("MapViewModel: Moved camera to driver position: $driverLocation");
-    } else {
-      debugPrint("MapViewModel: mapController is null, cannot move to driver yet.");
-    }
+    _driverStreamSubscription = driverLocationStream.listen(
+          (newPosition) {
+        updateDriverPosition(newPosition);
+      },
+      onError: (error) {
+        debugPrint("MapViewModel: Driver stream error: $error");
+      },
+    );
   }
 
-  /// Optional: Smooth follow with padding (shows driver + route or destination)
-  Future<void> fitDriverAndDestination(LatLng driverLoc, LatLng destination) async {
+  /// Updates the driver marker on the map and moves the camera to follow.
+  /// Also called directly by ActiveTripViewModel on each driver location tick.
+  void updateDriverPosition(LatLng newPosition) {
+    _driverPosition = newPosition;
+
+    _markers.removeWhere((marker) => marker.markerId == _driverMarkerId);
+    _markers.add(
+      Marker(
+        markerId: _driverMarkerId,
+        position: newPosition,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        anchor: const Offset(0.5, 0.5),
+        flat: true,
+        infoWindow: const InfoWindow(title: 'Your Driver'),
+      ),
+    );
+
+    // Move camera center only — does not reset the user's zoom level.
+    if (_isFollowingDriver && _mapController != null) {
+      _mapController!.animateCamera(CameraUpdate.newLatLng(newPosition));
+    }
+
+    notifyListeners();
+  }
+
+  /// Stops following the driver and removes the driver marker from the map.
+  void stopFollowingDriver() {
+    _driverStreamSubscription?.cancel();
+    _driverStreamSubscription = null;
+    _isFollowingDriver = false;
+    _driverPosition = null;
+    _markers.removeWhere((marker) => marker.markerId == _driverMarkerId);
+  }
+
+  /// Fits both driver and destination into the camera view.
+  /// Useful during an ongoing trip so the passenger can see progress.
+  Future<void> fitDriverAndDestination(LatLng driverLocation, LatLng destination) async {
     if (_mapController == null) return;
 
     final bounds = LatLngBounds(
       southwest: LatLng(
-        driverLoc.latitude < destination.latitude ? driverLoc.latitude : destination.latitude,
-        driverLoc.longitude < destination.longitude ? driverLoc.longitude : destination.longitude,
+        driverLocation.latitude < destination.latitude ? driverLocation.latitude : destination.latitude,
+        driverLocation.longitude < destination.longitude ? driverLocation.longitude : destination.longitude,
       ),
       northeast: LatLng(
-        driverLoc.latitude > destination.latitude ? driverLoc.latitude : destination.latitude,
-        driverLoc.longitude > destination.longitude ? driverLoc.longitude : destination.longitude,
+        driverLocation.latitude > destination.latitude ? driverLocation.latitude : destination.latitude,
+        driverLocation.longitude > destination.longitude ? driverLocation.longitude : destination.longitude,
       ),
     );
 
-    await _mapController!.animateCamera(
-      CameraUpdate.newLatLngBounds(bounds, 80), // padding in pixels
-    );
+    await _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
   }
-
-  /// Call this when leaving activeTrip or cancelling
-  void stopFollowingDriver() {
-    _isFollowingDriver = false;
-    _driverPosition = null;
-    notifyListeners();
-  }
-
-  /// Update driver position in realtime (called from HomeViewModel listener)
-  void updateDriverPosition(LatLng newPosition) {
-    _driverPosition = newPosition;
-
-    if (_isFollowingDriver && _mapController != null) {
-      _mapController!.animateCamera(
-        CameraUpdate.newLatLng(newPosition),
-      );
-    }
-    notifyListeners();
-  }
-
-
-
-
-  /// Call this when you enter activeTrip and have a stream of driver location
-  void startFollowingDriver(Stream<LatLng> driverLocationStream) {
-    _driverStreamSubscription?.cancel(); // cancel old one if any
-
-    _isFollowingDriver = true;
-    notifyListeners();
-
-    _driverStreamSubscription = driverLocationStream.listen((newPosition) {
-      _driverPosition = newPosition;
-
-      // Auto-move the camera to the driver in real-time
-      if (_mapController != null) {
-        _mapController!.animateCamera(
-          CameraUpdate.newLatLngZoom(newPosition, 16.5), // or newLatLng() for smoother following
-        );
-      }
-
-      notifyListeners();
-    }, onError: (e) {
-      debugPrint("Driver location stream error: $e");
-    });
-  }
-
-
 
   @override
   void dispose() {
-    debugPrint("MapViewModel: Disposing MapViewModel.");
+    debugPrint("MapViewModel: Disposing.");
+    _driverStreamSubscription?.cancel();
     _mapController?.dispose();
     super.dispose();
   }
