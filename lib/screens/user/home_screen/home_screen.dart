@@ -10,6 +10,7 @@ import '../../../models/user_profile.dart';
 import '../../../services/place_service.dart'; // For PlaceDetails
 import '../../../viewmodel/home/home_view_model.dart'; // Your HomeViewModel
 import '../../../widgets/custom_loading_indicator.dart';
+import '../../../widgets/rating_dialog.dart';
 import '../../shared/search/search_destination.dart';
 import '../trip/active_trip_screen.dart';
 import '../trip/finding_driver.dart'; // Your FindingDriverCard
@@ -23,6 +24,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _didScheduleInitialRefresh = false;
+  bool _showingCancelDialog = false;
+  bool _showingRatingDialog = false;
+  bool _isActiveTripCardCollapsed = false;
 
   @override
   void initState() {
@@ -33,13 +37,80 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_didScheduleInitialRefresh) return;
-    _didScheduleInitialRefresh = true;
+    if (!_didScheduleInitialRefresh) {
+      _didScheduleInitialRefresh = true;
+      context.read<HomeViewModel>().addListener(_onViewModelChanged);
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await context.read<HomeViewModel>().refreshOnScreenResume();
+      });
+    }
+  }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      await context.read<HomeViewModel>().refreshOnScreenResume();
-    });
+  void _onViewModelChanged() {
+    if (!mounted) return;
+    final vm = context.read<HomeViewModel>();
+
+    if (vm.cancelledByDriver && !_showingCancelDialog) {
+      _showingCancelDialog = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20)),
+            title: const Row(
+              children: [
+                Icon(Icons.cancel, color: Colors.red),
+                SizedBox(width: 8),
+                Text("Ride Cancelled"),
+              ],
+            ),
+            content: Text(
+              vm.cancelledByDriverName != null
+                  ? "${vm.cancelledByDriverName} has cancelled your ride."
+                  : "Your driver has cancelled the ride.",
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  vm.acknowledgeDriverCancellation();
+                  _showingCancelDialog = false;
+                },
+                child: const Text("OK"),
+              ),
+            ],
+          ),
+        ).then((_) => _showingCancelDialog = false);
+      });
+    }
+
+    if (vm.showRatingDialog && !_showingRatingDialog) {
+      _showingRatingDialog = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => RatingDialog(
+            driverName: vm.ratingDriverName,
+            onSubmit: (rating) {
+              Navigator.of(context).pop();
+              vm.submitRating(rating);
+              _showingRatingDialog = false;
+            },
+            onSkip: () {
+              Navigator.of(context).pop();
+              vm.dismissRatingDialog();
+              _showingRatingDialog = false;
+            },
+          ),
+        ).then((_) => _showingRatingDialog = false);
+      });
+    }
   }
 
   @override
@@ -51,6 +122,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    context.read<HomeViewModel>().removeListener(_onViewModelChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -131,7 +203,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         bottomPadding = 260; // Approximate height for finding driver card
         break;
       case HomeStep.activeTrip:
-        bottomPadding = 220; // Example height for active trip card
+        // Shrink reserved space when the card is collapsed so the map has
+        // more visible area; expand it when open so content is not hidden.
+        bottomPadding = _isActiveTripCardCollapsed ? 90 : 380;
         break;
     }
 
@@ -232,7 +306,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return FindingDriverCard(key: const ValueKey(HomeStep.findingDriver), onCancel: viewModel.cancelRide);
       case HomeStep.activeTrip:
         debugPrint("Page already in active trip mode");
-        return ActiveTripCard(key: const ValueKey(HomeStep.activeTrip), rideId: viewModel.currentRideId ?? '');
+        return ActiveTripCard(
+          key: const ValueKey(HomeStep.activeTrip),
+          rideId: viewModel.currentRideId ?? '',
+          onCollapseChanged: (isCollapsed) {
+            setState(() => _isActiveTripCardCollapsed = isCollapsed);
+          },
+        );
     }
   }
 

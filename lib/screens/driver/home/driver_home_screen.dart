@@ -3,15 +3,61 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import 'package:provider/provider.dart';
 
+import '../../../models/ride_request_model.dart';
 import '../../../viewmodel/home/driver_home_view_model.dart';
 import '../../../widgets/custom_loading_indicator.dart';
 import '../ride_request/ride_requests_screen.dart';
 import '../trip/active_trip_bottom_sheet.dart';
 
-class DriverHomeScreen extends StatelessWidget {
-
+class DriverHomeScreen extends StatefulWidget {
   const DriverHomeScreen({super.key});
 
+  @override
+  State<DriverHomeScreen> createState() => _DriverHomeScreenState();
+}
+
+class _DriverHomeScreenState extends State<DriverHomeScreen> {
+  bool _showingCancelDialog = false;
+  bool _isActiveSheetCollapsed = false;
+
+  void _onViewModelChanged() {
+    if (!mounted) return;
+    final vm = context.read<DriverHomeViewModel>();
+
+    if (vm.rideCancelledByUser && !_showingCancelDialog) {
+      _showingCancelDialog = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20)),
+            title: const Row(
+              children: [
+                Icon(Icons.cancel, color: Colors.orange),
+                SizedBox(width: 8),
+                Text("Ride Cancelled"),
+              ],
+            ),
+            content: const Text(
+                "The passenger has cancelled this ride request."),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  vm.acknowledgePassengerCancellation();
+                  _showingCancelDialog = false;
+                },
+                child: const Text("OK"),
+              ),
+            ],
+          ),
+        ).then((_) => _showingCancelDialog = false);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +66,12 @@ class DriverHomeScreen extends StatelessWidget {
       child: Scaffold(
         body: Consumer<DriverHomeViewModel>(
           builder: (context, viewModel, child) {
+            // Register the listener once the ViewModel is available.
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              viewModel.removeListener(_onViewModelChanged);
+              viewModel.addListener(_onViewModelChanged);
+            });
+
             if (viewModel.isLoading || viewModel.mapViewModel.isLoading) {
               return const CustomLoadingIndicator();
             }
@@ -78,7 +130,12 @@ class DriverHomeScreen extends StatelessWidget {
                 _buildHeader(context, viewModel),
                 if (viewModel.isOnline)
                   viewModel.activeRide != null
-                      ? ActiveTripDriverBottomSheet(rideId: viewModel.activeRide!.id)
+                      ? ActiveTripDriverBottomSheet(
+                          rideId: viewModel.activeRide!.id,
+                          onCollapseChanged: (isCollapsed) {
+                            setState(() => _isActiveSheetCollapsed = isCollapsed);
+                          },
+                        )
                       : _buildOnlineStatusCard(context, viewModel)
                 else
                   _buildOfflineCard(context, viewModel)
@@ -91,14 +148,23 @@ class DriverHomeScreen extends StatelessWidget {
   }
 
   Widget _buildMap(BuildContext context, DriverHomeViewModel viewModel) {
+    double bottomPadding;
+    if (viewModel.activeRide != null) {
+      // Give the map enough room so polylines/markers are not hidden behind
+      // the active trip sheet. Use a smaller value when it is collapsed.
+      bottomPadding = _isActiveSheetCollapsed ? 100 : 420;
+    } else {
+      bottomPadding = 280; // height of the online/offline status card
+    }
+
     return GoogleMap(
       initialCameraPosition: CameraPosition(
         target: viewModel.mapViewModel.currentPosition != null
             ? LatLng(
-          viewModel.mapViewModel.currentPosition!.latitude,
-          viewModel.mapViewModel.currentPosition!.longitude,
-        )
-            : const LatLng(33.7490, -84.3880), // Atlanta fallback
+                viewModel.mapViewModel.currentPosition!.latitude,
+                viewModel.mapViewModel.currentPosition!.longitude,
+              )
+            : const LatLng(33.7490, -84.3880),
         zoom: 15.0,
       ),
       onMapCreated: viewModel.mapViewModel.onMapCreated,
@@ -111,7 +177,7 @@ class DriverHomeScreen extends StatelessWidget {
       polylines: viewModel.mapViewModel.polylines,
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 160,
-        bottom: 280,
+        bottom: bottomPadding,
       ),
     );
   }
@@ -489,9 +555,22 @@ class DriverHomeScreen extends StatelessWidget {
                     MaterialPageRoute(
                       builder: (_) => const RideRequestsScreen(),
                     ),
-                  ).then((value) {
+                  ).then((result) {
+                    // When the driver accepts a ride, RideRequestsScreen pops
+                    // with the accepted RideRequest so we can show the active
+                    // trip sheet immediately without waiting for Firestore.
+                    if (result is RideRequest && mounted) {
+                      viewModel.preSetActiveRide(result);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Ride accepted! Navigate to pickup."),
+                          backgroundColor: Colors.green,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
                     viewModel.refreshStats();
-                  },);
+                  });
                 },
                 icon: const Icon(Icons.list_alt),
                 label: Text(

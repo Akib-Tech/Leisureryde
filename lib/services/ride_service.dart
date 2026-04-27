@@ -139,6 +139,40 @@ class RideService {
   }
 
   // ============================================================
+  // RATING
+  // ============================================================
+
+  /// Writes the driver rating to the ride document and updates the driver's
+  /// rolling average rating in the users collection.
+  Future<void> submitDriverRating({
+    required String rideId,
+    required String driverId,
+    required double rating,
+  }) async {
+    await _db.collection('rideRequests').doc(rideId).update({
+      'driverRating': rating,
+      'ratedAt': FieldValue.serverTimestamp(),
+    });
+
+    await _db.runTransaction((tx) async {
+      final driverRef = _db.collection('users').doc(driverId);
+      final driverDoc = await tx.get(driverRef);
+      if (!driverDoc.exists) return;
+      final currentRating =
+          (driverDoc.data()?['rating'] as num?)?.toDouble() ?? 5.0;
+      final ratingCount =
+          (driverDoc.data()?['ratingCount'] as num?)?.toInt() ?? 0;
+      final newCount = ratingCount + 1;
+      final newRating =
+          ((currentRating * ratingCount) + rating) / newCount;
+      tx.update(driverRef, {
+        'rating': double.parse(newRating.toStringAsFixed(2)),
+        'ratingCount': newCount,
+      });
+    });
+  }
+
+  // ============================================================
   // HELPER: Cancelled listener cleanup
   // ============================================================
 

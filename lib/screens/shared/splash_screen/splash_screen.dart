@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:leisureryde/app/service_locator.dart';
 import 'package:leisureryde/screens/shared/main_screen/main_screen.dart';
 import 'package:leisureryde/screens/shared/splash_screen/welcome_screen.dart';
+import 'package:leisureryde/services/push_notifications_service.dart';
 import 'package:provider/provider.dart';
 import 'package:leisureryde/services/auth_service.dart';
 
@@ -47,7 +49,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       final authService = Provider.of<AuthService>(context, listen: false);
 
       if (authService.isLoggedIn) {
-        // Get the user's role
+        final uid = authService.currentUser!.uid;
+        locator<NotificationService>().initialize(uid);
+
         final role = await authService.getCurrentUserRole();
 
         if (role == UserRole.admin) {

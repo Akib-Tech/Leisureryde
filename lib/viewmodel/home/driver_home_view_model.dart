@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:leisureryde/main.dart';
 import 'package:leisureryde/app/service_locator.dart';
 import 'package:leisureryde/models/driver_profile.dart';
 import 'package:leisureryde/models/ride_request_model.dart';
@@ -25,7 +26,11 @@ class DriverHomeViewModel extends ChangeNotifier {
   bool get hasActiveTrip => _activeRide != null;
 
   StreamSubscription<QuerySnapshot>? _activeRideSubscription;
+  StreamSubscription<DocumentSnapshot>? _activeRideDocSubscription;
   StreamSubscription<DocumentSnapshot>? _driverLocationSubscription;
+
+  bool _rideCancelledByUser = false;
+  bool get rideCancelledByUser => _rideCancelledByUser;
 
   bool _isLoading = true;
   bool get isLoading => _isLoading;
@@ -82,6 +87,7 @@ class DriverHomeViewModel extends ChangeNotifier {
       if (_driverProfile?.isApproved == true) {
         _isOnline = _driverProfile!.isOnline;
         if (_isOnline) {
+          _notificationService.subscribeToOnlineDriversTopic();
           _startLocationUpdates();
           _startListeningToStats();
           await _startListeningToActiveRide();
@@ -107,7 +113,7 @@ class DriverHomeViewModel extends ChangeNotifier {
       await _databaseService.updateDriverOnlineStatus(_driverProfile!.uid, _isOnline);
 
       if (_isOnline) {
-        _notificationService.subscribeToOnlineDriversTopic();
+       _notificationService.subscribeToOnlineDriversTopic();
         _startLocationUpdates();
         _startListeningToStats();
         await _startListeningToActiveRide();
@@ -159,6 +165,8 @@ class DriverHomeViewModel extends ChangeNotifier {
       _pendingRequestsCount = rides
           .where((rideRequest) => rideRequest.status == RideStatus.pending)
           .length;
+
+
       notifyListeners();
     });
 
@@ -179,6 +187,16 @@ class DriverHomeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Pre-populates the active ride immediately after the driver accepts from
+  /// the ride-requests screen. This makes the ActiveTripDriverBottomSheet
+  /// appear at once instead of waiting for the Firestore stream to fire.
+  /// The doc subscription takes over from here and handles all status changes.
+  void preSetActiveRide(RideRequest ride) {
+    _activeRide = ride;
+    notifyListeners();
+    _subscribeToActiveRideDoc(ride.id);
+  }
+
   Future<void> acceptRide(String rideId) async {
     if (_driverProfile == null) return;
     await _rideService.acceptRide(rideId, _driverProfile!.uid);
@@ -195,6 +213,10 @@ class DriverHomeViewModel extends ChangeNotifier {
 
     debugPrint("DriverHomeViewModel: Listening to active ride for driver: ${_driverProfile!.uid}");
 
+    // Query stream discovers when a ride is assigned to this driver.
+    // A separate document subscription (below) tracks that ride's full lifecycle,
+    // including cancellation by the user — which the query misses because the
+    // cancelled status drops out of the 'whereIn' filter.
     _activeRideSubscription = FirebaseFirestore.instance
         .collection('rideRequests')
         .where('driverId', isEqualTo: _driverProfile!.uid)
@@ -203,23 +225,13 @@ class DriverHomeViewModel extends ChangeNotifier {
         .snapshots()
         .listen((snapshot) async {
       if (snapshot.docs.isNotEmpty) {
-        final updatedRide = RideRequest.fromFirestore(snapshot.docs.first);
-        final bool rideChanged = _activeRide?.id != updatedRide.id ||
-            _activeRide?.status != updatedRide.status;
-
-        _activeRide = updatedRide;
-        notifyListeners();
-
-        // Redraw the route whenever the ride or its status changes.
-        if (rideChanged) {
-          await _drawRouteForActiveRide();
+        final rideId = snapshot.docs.first.id;
+        // Only attach a new doc listener when we see a genuinely new ride.
+        if (_activeRide?.id != rideId) {
+          _subscribeToActiveRideDoc(rideId);
         }
-      } else {
-        _activeRide = null;
-        // No active ride — clear the map route.
-        mapViewModel.clearRoute();
-        notifyListeners();
       }
+      // When the query returns empty the doc subscription handles cleanup.
     }, onError: (error) {
       debugPrint("DriverHomeViewModel: Active ride stream error: $error");
     });
@@ -227,6 +239,70 @@ class DriverHomeViewModel extends ChangeNotifier {
     // Also listen to the driver's own GPS position so we can update
     // the route as the driver moves.
     _listenToOwnLocation();
+  }
+
+  /// Document-level subscription for the active ride — catches ALL status
+  /// changes, including user cancellation that drops out of the query filter.
+  void _subscribeToActiveRideDoc(String rideId) {
+    _activeRideDocSubscription?.cancel();
+
+    _activeRideDocSubscription = FirebaseFirestore.instance
+        .collection('rideRequests')
+        .doc(rideId)
+        .snapshots()
+        .listen((snapshot) async {
+      if (!snapshot.exists) {
+        _activeRide = null;
+        mapViewModel.clearRoute();
+        notifyListeners();
+        return;
+      }
+
+      final ride = RideRequest.fromFirestore(snapshot);
+
+      if (ride.status == RideStatus.cancelled) {
+        _rideCancelledByUser = true;
+        _activeRide = null;
+        _activeRideDocSubscription?.cancel();
+        _activeRideDocSubscription = null;
+        mapViewModel.clearRoute();
+        notifyListeners();
+        return;
+      }
+
+      if (ride.status.isTerminal) {
+        _activeRide = null;
+        _activeRideDocSubscription?.cancel();
+        _activeRideDocSubscription = null;
+        mapViewModel.clearRoute();
+        notifyListeners();
+        return;
+      }
+
+      final bool rideChanged =
+          _activeRide?.id != ride.id || _activeRide?.status != ride.status;
+      _activeRide = ride;
+
+      // Seed driver position from GPS fix if the Firestore watcher hasn't
+      // fired yet (common on the first tick right after accepting a ride).
+      if (_driverCurrentPosition == null &&
+          mapViewModel.currentPosition != null) {
+        _driverCurrentPosition = LatLng(
+          mapViewModel.currentPosition!.latitude,
+          mapViewModel.currentPosition!.longitude,
+        );
+      }
+
+      notifyListeners();
+      if (rideChanged) await _drawRouteForActiveRide();
+    }, onError: (error) {
+      debugPrint("DriverHomeViewModel: Ride doc stream error: $error");
+    });
+  }
+
+  void acknowledgePassengerCancellation() {
+    _rideCancelledByUser = false;
+    notifyListeners();
   }
 
   /// Listens to the driver's own real-time GPS from Firestore
@@ -324,6 +400,8 @@ class DriverHomeViewModel extends ChangeNotifier {
   void _stopListeningToActiveRide() {
     _activeRideSubscription?.cancel();
     _activeRideSubscription = null;
+    _activeRideDocSubscription?.cancel();
+    _activeRideDocSubscription = null;
     _driverLocationSubscription?.cancel();
     _driverLocationSubscription = null;
     _activeRide = null;
@@ -382,6 +460,7 @@ class DriverHomeViewModel extends ChangeNotifier {
     _dailyStatsSub?.cancel();
     _pendingReqSub?.cancel();
     _activeRideSubscription?.cancel();
+    _activeRideDocSubscription?.cancel();
     _driverLocationSubscription?.cancel();
     super.dispose();
   }

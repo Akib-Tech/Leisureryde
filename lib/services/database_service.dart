@@ -91,7 +91,6 @@ class DatabaseService {
       if (isOnline) {
         updateData['lastWentOnlineAt'] = FieldValue.serverTimestamp();
       }
-
       await _db.collection('users').doc(uid).update(updateData);
     } catch (e) {
       rethrow;

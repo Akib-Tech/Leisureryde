@@ -31,11 +31,24 @@ exports.notifyDriversOfNewRide = onDocumentCreated("rideRequests/{rideId}",
                        `Pickup: ${rideRequest.pickupAddress}`;
       console.log(logMessage);
 
-      const payload = {
+      const message = {
+        topic: "online_drivers",
         notification: {
           title: "New Ride Request!",
           body: `Pickup from: ${rideRequest.pickupAddress}`,
-          sound: "default",
+        },
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "default_channel",
+            sound: "default",
+            priority: "high",
+          },
+        },
+        apns: {
+          payload: {
+            aps: {sound: "default"},
+          },
         },
         data: {
           click_action: "FLUTTER_NOTIFICATION_CLICK",
@@ -43,9 +56,8 @@ exports.notifyDriversOfNewRide = onDocumentCreated("rideRequests/{rideId}",
         },
       };
 
-      const topic = "online_drivers";
 
-      return admin.messaging().sendToTopic(topic, payload)
+      return admin.messaging().send(message)
           .then((response) => {
             console.log("Successfully sent notification to topic:", response);
             return {success: true};

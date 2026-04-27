@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:leisureryde/main.dart';
 import 'package:leisureryde/models/ride_request_model.dart';
 import 'package:leisureryde/viewmodel/ride/ride_request_view_model.dart';
 import 'package:leisureryde/widgets/custom_loading_indicator.dart'; // Assuming you have this
@@ -49,6 +50,7 @@ class RideRequestsScreen extends StatelessWidget {
                 }
 
                 final requests = snapshot.data!;
+
                 return ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: requests.length,
@@ -191,21 +193,14 @@ class _RideRequestCard extends StatelessWidget {
         Expanded(
           flex: 2,
           child: ElevatedButton(
-            onPressed: () async{
-              final success = await viewModel.acceptRide(request.id,context);
+            onPressed: () async {
+              final success = await viewModel.acceptRide(request.id, context);
 
               if (success && context.mounted) {
-                // Go back to DriverHomeScreen
-                Navigator.pop(context);
-
-                // Nice feedback
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Ride accepted successfully!"),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }else if (context.mounted) {
+                // Pop back to DriverHomeScreen passing the accepted ride so
+                // it can be shown immediately without waiting for Firestore.
+                Navigator.pop(context, request);
+              } else if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text("Failed to accept ride. Please try again."),
