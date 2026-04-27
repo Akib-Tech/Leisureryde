@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Leisureryde</string>
+	<string>Leisure Ryde</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -45,31 +45,45 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- Location — passengers use WhenInUse; drivers need Always for background tracking -->
 	<key>NSLocationWhenInUseUsageDescription</key>
-    <string>This app needs access to location when open.</string>
+	<string>LeisureRyde needs your location to show nearby drivers and calculate your route.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>LeisureRyde needs your location in the background so passengers can track your journey in real time.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>LeisureRyde needs your location in the background so passengers can track your journey in real time.</string>
 
-    <!-- Network Security -->
-    	<key>NSAppTransportSecurity</key>
-    	<dict>
-    		<key>NSAllowsArbitraryLoads</key>
-    		<true/>
-    		<key>NSAllowsArbitraryLoadsInWebContent</key>
-    		<true/>
-    		<key>NSAllowsLocalNetworking</key>
-    		<true/>
-    	</dict>
-    
-    	<!-- Camera Permission -->
-    	<key>NSCameraUsageDescription</key>
-    	<string>LeisureRyde needs access to your camera to upload images</string>
+	<!-- Background location updates for driver GPS tracking -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
 
+	<!-- Network -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 
-    
-    	<!-- Photo Library Permissions -->
-    	<key>NSPhotoLibraryUsageDescription</key>
-    	<string>LeisureRyde needs access to photo library to upload and save images</string>
-    	<key>NSPhotoLibraryAddUsageDescription</key>
-    	<string>LeisureRyde needs access to photo library to save images</string>
+	<!-- Camera & Photo Library for driver document / profile image uploads -->
+	<key>NSCameraUsageDescription</key>
+	<string>LeisureRyde needs your camera to upload profile photos and driver documents.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>LeisureRyde needs your photo library to upload profile photos and driver documents.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>LeisureRyde needs permission to save images to your photo library.</string>
+
+	<!-- Microphone — required by some Firebase / WebView components -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>LeisureRyde may use the microphone for in-app communication features.</string>
 
 </dict>
 </plist>

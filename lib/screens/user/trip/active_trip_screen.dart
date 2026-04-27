@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../models/ride_request_model.dart';
 import '../../../screens/shared/timer/timer.dart';
@@ -43,6 +44,7 @@ class _ActiveTripCardState extends State<ActiveTripCard>
       value: 1.0,
     );
     _heightFactor = _animCtrl.drive(CurveTween(curve: Curves.easeInOut));
+    WakelockPlus.enable();
   }
 
   void _toggleCollapse() {
@@ -58,6 +60,7 @@ class _ActiveTripCardState extends State<ActiveTripCard>
   @override
   void dispose() {
     _animCtrl.dispose();
+    WakelockPlus.disable();
     super.dispose();
   }
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-
 import 'package:provider/provider.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../models/ride_request_model.dart';
 import '../../../viewmodel/home/driver_home_view_model.dart';
@@ -16,13 +16,40 @@ class DriverHomeScreen extends StatefulWidget {
   State<DriverHomeScreen> createState() => _DriverHomeScreenState();
 }
 
-class _DriverHomeScreenState extends State<DriverHomeScreen> {
+class _DriverHomeScreenState extends State<DriverHomeScreen>
+    with WidgetsBindingObserver {
   bool _showingCancelDialog = false;
   bool _isActiveSheetCollapsed = false;
+  DriverHomeViewModel? _vm;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    WakelockPlus.disable();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      final vm = _vm;
+      if (vm != null && vm.mapViewModel.currentPosition == null) {
+        vm.requestLocationPermission();
+      }
+    }
+  }
 
   void _onViewModelChanged() {
     if (!mounted) return;
     final vm = context.read<DriverHomeViewModel>();
+
+    WakelockPlus.toggle(enable: vm.isOnline);
 
     if (vm.rideCancelledByUser && !_showingCancelDialog) {
       _showingCancelDialog = true;
@@ -66,6 +93,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
       child: Scaffold(
         body: Consumer<DriverHomeViewModel>(
           builder: (context, viewModel, child) {
+            // Store a direct reference for the lifecycle observer.
+            _vm = viewModel;
             // Register the listener once the ViewModel is available.
             WidgetsBinding.instance.addPostFrameCallback((_) {
               viewModel.removeListener(_onViewModelChanged);

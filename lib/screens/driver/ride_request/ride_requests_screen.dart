@@ -2,10 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:leisureryde/main.dart';
 import 'package:leisureryde/models/ride_request_model.dart';
 import 'package:leisureryde/viewmodel/ride/ride_request_view_model.dart';
-import 'package:leisureryde/widgets/custom_loading_indicator.dart'; // Assuming you have this
+import 'package:leisureryde/widgets/custom_loading_indicator.dart';
 
 class RideRequestsScreen extends StatelessWidget {
   const RideRequestsScreen({super.key});
@@ -176,49 +175,35 @@ class _RideRequestCard extends StatelessWidget {
   }
 
   Widget _buildActionButtons(BuildContext context, RideRequestsViewModel viewModel) {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: () => viewModel.declineRide(request.id),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red,
-              side: const BorderSide(color: Colors.red),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-            child: const Text("Decline"),
-          ),
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: () async {
+          // Capture navigator before the async gap so it remains valid even if
+          // the stream rebuilds this widget after the ride status changes.
+          final navigator = Navigator.of(context);
+          final success = await viewModel.acceptRide(request.id, context);
+          if (success) {
+            // Pop back to DriverHomeScreen passing the accepted ride so
+            // it can be shown immediately without waiting for Firestore.
+            navigator.pop(request);
+          } else if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Failed to accept ride. Please try again."),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Theme.of(context).primaryColor,
+          padding: const EdgeInsets.symmetric(vertical: 12),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 2,
-          child: ElevatedButton(
-            onPressed: () async {
-              final success = await viewModel.acceptRide(request.id, context);
-
-              if (success && context.mounted) {
-                // Pop back to DriverHomeScreen passing the accepted ride so
-                // it can be shown immediately without waiting for Firestore.
-                Navigator.pop(context, request);
-              } else if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Failed to accept ride. Please try again."),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).primaryColor,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-            child: Text(
-              "Accept (${(request.distance / 1000).toStringAsFixed(1)} km)",
-            ),
-          ),
+        child: Text(
+          "Accept (${(request.distance / 1000).toStringAsFixed(1)} km)",
         ),
-      ],
+      ),
     );
   }
 
