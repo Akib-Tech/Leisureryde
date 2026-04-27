@@ -12,7 +12,20 @@ class NotificationService {
 
 
   Future<void> initialize(String userId) async {
-    await _fcm.requestPermission();
+    // Ask iOS for alert + badge + sound; Android 13+ is handled via
+    // flutter_local_notifications in main.dart.
+    final settings = await _fcm.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+    );
+
+    final granted = settings.authorizationStatus == AuthorizationStatus.authorized
+        || settings.authorizationStatus == AuthorizationStatus.provisional;
+
+    if (!granted) return;
+
     final token = await _fcm.getToken();
     if (token != null) {
       await saveTokenToDatabase(token, userId);

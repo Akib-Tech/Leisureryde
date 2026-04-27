@@ -53,22 +53,25 @@ class _RatingDialogState extends State<RatingDialog> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 28),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(5, (index) {
-                final starIndex = index + 1;
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedRating = starIndex.toDouble()),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Icon(
-                      starIndex <= _selectedRating ? Icons.star : Icons.star_border,
-                      color: Colors.amber,
-                      size: 44,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) {
+                  final starIndex = index + 1;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedRating = starIndex.toDouble()),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Icon(
+                        starIndex <= _selectedRating ? Icons.star : Icons.star_border,
+                        color: Colors.amber,
+                        size: 44,
+                      ),
                     ),
-                  ),
-                );
-              }),
+                  );
+                }),
+              ),
             ),
             if (_selectedRating > 0) ...[
               const SizedBox(height: 8),

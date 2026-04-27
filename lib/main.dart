@@ -23,14 +23,24 @@ const NotificationDetails notDetails = NotificationDetails(
     importance: Importance.max,
     priority: Priority.high,
   ),
+  iOS: DarwinNotificationDetails(
+    presentAlert: true,
+    presentBadge: true,
+    presentSound: true,
+  ),
 );
 
+// @pragma is required so the Dart tree-shaker keeps this function in release builds.
+@pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   const AndroidInitializationSettings androidInit =
       AndroidInitializationSettings('@mipmap/ic_launcher');
-  await _local.initialize(const InitializationSettings(android: androidInit));
+  const DarwinInitializationSettings iosInit = DarwinInitializationSettings();
+  await _local.initialize(
+    const InitializationSettings(android: androidInit, iOS: iosInit),
+  );
 
   final notif = message.notification;
   if (notif != null) {
@@ -44,14 +54,22 @@ Future<void> main() async {
 
   await setupLocator();
 
+  // Initialise local notifications for both Android and iOS.
   const AndroidInitializationSettings androidInit =
-  AndroidInitializationSettings('@mipmap/ic_launcher');
-  const InitializationSettings initSettings =
-  InitializationSettings(android: androidInit);
-  await _local.initialize(initSettings);
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+  const DarwinInitializationSettings iosInit = DarwinInitializationSettings(
+    requestAlertPermission: true,
+    requestBadgePermission: true,
+    requestSoundPermission: true,
+  );
+  await _local.initialize(
+    const InitializationSettings(android: androidInit, iOS: iosInit),
+  );
 
+  // Android 13+ runtime notification permission.
   await _local
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
       ?.requestNotificationsPermission();
 
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);

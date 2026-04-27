@@ -65,7 +65,11 @@ class MapViewModel extends ChangeNotifier {
       }
 
       if (permission == LocationPermission.deniedForever) {
-        throw Exception('Location permissions are permanently denied.');
+        // On iOS the first denial is already permanent; on Android the user
+        // ticked "Never ask again". Open OS settings so the user can flip the
+        // toggle — when they return the resume listener re-calls initialize().
+        await Geolocator.openAppSettings();
+        return;
       }
 
       _currentPosition = await Geolocator.getCurrentPosition(

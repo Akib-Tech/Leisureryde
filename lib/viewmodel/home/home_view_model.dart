@@ -517,6 +517,16 @@ class HomeViewModel extends ChangeNotifier {
   Future<void> refreshOnScreenResume() async {
     debugPrint("🔄 refreshOnScreenResume() called");
 
+    // Re-initialize the map when the user returns from OS Settings after
+    // granting location permission (currentPosition will be null until then).
+    if (mapViewModel.currentPosition == null) {
+      _isLoading = true;
+      notifyListeners();
+      await mapViewModel.initialize();
+      _isLoading = false;
+      notifyListeners();
+    }
+
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
 
@@ -524,9 +534,6 @@ class HomeViewModel extends ChangeNotifier {
     _isRefreshing = true;
 
     try {
-      // Firestore is the single source of truth.
-      // Always re-check and re-attach the listener — never rely on in-memory state
-      // alone because the stream may have died while the app was backgrounded.
       await _checkForActiveRide();
     } finally {
       _isRefreshing = false;
