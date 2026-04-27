@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -38,8 +39,18 @@ class ActiveTripViewModel extends ChangeNotifier {
   LatLng? _driverLocation;
   LatLng? get driverLocation => _driverLocation;
 
+  LatLng? _lastRouteRecalcPosition;
+
   LatLng? _destination;
   LatLng? get userDestination => _destination;
+
+  /// Lazily-created stream of the driver's LatLng — used by TripEndTimer on
+  /// the user side. Null until the driverId is known from the ride document.
+  Stream<LatLng>? get driverLatLngStream {
+    final driverId = _rideRequest?.driverId;
+    if (driverId == null) return null;
+    return _databaseService.getDriverLatLngStream(driverId);
+  }
 
   // We no longer maintain a separate _polylines set here.
   // All polylines are written directly into mapViewModel so the
@@ -106,14 +117,20 @@ class ActiveTripViewModel extends ChangeNotifier {
 
       if (latitude == null || longitude == null) return;
 
-      _driverLocation = LatLng(latitude, longitude);
+      final newPos = LatLng(latitude, longitude);
+      _driverLocation = newPos;
 
-      // Write driver marker and move camera via the shared MapViewModel.
-      // This is the key: we update the SAME mapViewModel the GoogleMap reads.
       mapViewModel.updateDriverPosition(_driverLocation!);
 
-      // Recalculate the live route every time the driver moves.
-      await _updateLiveRoute();
+      // Only recalculate the route when the driver has moved > 50 m to avoid
+      // hammering the Directions API on every GPS tick.
+      if (_lastRouteRecalcPosition == null ||
+          _metersApart(_lastRouteRecalcPosition!, newPos) > 50) {
+        _lastRouteRecalcPosition = newPos;
+        await _updateLiveRoute();
+      } else {
+        notifyListeners();
+      }
     });
   }
 
@@ -161,6 +178,19 @@ class ActiveTripViewModel extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  double _metersApart(LatLng a, LatLng b) {
+    const r = 6371000.0;
+    final lat1 = a.latitude * math.pi / 180;
+    final lat2 = b.latitude * math.pi / 180;
+    final dLat = (b.latitude - a.latitude) * math.pi / 180;
+    final dLon = (b.longitude - a.longitude) * math.pi / 180;
+    final sinLat = math.sin(dLat / 2);
+    final sinLon = math.sin(dLon / 2);
+    final aa = sinLat * sinLat +
+        math.cos(lat1) * math.cos(lat2) * sinLon * sinLon;
+    return r * 2 * math.atan2(math.sqrt(aa), math.sqrt(1 - aa));
   }
 
   Future<void> makePhoneCall() async {

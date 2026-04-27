@@ -69,6 +69,22 @@ class HomeViewModel extends ChangeNotifier {
   String? get currentRideId => _rideId;
   StreamSubscription<DocumentSnapshot>? _rideListener;
 
+  // Cancellation state — set when the driver cancels on the user's behalf
+  bool _cancelledByDriver = false;
+  bool get cancelledByDriver => _cancelledByDriver;
+  String? _cancelledByDriverName;
+  String? get cancelledByDriverName => _cancelledByDriverName;
+
+  // Rating state — set after the trip completes
+  bool _showRatingDialog = false;
+  bool get showRatingDialog => _showRatingDialog;
+  String? _ratingRideId;
+  String? _ratingDriverId;
+  String? _ratingDriverName;
+  String? get ratingRideId => _ratingRideId;
+  String? get ratingDriverId => _ratingDriverId;
+  String? get ratingDriverName => _ratingDriverName;
+
   PaymentViewModel get paymentViewModel => _paymentViewModel;
 
   // SharedPreferences key — only used to persist the rideId across cold starts.
@@ -394,6 +410,18 @@ class HomeViewModel extends ChangeNotifier {
 
         if (status.isTerminal) {
           debugPrint("🛑 Terminal status — resetting ride.");
+          if (status == RideStatus.cancelled_by_driver) {
+            _cancelledByDriver = true;
+            _cancelledByDriverName = data['driverName'] as String?;
+          } else if (status == RideStatus.completed) {
+            final driverId = data['driverId'] as String?;
+            if (driverId != null) {
+              _ratingRideId = rideId;
+              _ratingDriverId = driverId;
+              _ratingDriverName = data['driverName'] as String?;
+              _showRatingDialog = true;
+            }
+          }
           _resetRide();
           return;
         }
@@ -511,6 +539,34 @@ class HomeViewModel extends ChangeNotifier {
     final ui.FrameInfo frameInfo = await codec.getNextFrame();
     final byteData = await frameInfo.image.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
+  }
+
+  void acknowledgeDriverCancellation() {
+    _cancelledByDriver = false;
+    _cancelledByDriverName = null;
+    notifyListeners();
+  }
+
+  void dismissRatingDialog() {
+    _showRatingDialog = false;
+    _ratingRideId = null;
+    _ratingDriverId = null;
+    _ratingDriverName = null;
+    notifyListeners();
+  }
+
+  Future<void> submitRating(double rating) async {
+    if (_ratingRideId == null || _ratingDriverId == null) return;
+    try {
+      await _rideService.submitDriverRating(
+        rideId: _ratingRideId!,
+        driverId: _ratingDriverId!,
+        rating: rating,
+      );
+    } catch (e) {
+      debugPrint("HomeViewModel: Failed to submit rating: $e");
+    }
+    dismissRatingDialog();
   }
 
   bool _isDisposed = false;

@@ -6,11 +6,13 @@ import 'package:leisureryde/app/service_locator.dart';
 import 'package:leisureryde/screens/shared/main_screen/main_screen.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/push_notifications_service.dart';
 
 enum SignupType { user, driver }
 
 class SignupViewModel extends ChangeNotifier {
   final AuthService _authService = locator<AuthService>();
+  final NotificationService _notificationService = locator<NotificationService>();
 
   final TextEditingController emailController = TextEditingController();
   final TextEditingController firstNameController = TextEditingController();
@@ -104,11 +106,9 @@ class SignupViewModel extends ChangeNotifier {
         );
       }
 
-      // =======================================================================
-      // THE CRITICAL FIX IS HERE
-      // We update the UI state to turn OFF the loader *before* we destroy this
-      // screen's context with the navigation call.
-      // =======================================================================
+      final uid = _authService.currentUser!.uid;
+      _notificationService.initialize(uid);
+
       _setLoading(false);
 
 

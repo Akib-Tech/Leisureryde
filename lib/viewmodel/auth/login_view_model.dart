@@ -5,6 +5,7 @@ import 'package:leisureryde/screens/shared/main_screen/main_screen.dart';
 import '../../app/enums.dart';
 import '../../screens/admin/admin_home_page.dart';
 import '../../services/auth_service.dart';
+import '../../services/push_notifications_service.dart';
 
 
 enum LoginType { user, driver }
@@ -12,6 +13,7 @@ enum LoginType { user, driver }
 
 class LoginViewModel extends ChangeNotifier {
   final AuthService _authService = locator<AuthService>();
+  final NotificationService _notificationService = locator<NotificationService>();
 
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
@@ -54,7 +56,9 @@ class LoginViewModel extends ChangeNotifier {
         passwordController.text.trim(),
       );
 
-      // 🔍  Fetch user role right after sign In
+      final uid = _authService.currentUser!.uid;
+      _notificationService.initialize(uid);
+
       final role = await _authService.getCurrentUserRole();
 
       if (!context.mounted) return;

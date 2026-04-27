@@ -16,23 +16,25 @@ import 'viewmodel/theme_view_model.dart';
 
 final FlutterLocalNotificationsPlugin _local = FlutterLocalNotificationsPlugin();
 
+const NotificationDetails notDetails = NotificationDetails(
+  android: AndroidNotificationDetails(
+    'default_channel',
+    'General',
+    importance: Importance.max,
+    priority: Priority.high,
+  ),
+);
+
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  RemoteNotification? notif = message.notification;
+
+  const AndroidInitializationSettings androidInit =
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+  await _local.initialize(const InitializationSettings(android: androidInit));
+
+  final notif = message.notification;
   if (notif != null) {
-    _local.show(
-      notif.hashCode,
-      notif.title,
-      notif.body,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'default_channel',
-          'General',
-          importance: Importance.max,
-          priority: Priority.high,
-        ),
-      ),
-    );
+    await _local.show(notif.hashCode, notif.title, notif.body, notDetails);
   }
 }
 
@@ -41,15 +43,25 @@ Future<void> main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   await setupLocator();
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-  //
-  // const AndroidInitializationSettings androidInit =
-  // AndroidInitializationSettings('@mipmap/ic_launcher');
-  // const InitializationSettings initSettings =
-  // InitializationSettings(android: androidInit);
-  // await _local.initialize(initSettings);
-  // await locator<ThemeViewModel>().init();
 
+  const AndroidInitializationSettings androidInit =
+  AndroidInitializationSettings('@mipmap/ic_launcher');
+  const InitializationSettings initSettings =
+  InitializationSettings(android: androidInit);
+  await _local.initialize(initSettings);
+
+  await _local
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.requestNotificationsPermission();
+
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    final notif = message.notification;
+    if (notif != null) {
+      _local.show(notif.hashCode, notif.title, notif.body, notDetails);
+    }
+  });
 
   runApp(const MyApp());
 }

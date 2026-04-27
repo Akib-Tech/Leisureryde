@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../models/ride_request_model.dart';
+import '../../../screens/shared/timer/timer.dart';
 import '../../../viewmodel/home/home_view_model.dart';
 import '../../../viewmodel/ride/active_trip_view_model.dart';
 import '../../../widgets/custom_loading_indicator.dart';
@@ -13,22 +14,60 @@ import '../../shared/chat/chat_screen.dart';
 /// IMPORTANT: We pass the shared [MapViewModel] from [HomeViewModel] into
 /// [ActiveTripViewModel] so that all polylines and markers are drawn into
 /// the same [GoogleMap] widget that HomeScreen is already displaying.
-/// If we let ActiveTripViewModel create its own MapViewModel, it would draw
-/// into a separate, invisible instance and nothing would appear on screen.
-class ActiveTripCard extends StatelessWidget {
+class ActiveTripCard extends StatefulWidget {
   final String rideId;
+  final void Function(bool isCollapsed)? onCollapseChanged;
 
-  const ActiveTripCard({super.key, required this.rideId});
+  const ActiveTripCard({
+    super.key,
+    required this.rideId,
+    this.onCollapseChanged,
+  });
+
+  @override
+  State<ActiveTripCard> createState() => _ActiveTripCardState();
+}
+
+class _ActiveTripCardState extends State<ActiveTripCard>
+    with SingleTickerProviderStateMixin {
+  bool _isCollapsed = false;
+  late final AnimationController _animCtrl;
+  late final Animation<double> _heightFactor;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+      value: 1.0,
+    );
+    _heightFactor = _animCtrl.drive(CurveTween(curve: Curves.easeInOut));
+  }
+
+  void _toggleCollapse() {
+    setState(() => _isCollapsed = !_isCollapsed);
+    widget.onCollapseChanged?.call(_isCollapsed);
+    if (_isCollapsed) {
+      _animCtrl.reverse();
+    } else {
+      _animCtrl.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Read the shared HomeViewModel to get its MapViewModel.
     final homeViewModel = context.read<HomeViewModel>();
 
     return ChangeNotifierProvider(
-      // Pass the SHARED mapViewModel so polylines go to the right place.
       create: (_) => ActiveTripViewModel(
-        rideId: rideId,
+        rideId: widget.rideId,
         mapViewModel: homeViewModel.mapViewModel,
       ),
       child: Consumer<ActiveTripViewModel>(
@@ -60,124 +99,236 @@ class ActiveTripCard extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Drag handle
-                Container(
-                  margin: const EdgeInsets.only(top: 12),
-                  width: 40,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                  child: Column(
-                    children: [
-                      // Status label
-                      Text(
-                        _statusLabel(rideRequest.status),
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.primaryColor,
-                        ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Driver info
-                      if (viewModel.driverProfile != null) ...[
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: CircleAvatar(
-                            radius: 28,
-                            backgroundImage: viewModel.driverProfile!.profileImageUrl.isNotEmpty
-                                ? NetworkImage(viewModel.driverProfile!.profileImageUrl)
-                                : null,
-                            child: viewModel.driverProfile!.profileImageUrl.isEmpty
-                                ? Text(
-                              viewModel.driverProfile!.firstName[0].toUpperCase(),
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            )
-                                : null,
-                          ),
-                          title: Text(
-                            viewModel.driverProfile!.fullName,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Row(
-                            children: [
-                              const Icon(Icons.star, size: 14, color: Colors.amber),
-                              const SizedBox(width: 4),
-                              Text(viewModel.driverProfile!.rating.toStringAsFixed(1)),
-                            ],
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.call, color: Colors.green),
-                                onPressed: () => _callDriver(viewModel.driverProfile!.phone),
+                // ── Drag handle + collapsed summary ──────────────────
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _toggleCollapse,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 5,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(10),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.chat, color: Colors.blue),
-                                onPressed: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => ChatScreen(
-                                      rideId: rideId,
-                                      otherUserId: viewModel.driverProfile!.uid,
-                                      otherUserName: viewModel.driverProfile!.fullName,
-                                      otherUserImageUrl: viewModel.driverProfile!.profileImageUrl,
-                                    ),
+                            ),
+                            const Spacer(),
+                            Icon(
+                              _isCollapsed
+                                  ? Icons.keyboard_arrow_up
+                                  : Icons.keyboard_arrow_down,
+                              color: Colors.grey[500],
+                            ),
+                          ],
+                        ),
+                        if (_isCollapsed) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              if (viewModel.driverProfile != null) ...[
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundImage: viewModel
+                                          .driverProfile!
+                                          .profileImageUrl
+                                          .isNotEmpty
+                                      ? NetworkImage(viewModel
+                                          .driverProfile!.profileImageUrl)
+                                      : null,
+                                  child: viewModel.driverProfile!
+                                          .profileImageUrl.isEmpty
+                                      ? Text(
+                                          viewModel.driverProfile!
+                                              .firstName[0]
+                                              .toUpperCase(),
+                                          style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold))
+                                      : null,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    viewModel.driverProfile!.fullName,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ] else
+                                const Expanded(child: SizedBox()),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color:
+                                      theme.primaryColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  _statusLabel(rideRequest.status),
+                                  style: TextStyle(
+                                    color: theme.primaryColor,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
                                   ),
                                 ),
                               ),
                             ],
                           ),
+                          const SizedBox(height: 6),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+
+                // ── Expanded content ──────────────────────────────────
+                SizeTransition(
+                  sizeFactor: _heightFactor,
+                  axisAlignment: -1,
+                  child: Padding(
+
+
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+                    child: Column(
+                      children: [
+                        // Status label
+                        Text(
+                          _statusLabel(rideRequest.status),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: theme.primaryColor,
+                          ),
                         ),
 
-                        const SizedBox(height: 12),
-                      ],
+                        const SizedBox(height: 16),
 
-                      // Destination row
-                      Row(
-                        children: [
-                          Icon(Icons.location_on, color: theme.primaryColor, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              rideRequest.destinationAddress,
-                              style: theme.textTheme.bodyMedium,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
+                        // Driver info
+                        if (viewModel.driverProfile != null) ...[
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: CircleAvatar(
+                              radius: 28,
+                              backgroundImage: viewModel
+                                      .driverProfile!
+                                      .profileImageUrl
+                                      .isNotEmpty
+                                  ? NetworkImage(viewModel
+                                      .driverProfile!.profileImageUrl)
+                                  : null,
+                              child: viewModel
+                                      .driverProfile!.profileImageUrl.isEmpty
+                                  ? Text(
+                                      viewModel.driverProfile!.firstName[0]
+                                          .toUpperCase(),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold),
+                                    )
+                                  : null,
                             ),
+                            title: Text(
+                              viewModel.driverProfile!.fullName,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Row(
+                              children: [
+                                const Icon(Icons.star,
+                                    size: 14, color: Colors.amber),
+                                const SizedBox(width: 4),
+                                Text(viewModel.driverProfile!.rating
+                                    .toStringAsFixed(1)),
+                              ],
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.call,
+                                      color: Colors.green),
+                                  onPressed: () => _callDriver(
+                                      viewModel.driverProfile!.phone),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.chat,
+                                      color: Colors.blue),
+                                  onPressed: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ChatScreen(
+                                        rideId: widget.rideId,
+                                        otherUserId:
+                                            viewModel.driverProfile!.uid,
+                                        otherUserName: viewModel
+                                            .driverProfile!.fullName,
+                                        otherUserImageUrl: viewModel
+                                            .driverProfile!.profileImageUrl,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
+
+                        // Destination row
+                        Row(
+                          children: [
+                            Icon(Icons.location_on,
+                                color: theme.primaryColor, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                rideRequest.destinationAddress,
+                                style: theme.textTheme.bodyMedium,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        // Trip timer — shown to the user when the trip is ongoing
+                        if (rideRequest.status == RideStatus.ongoing) ...[
+                          const SizedBox(height: 16),
+                          TripEndTimer(
+                            destination: rideRequest.destinationLocation,
+                            driverLocationStream:
+                                viewModel.driverLatLngStream,
                           ),
                         ],
-                      ),
 
-                      const SizedBox(height: 16),
+                        const SizedBox(height: 16),
 
-                      // Cancel button — only shown before trip is ongoing
-                      if (rideRequest.status == RideStatus.pending)
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.red,
-                            side: const BorderSide(color: Colors.red),
-                            minimumSize: const Size(double.infinity, 48),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                        // Cancel allowed while driver hasn't started the trip
+                        if (rideRequest.status == RideStatus.pending ||
+                            rideRequest.status == RideStatus.accepted)
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              side: const BorderSide(color: Colors.red),
+                              minimumSize: const Size(double.infinity, 48),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: () => viewModel.cancelTrip(),
+                            icon: const Icon(Icons.cancel_outlined),
+                            label: const Text(
+                              "Cancel Ride",
+                              style: TextStyle(fontWeight: FontWeight.bold),
                             ),
                           ),
-                          onPressed: () => viewModel.cancelTrip(),
-                          icon: const Icon(Icons.cancel_outlined),
-                          label: const Text(
-                            "Cancel Ride",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],
