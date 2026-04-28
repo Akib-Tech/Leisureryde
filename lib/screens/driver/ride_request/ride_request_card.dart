@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../models/ride_request_model.dart';
+import '../../../services/fare_calculation_service.dart';
 
 class RideRequestCard extends StatefulWidget {
   final RideRequest request;
@@ -102,7 +103,7 @@ class _RideRequestCardState extends State<RideRequestCard> {
                 style: theme.textTheme.titleMedium,
               ),
               Text(
-                '~\$${widget.request.fare.toStringAsFixed(2)}',
+                '~\$${FareCalculationService.driverEarnings(widget.request.fare).toStringAsFixed(2)}',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: Colors.green,

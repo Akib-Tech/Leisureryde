@@ -6,6 +6,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../app/service_locator.dart';
 import '../../../models/route_selection.dart';
+import '../../../services/fare_calculation_service.dart';
 import '../../../models/user_profile.dart';
 import '../../../services/place_service.dart'; // For PlaceDetails
 import '../../../viewmodel/home/home_view_model.dart'; // Your HomeViewModel
@@ -623,7 +624,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             child: Column(
               children: [
-                _buildPaymentDetailRow(theme, "Trip Fare", "\$${selectedVehicleFare.toStringAsFixed(2)}"),
+                _buildPaymentDetailRow(theme, "Subtotal", "\$${FareCalculationService.subtotalFromTotal(selectedVehicleFare).toStringAsFixed(2)}"),
+                const SizedBox(height: 8),
+                _buildPaymentDetailRow(theme, "Tax (7%)", "\$${FareCalculationService.taxFromTotal(selectedVehicleFare).toStringAsFixed(2)}"),
+                const SizedBox(height: 8),
+                _buildPaymentDetailRow(theme, "Total", "\$${selectedVehicleFare.toStringAsFixed(2)}", isBold: true),
                 const SizedBox(height: 8),
                 _buildPaymentDetailRow(theme, "Vehicle Type", viewModel.selectedVehicle!),
                 const SizedBox(height: 8),
@@ -673,14 +678,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildPaymentDetailRow(ThemeData theme, String label, String value, {bool isSubtitle = false}) {
+  Widget _buildPaymentDetailRow(ThemeData theme, String label, String value, {bool isSubtitle = false, bool isBold = false}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
           label,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+            color: isBold ? null : theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            fontSize: isBold ? 16 : null,
           ),
         ),
         Expanded(
@@ -690,7 +697,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             maxLines: isSubtitle ? 2 : 1,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: isSubtitle ? FontWeight.normal : FontWeight.bold,
+              fontWeight: (isSubtitle && !isBold) ? FontWeight.normal : FontWeight.bold,
+              fontSize: isBold ? 16 : null,
             ),
           ),
         ),

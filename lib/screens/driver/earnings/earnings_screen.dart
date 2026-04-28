@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../services/fare_calculation_service.dart';
 import '../../../viewmodel/earnings/earnings_view_model.dart';
 import '../../../widgets/custom_loading_indicator.dart';
 
@@ -111,7 +112,7 @@ class EarningsScreen extends StatelessWidget {
           '${fmt.format(trip.createdAt)} • ${(trip.distance).toStringAsFixed(1)} mi',
         ),
         trailing: Text(
-          '\$${trip.fare.toStringAsFixed(2)}',
+          '\$${FareCalculationService.driverEarnings(trip.fare).toStringAsFixed(2)}',
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),

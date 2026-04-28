@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:leisureryde/models/ride_request_model.dart';
+import 'package:leisureryde/services/fare_calculation_service.dart';
 import 'package:leisureryde/viewmodel/ride/ride_request_view_model.dart';
 import 'package:leisureryde/widgets/custom_loading_indicator.dart';
 
@@ -135,7 +136,7 @@ class _RideRequestCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    "\$${request.fare.toStringAsFixed(2)}",
+                    "\$${FareCalculationService.driverEarnings(request.fare).toStringAsFixed(2)}",
                     style: const TextStyle(
                       color: Colors.green,
                       fontWeight: FontWeight.bold,

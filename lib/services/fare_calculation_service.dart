@@ -7,6 +7,18 @@ class FareCalculationService {
   static const double _bookingFee = 4.25;
   static const double _minTripEarnings = 6.50;
 
+  static const double taxRate = 0.07;
+  static const double driverShareRate = 0.30;
+
+  /// Pre-tax amount from a total that already includes 7% tax.
+  static double subtotalFromTotal(double total) => total / (1 + taxRate);
+
+  /// Tax portion of a total that already includes 7% tax.
+  static double taxFromTotal(double total) => total - subtotalFromTotal(total);
+
+  /// Driver's 30% share of the total fare.
+  static double driverEarnings(double total) => total * driverShareRate;
+
   // Vehicle type multipliers - optimized for Uber-like pricing
   static const double _leisureComfortMultiplier = 1.0;
   static const double _leisurePlusMultiplier = 1.45;   // ~45% premium (realistic for Comfort/Plus tier)
