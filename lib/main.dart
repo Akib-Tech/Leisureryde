@@ -16,21 +16,50 @@ import 'viewmodel/theme_view_model.dart';
 
 final FlutterLocalNotificationsPlugin _local = FlutterLocalNotificationsPlugin();
 
-const NotificationDetails notDetails = NotificationDetails(
-  android: AndroidNotificationDetails(
-    'default_channel',
-    'General',
-    importance: Importance.max,
-    priority: Priority.high,
-  ),
-  iOS: DarwinNotificationDetails(
-    presentAlert: true,
-    presentBadge: true,
-    presentSound: true,
-  ),
+// Android group key — all ride-request notifications share this key so the OS
+// collapses them into a single stack instead of showing each one separately.
+const String _rideGroupKey = 'com.leisureryde.rides';
+
+// ID 0 is reserved for the group-summary notification; individual ones start at 1.
+const int _rideSummaryId = 0;
+int _nextNotifId = 1;
+
+AndroidNotificationDetails _androidDetails({bool isSummary = false}) =>
+    AndroidNotificationDetails(
+      'default_channel',
+      'General',
+      importance: Importance.max,
+      priority: Priority.high,
+      groupKey: _rideGroupKey,
+      setAsGroupSummary: isSummary,
+    );
+
+const DarwinNotificationDetails _iosDetails = DarwinNotificationDetails(
+  presentAlert: true,
+  presentBadge: true,
+  presentSound: true,
 );
 
-// @pragma is required so the Dart tree-shaker keeps this function in release builds.
+/// Shows a notification and updates the Android group summary so the OS
+/// collapses multiple notifications into a single stack in the drawer.
+Future<void> _showGrouped(
+    FlutterLocalNotificationsPlugin plugin, int id, String? title, String? body) async {
+  await plugin.show(
+    id,
+    title,
+    body,
+    NotificationDetails(android: _androidDetails(), iOS: _iosDetails),
+  );
+  // The summary notification is required for Android to group the stack.
+  await plugin.show(
+    _rideSummaryId,
+    'LeisureRyde',
+    'You have new ride notifications',
+    NotificationDetails(android: _androidDetails(isSummary: true)),
+  );
+}
+
+// @pragma is required so the tree-shaker keeps this in release builds.
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -42,9 +71,15 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     const InitializationSettings(android: androidInit, iOS: iosInit),
   );
 
-  final notif = message.notification;
-  if (notif != null) {
-    await _local.show(notif.hashCode, notif.title, notif.body, notDetails);
+  // Read from the data map first (Android data-only messages), then fall back
+  // to the notification object (iOS / legacy notification messages).
+  final title = message.data['title'] ?? message.notification?.title;
+  final body = message.data['body'] ?? message.notification?.body;
+  if (title != null || body != null) {
+    // Use a timestamp-based ID in this isolate — the shared counter is not
+    // accessible across isolates, and collisions are extremely unlikely.
+    final id = DateTime.now().millisecondsSinceEpoch & 0x7FFFFFFF;
+    await _showGrouped(_local, id, title as String?, body as String?);
   }
 }
 
@@ -54,7 +89,6 @@ Future<void> main() async {
 
   await setupLocator();
 
-  // Initialise local notifications for both Android and iOS.
   const AndroidInitializationSettings androidInit =
       AndroidInitializationSettings('@mipmap/ic_launcher');
   const DarwinInitializationSettings iosInit = DarwinInitializationSettings(
@@ -75,9 +109,10 @@ Future<void> main() async {
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    final notif = message.notification;
-    if (notif != null) {
-      _local.show(notif.hashCode, notif.title, notif.body, notDetails);
+    final title = message.data['title'] ?? message.notification?.title;
+    final body = message.data['body'] ?? message.notification?.body;
+    if (title != null || body != null) {
+      _showGrouped(_local, _nextNotifId++, title as String?, body as String?);
     }
   });
 
@@ -94,7 +129,6 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (context) => locator<AuthService>()),
         ChangeNotifierProvider(create: (context) => locator<PaymentViewModel>()),
         ChangeNotifierProvider(create: (context) => locator<HomeViewModel>()),
-
         ChangeNotifierProvider(create: (context) => locator<ThemeViewModel>()),
       ],
       child: Consumer<ThemeViewModel>(
@@ -102,9 +136,9 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             title: 'LeisureRyde',
-            theme: AppTheme.darkTheme,       // Provide light theme
-            darkTheme: AppTheme.darkTheme,     // Provide dark theme
-            themeMode: themeViewModel.themeMode, // Set the current mode
+            theme: AppTheme.darkTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: themeViewModel.themeMode,
             home: const SplashScreen(),
           );
         },

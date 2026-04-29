@@ -112,15 +112,16 @@ class ActiveTripViewModel extends ChangeNotifier {
       if (!snapshot.exists) return;
 
       final data = snapshot.data() as Map<String, dynamic>;
-      final latitude = data['latitude'] as double?;
-      final longitude = data['longitude'] as double?;
+      final latitude = (data['latitude'] as num?)?.toDouble();
+      final longitude = (data['longitude'] as num?)?.toDouble();
+      final heading = (data['heading'] as num?)?.toDouble() ?? 0.0;
 
       if (latitude == null || longitude == null) return;
 
       final newPos = LatLng(latitude, longitude);
       _driverLocation = newPos;
 
-      mapViewModel.updateDriverPosition(_driverLocation!);
+      mapViewModel.updateDriverPosition(_driverLocation!, heading: heading);
 
       // Only recalculate the route when the driver has moved > 50 m to avoid
       // hammering the Directions API on every GPS tick.
@@ -156,6 +157,7 @@ class ActiveTripViewModel extends ChangeNotifier {
       case RideStatus.ongoing:
         routeOrigin = _driverLocation!;
         routeDestination = _rideRequest!.destinationLocation;
+        mapViewModel.clearBookingRoute();
         break;
 
       default:

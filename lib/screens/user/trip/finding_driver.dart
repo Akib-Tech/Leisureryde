@@ -2,16 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 
 class FindingDriverCard extends StatefulWidget {
-  // --- REMOVED ---
-  // The card no longer needs to receive the rideId.
-  // final String rideId;
-
-  final VoidCallback onCancel;
-
   const FindingDriverCard({
     super.key,
-    // required this.rideId, // <-- REMOVED
-    required this.onCancel,
   });
 
   @override
@@ -93,22 +85,6 @@ class _FindingDriverCardState extends State<FindingDriverCard> {
                 color:
                 theme.textTheme.bodySmall?.color?.withOpacity(0.8)),
             textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 30),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor:
-              theme.colorScheme.errorContainer.withOpacity(0.25),
-              foregroundColor: theme.colorScheme.error,
-              minimumSize: const Size(double.infinity, 50),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: widget.onCancel,
-            child: const Text(
-              "Cancel Ride",
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
           ),
         ],
       ),

@@ -9,17 +9,20 @@ class ChatService {
         .doc(rideId)
         .collection('messages')
         .orderBy('timestamp', descending: true)
+        .limit(100)
         .snapshots();
   }
 
   Future<void> sendMessage({
     required String rideId,
     required String senderId,
+    required String senderName,
     required String receiverId,
     required String text,
   }) async {
     await _db.collection('chats').doc(rideId).collection('messages').add({
       'senderId': senderId,
+      'senderName': senderName,
       'receiverId': receiverId,
       'text': text.trim(),
       'timestamp': FieldValue.serverTimestamp(),

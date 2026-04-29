@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -47,6 +48,10 @@ class DriverHomeViewModel extends ChangeNotifier {
 
   // The driver's own current position — updated from their GPS.
   LatLng? _driverCurrentPosition;
+
+  // Last position at which we recalculated the route.
+  // Prevents hammering the Directions API on every GPS tick.
+  LatLng? _lastRouteCalcPosition;
 
   int _todayTrips = 0;
   double _todayEarnings = 0.0;
@@ -305,13 +310,27 @@ class DriverHomeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Haversine distance in metres between two LatLng points.
+  double _metersApart(LatLng a, LatLng b) {
+    const r = 6371000.0;
+    final lat1 = a.latitude * math.pi / 180;
+    final lat2 = b.latitude * math.pi / 180;
+    final dLat = (b.latitude - a.latitude) * math.pi / 180;
+    final dLon = (b.longitude - a.longitude) * math.pi / 180;
+    final sinLat = math.sin(dLat / 2);
+    final sinLon = math.sin(dLon / 2);
+    final aa = sinLat * sinLat + math.cos(lat1) * math.cos(lat2) * sinLon * sinLon;
+    return r * 2 * math.atan2(math.sqrt(aa), math.sqrt(1 - aa));
+  }
+
   /// Listens to the driver's own real-time GPS from Firestore
   /// (written there by DriverLocationUpdater) and redraws the route
-  /// each time they move.
+  /// only when the driver has moved enough to warrant a new Directions call.
   void _listenToOwnLocation() {
     if (_driverProfile == null) return;
 
     _driverLocationSubscription?.cancel();
+    _lastRouteCalcPosition = null;
 
     _driverLocationSubscription = _databaseService
         .getDriverLocationStream(_driverProfile!.uid)
@@ -319,15 +338,27 @@ class DriverHomeViewModel extends ChangeNotifier {
       if (!snapshot.exists) return;
 
       final data = snapshot.data() as Map<String, dynamic>;
-      final latitude = data['latitude'] as double?;
-      final longitude = data['longitude'] as double?;
+      // Use num? cast — Firestore may store these as int or double.
+      final lat = (data['latitude'] as num?)?.toDouble();
+      final lng = (data['longitude'] as num?)?.toDouble();
 
-      if (latitude == null || longitude == null) return;
+      if (lat == null || lng == null) return;
 
-      _driverCurrentPosition = LatLng(latitude, longitude);
+      final newPos = LatLng(lat, lng);
+      _driverCurrentPosition = newPos;
 
-      // Redraw the live route from the updated driver position.
-      await _drawRouteForActiveRide();
+      // Keep the camera centred on the driver while a trip is active.
+      if (_activeRide != null) {
+        mapViewModel.animateCameraToPosition(newPos);
+      }
+
+      // Only recalculate the route when the driver has moved > 30 m to avoid
+      // hammering the Directions API on every GPS tick.
+      if (_lastRouteCalcPosition == null ||
+          _metersApart(_lastRouteCalcPosition!, newPos) > 30) {
+        _lastRouteCalcPosition = newPos;
+        await _drawRouteForActiveRide();
+      }
     });
   }
 
@@ -406,6 +437,7 @@ class DriverHomeViewModel extends ChangeNotifier {
     _driverLocationSubscription = null;
     _activeRide = null;
     _driverCurrentPosition = null;
+    _lastRouteCalcPosition = null;
   }
 
   Future<void> refreshStats() async {

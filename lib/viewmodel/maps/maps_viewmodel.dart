@@ -18,6 +18,16 @@ class MapViewModel extends ChangeNotifier {
   bool _isFollowingDriver = false;
   bool get isFollowingDriver => _isFollowingDriver;
 
+  // When true the user has manually panned the map; auto-camera moves pause
+  // until recenterCamera() is called.
+  bool _isUserInteracting = false;
+  bool get isUserInteracting => _isUserInteracting;
+
+  // Set to true immediately before any programmatic animateCamera call so the
+  // onCameraMoveStarted callback can ignore it (it fires for both gestures and
+  // programmatic moves; there is no built-in isGesture flag in google_maps_flutter).
+  bool _isProgrammaticMove = false;
+
   StreamSubscription<LatLng>? _driverStreamSubscription;
 
   bool _isLoading = true;
@@ -26,28 +36,29 @@ class MapViewModel extends ChangeNotifier {
   Position? get currentPosition => _currentPosition;
   DirectionsResult? get directionsResult => _directionsResult;
 
-  // Two separate polyline IDs so booking route and live driver route
-  // never overwrite each other.
-  static const PolylineId _bookingRouteId = PolylineId('booking_route');
-  static const PolylineId _liveRouteId = PolylineId('live_route');
-  static const MarkerId _driverMarkerId = MarkerId('driver');
+  // Optional car-icon set by the parent ViewModel after async asset load.
+  BitmapDescriptor? _driverIcon;
 
-  Set<Marker> _markers = {};
+  static const PolylineId _bookingRouteId = PolylineId('booking_route');
+  static const PolylineId _liveRouteId    = PolylineId('live_route');
+  static const MarkerId   _driverMarkerId  = MarkerId('driver');
+
+  Set<Marker>   _markers   = {};
   Set<Polyline> _polylines = {};
 
-  Set<Marker> get markers => _markers;
+  Set<Marker>   get markers   => _markers;
   Set<Polyline> get polylines => _polylines;
 
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
+  // ─── Initialisation ──────────────────────────────────────────────────────
+
   Future<void> initialize() async {
-    debugPrint("MapViewModel: Initializing...");
     _isLoading = true;
     notifyListeners();
     await _getCurrentLocation();
     _isLoading = false;
-    debugPrint("MapViewModel: Ready. Position: ${_currentPosition?.latitude}, ${_currentPosition?.longitude}");
     notifyListeners();
   }
 
@@ -65,9 +76,6 @@ class MapViewModel extends ChangeNotifier {
       }
 
       if (permission == LocationPermission.deniedForever) {
-        // On iOS the first denial is already permanent; on Android the user
-        // ticked "Never ask again". Open OS settings so the user can flip the
-        // toggle — when they return the resume listener re-calls initialize().
         await Geolocator.openAppSettings();
         return;
       }
@@ -76,13 +84,40 @@ class MapViewModel extends ChangeNotifier {
         desiredAccuracy: LocationAccuracy.high,
       );
     } catch (error) {
-      debugPrint("MapViewModel: Error getting location: $error");
+      debugPrint('MapViewModel: Error getting location: $error');
     }
   }
 
+  // ─── Map controller ───────────────────────────────────────────────────────
+
   void onMapCreated(GoogleMapController controller) {
     _mapController = controller;
-    debugPrint("MapViewModel: GoogleMapController set.");
+  }
+
+  /// Called by the GoogleMap widget's onCameraMoveStarted callback.
+  /// Distinguishes user gestures from programmatic moves.
+  void onCameraMoveStarted() {
+    if (_isProgrammaticMove) return; // ignore our own animateCamera calls
+    _isUserInteracting = true;
+    notifyListeners();
+  }
+
+  /// Called by the GoogleMap widget's onCameraIdle callback.
+  /// Clears the programmatic-move guard so the next user gesture is detected.
+  void onCameraIdle() {
+    _isProgrammaticMove = false;
+  }
+
+  /// Re-enables auto-following and snaps the camera back.
+  void recenterCamera() {
+    _isUserInteracting = false;
+    if (_isFollowingDriver && _driverPosition != null) {
+      _animateToPosition(_driverPosition!);
+    } else if (_currentPosition != null) {
+      _animateToPosition(
+          LatLng(_currentPosition!.latitude, _currentPosition!.longitude));
+    }
+    notifyListeners();
   }
 
   Future<Position?> getCurrentUserLocation() async {
@@ -90,10 +125,16 @@ class MapViewModel extends ChangeNotifier {
     return _currentPosition;
   }
 
-  /// Fetches and draws the booking route (origin → destination).
-  /// Used during route preview and vehicle selection steps.
+  // ─── Driver icon ──────────────────────────────────────────────────────────
+
+  /// Set from HomeViewModel after the car-icon asset is loaded.
+  void setDriverIcon(BitmapDescriptor icon) {
+    _driverIcon = icon;
+  }
+
+  // ─── Directions / polylines ───────────────────────────────────────────────
+
   Future<void> getDirections(LatLng origin, LatLng destination) async {
-    debugPrint("MapViewModel: Requesting directions $origin → $destination");
     clearRoute();
     notifyListeners();
 
@@ -110,190 +151,207 @@ class MapViewModel extends ChangeNotifier {
         _moveCameraToRoute(result.polylinePoints);
       } else {
         _directionsResult = null;
-        _errorMessage = "Could not find a route. Please try different locations.";
+        _errorMessage = 'Could not find a route. Please try different locations.';
       }
     } catch (error) {
-      debugPrint("MapViewModel: getDirections error: $error");
+      debugPrint('MapViewModel: getDirections error: $error');
       _directionsResult = null;
-      _errorMessage = "An unexpected error occurred. Please try again.";
+      _errorMessage = 'An unexpected error occurred. Please try again.';
     } finally {
       notifyListeners();
     }
   }
 
   void _setBookingRoutePolyline(List<LatLng> points) {
-    _polylines.removeWhere((polyline) => polyline.polylineId == _bookingRouteId);
+    _polylines.removeWhere((p) => p.polylineId == _bookingRouteId);
     _polylines.add(
       Polyline(
         polylineId: _bookingRouteId,
         points: points,
         color: Colors.blue,
         width: 5,
+        startCap: Cap.roundCap,
+        endCap: Cap.roundCap,
+        jointType: JointType.round,
       ),
     );
   }
 
-  /// Writes the live driver→pickup or driver→destination polyline into
-  /// the shared polylines set so the GoogleMap widget renders it immediately.
+  /// Replaces the live driver-route polyline with [points].
   ///
-  /// Called by ActiveTripViewModel every time the driver moves or the
-  /// ride status changes. Drawing here (not in ActiveTripViewModel) is
-  /// what makes the polyline survive screen navigation — it lives in the
-  /// same object the GoogleMap widget reads from.
+  /// Uses a solid line with round caps so it renders smoothly and doesn't
+  /// flash when redrawn on each GPS tick (dashed lines cause a visible
+  /// phase-reset artifact on every update).
   void setLiveRoutePolyline(List<LatLng> points) {
-    _polylines.removeWhere((polyline) => polyline.polylineId == _liveRouteId);
+    _polylines.removeWhere((p) => p.polylineId == _liveRouteId);
     _polylines.add(
       Polyline(
         polylineId: _liveRouteId,
         points: points,
-        color: Colors.deepOrange,
+        color: const Color(0xFF1565C0), // deep blue — distinct from the azure car marker
         width: 6,
-        patterns: [PatternItem.dash(20), PatternItem.gap(10)],
+        startCap: Cap.roundCap,
+        endCap: Cap.roundCap,
+        jointType: JointType.round,
       ),
     );
     notifyListeners();
   }
 
-  /// Removes only the live route polyline without touching the booking route.
+  /// Removes the live-route polyline without touching the booking route.
   void clearLiveRoute() {
-    _polylines.removeWhere((polyline) => polyline.polylineId == _liveRouteId);
+    _polylines.removeWhere((p) => p.polylineId == _liveRouteId);
+    notifyListeners();
+  }
+
+  /// Removes only the static booking route (origin → destination).
+  /// Call this when the trip becomes ongoing so only the live route is visible.
+  void clearBookingRoute() {
+    _polylines.removeWhere((p) => p.polylineId == _bookingRouteId);
     notifyListeners();
   }
 
   void _addRouteMarkers(LatLng origin, LatLng destination) {
     _markers
-      ..removeWhere((marker) =>
-      marker.markerId == const MarkerId('origin') ||
-          marker.markerId == const MarkerId('destination'))
-      ..add(
-        Marker(
-          markerId: const MarkerId('origin'),
-          position: origin,
-          infoWindow: const InfoWindow(title: 'Pickup'),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-        ),
-      )
-      ..add(
-        Marker(
-          markerId: const MarkerId('destination'),
-          position: destination,
-          infoWindow: const InfoWindow(title: 'Destination'),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-        ),
-      );
+      ..removeWhere((m) =>
+          m.markerId == const MarkerId('origin') ||
+          m.markerId == const MarkerId('destination'))
+      ..add(Marker(
+        markerId: const MarkerId('origin'),
+        position: origin,
+        infoWindow: const InfoWindow(title: 'Pickup'),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+      ))
+      ..add(Marker(
+        markerId: const MarkerId('destination'),
+        position: destination,
+        infoWindow: const InfoWindow(title: 'Destination'),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+      ));
   }
 
   void _moveCameraToRoute(List<LatLng> points) {
     if (_mapController == null || points.isEmpty) return;
     final bounds = _createBounds(points);
+    _isProgrammaticMove = true;
     _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100.0));
   }
 
   LatLngBounds _createBounds(List<LatLng> positions) {
     double? minLat, maxLat, minLon, maxLon;
-    for (final position in positions) {
-      if (minLat == null || position.latitude < minLat) minLat = position.latitude;
-      if (maxLat == null || position.latitude > maxLat) maxLat = position.latitude;
-      if (minLon == null || position.longitude < minLon) minLon = position.longitude;
-      if (maxLon == null || position.longitude > maxLon) maxLon = position.longitude;
+    for (final p in positions) {
+      if (minLat == null || p.latitude < minLat) minLat = p.latitude;
+      if (maxLat == null || p.latitude > maxLat) maxLat = p.latitude;
+      if (minLon == null || p.longitude < minLon) minLon = p.longitude;
+      if (maxLon == null || p.longitude > maxLon) maxLon = p.longitude;
     }
-    if (minLat == null || maxLat == null || minLon == null || maxLon == null) {
+    if (minLat == null) {
       return LatLngBounds(
-        southwest: const LatLng(0, 0),
-        northeast: const LatLng(0.1, 0.1),
-      );
+          southwest: const LatLng(0, 0), northeast: const LatLng(0.1, 0.1));
     }
     return LatLngBounds(
-      southwest: LatLng(minLat, minLon),
-      northeast: LatLng(maxLat, maxLon),
+      southwest: LatLng(minLat, minLon!),
+      northeast: LatLng(maxLat!, maxLon!),
     );
   }
 
-  /// Clears everything — both polylines, all markers, stops driver following.
-  /// Only call this on full ride reset (back to HomeStep.initial).
   void clearRoute() {
     _polylines.clear();
     _directionsResult = null;
     _errorMessage = null;
-    _markers.removeWhere((marker) =>
-    marker.markerId == const MarkerId('origin') ||
-        marker.markerId == const MarkerId('destination'));
+    _markers.removeWhere((m) =>
+        m.markerId == const MarkerId('origin') ||
+        m.markerId == const MarkerId('destination'));
     stopFollowingDriver();
   }
 
-  /// Starts following a driver via a LatLng stream.
-  /// Used by HomeViewModel the moment a ride is accepted.
+  // ─── Driver following ─────────────────────────────────────────────────────
+
+  /// Subscribes to [driverLocationStream] and follows the driver.
   void startFollowingDriver(Stream<LatLng> driverLocationStream) {
     _driverStreamSubscription?.cancel();
     _isFollowingDriver = true;
     notifyListeners();
 
     _driverStreamSubscription = driverLocationStream.listen(
-          (newPosition) {
-        updateDriverPosition(newPosition);
-      },
-      onError: (error) {
-        debugPrint("MapViewModel: Driver stream error: $error");
-      },
+      (pos) => updateDriverPosition(pos),
+      onError: (e) => debugPrint('MapViewModel: Driver stream error: $e'),
     );
   }
 
-  /// Updates the driver marker on the map and moves the camera to follow.
-  /// Also called directly by ActiveTripViewModel on each driver location tick.
-  void updateDriverPosition(LatLng newPosition) {
+  /// Enables camera-following without opening a new Firestore subscription.
+  /// Use when another component already manages driver-position updates.
+  void enableFollowing() {
+    _isFollowingDriver = true;
+  }
+
+  /// Updates the driver marker and, if following is active, moves the camera.
+  ///
+  /// [heading] rotates the marker to match the driver's bearing so the car
+  /// icon always faces the direction of travel.
+  void updateDriverPosition(LatLng newPosition, {double heading = 0.0}) {
     _driverPosition = newPosition;
 
-    _markers.removeWhere((marker) => marker.markerId == _driverMarkerId);
+    _markers.removeWhere((m) => m.markerId == _driverMarkerId);
     _markers.add(
       Marker(
         markerId: _driverMarkerId,
         position: newPosition,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        icon: _driverIcon ??
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        rotation: heading,
         anchor: const Offset(0.5, 0.5),
         flat: true,
         infoWindow: const InfoWindow(title: 'Your Driver'),
       ),
     );
 
-    // Move camera center only — does not reset the user's zoom level.
-    if (_isFollowingDriver && _mapController != null) {
-      _mapController!.animateCamera(CameraUpdate.newLatLng(newPosition));
+    // Move camera only when following is active AND the user hasn't manually
+    // panned the map (pausing auto-follow until they tap re-center).
+    if (_isFollowingDriver && !_isUserInteracting && _mapController != null) {
+      _animateToPosition(newPosition);
     }
 
     notifyListeners();
   }
 
-  /// Stops following the driver and removes the driver marker from the map.
   void stopFollowingDriver() {
     _driverStreamSubscription?.cancel();
     _driverStreamSubscription = null;
     _isFollowingDriver = false;
+    _isUserInteracting = false;
     _driverPosition = null;
-    _markers.removeWhere((marker) => marker.markerId == _driverMarkerId);
+    _markers.removeWhere((m) => m.markerId == _driverMarkerId);
   }
 
-  /// Fits both driver and destination into the camera view.
-  /// Useful during an ongoing trip so the passenger can see progress.
-  Future<void> fitDriverAndDestination(LatLng driverLocation, LatLng destination) async {
+  // ─── Camera helpers ───────────────────────────────────────────────────────
+
+  /// Smoothly moves the camera to [position] without changing zoom.
+  void animateCameraToPosition(LatLng position) {
+    if (_isUserInteracting) return; // don't fight the user
+    _animateToPosition(position);
+  }
+
+  Future<void> fitDriverAndDestination(
+      LatLng driverLocation, LatLng destination) async {
     if (_mapController == null) return;
-
-    final bounds = LatLngBounds(
-      southwest: LatLng(
-        driverLocation.latitude < destination.latitude ? driverLocation.latitude : destination.latitude,
-        driverLocation.longitude < destination.longitude ? driverLocation.longitude : destination.longitude,
-      ),
-      northeast: LatLng(
-        driverLocation.latitude > destination.latitude ? driverLocation.latitude : destination.latitude,
-        driverLocation.longitude > destination.longitude ? driverLocation.longitude : destination.longitude,
-      ),
-    );
-
-    await _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
+    final bounds = _createBounds([driverLocation, destination]);
+    _isProgrammaticMove = true;
+    await _mapController!
+        .animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
   }
+
+  // Internal helper — always fires the camera move and marks it as programmatic.
+  void _animateToPosition(LatLng position) {
+    if (_mapController == null) return;
+    _isProgrammaticMove = true;
+    _mapController!.animateCamera(CameraUpdate.newLatLng(position));
+  }
+
+  // ─── Dispose ─────────────────────────────────────────────────────────────
 
   @override
   void dispose() {
-    debugPrint("MapViewModel: Disposing.");
     _driverStreamSubscription?.cancel();
     _mapController?.dispose();
     super.dispose();

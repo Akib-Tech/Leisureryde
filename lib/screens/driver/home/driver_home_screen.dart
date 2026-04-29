@@ -47,7 +47,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
 
   void _onViewModelChanged() {
     if (!mounted) return;
-    final vm = context.read<DriverHomeViewModel>();
+    final vm = _vm;
+    if (vm == null) return;
 
     WakelockPlus.toggle(enable: vm.isOnline);
 
@@ -167,7 +168,20 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
                         )
                       : _buildOnlineStatusCard(context, viewModel)
                 else
-                  _buildOfflineCard(context, viewModel)
+                  _buildOfflineCard(context, viewModel),
+                if (viewModel.mapViewModel.isUserInteracting &&
+                    viewModel.activeRide != null)
+                  Positioned(
+                    bottom: _isActiveSheetCollapsed ? 120 : 440,
+                    right: 16,
+                    child: FloatingActionButton.small(
+                      heroTag: 'driver_recenter',
+                      onPressed: viewModel.mapViewModel.recenterCamera,
+                      backgroundColor: Colors.white,
+                      child: const Icon(Icons.my_location,
+                          color: Colors.black87),
+                    ),
+                  ),
               ],
             );
           },
@@ -197,6 +211,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
         zoom: 15.0,
       ),
       onMapCreated: viewModel.mapViewModel.onMapCreated,
+      onCameraMoveStarted: viewModel.mapViewModel.onCameraMoveStarted,
+      onCameraIdle: viewModel.mapViewModel.onCameraIdle,
       myLocationEnabled: true,
       myLocationButtonEnabled: false,
       zoomControlsEnabled: false,

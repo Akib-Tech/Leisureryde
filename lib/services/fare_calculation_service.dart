@@ -8,7 +8,7 @@ class FareCalculationService {
   static const double _minTripEarnings = 6.50;
 
   static const double taxRate = 0.07;
-  static const double driverShareRate = 0.30;
+  static const double driverShareRate = 0.55;
 
   /// Pre-tax amount from a total that already includes 7% tax.
   static double subtotalFromTotal(double total) => total / (1 + taxRate);
@@ -16,7 +16,7 @@ class FareCalculationService {
   /// Tax portion of a total that already includes 7% tax.
   static double taxFromTotal(double total) => total - subtotalFromTotal(total);
 
-  /// Driver's 30% share of the total fare.
+  /// Driver's 55% share of the total fare.
   static double driverEarnings(double total) => total * driverShareRate;
 
   // Vehicle type multipliers - optimized for Uber-like pricing
@@ -34,10 +34,10 @@ class FareCalculationService {
         (durationInMinutes * _perMinute) +
         _bookingFee;
 
-    // Calculate fare for each vehicle type
-    double comfortFare = (standardFare * _leisureComfortMultiplier) + (0.07 * (standardFare * _leisureComfortMultiplier));
-    double plusFare = standardFare * _leisurePlusMultiplier  + (0.07 * (standardFare * _leisurePlusMultiplier));
-    double execFare = standardFare * _leisureExecMultiplier + (0.07 * (standardFare * _leisureExecMultiplier));
+    // Calculate fare for each vehicle type (total includes tax)
+    double comfortFare = standardFare * _leisureComfortMultiplier * (1 + taxRate);
+    double plusFare = standardFare * _leisurePlusMultiplier * (1 + taxRate);
+    double execFare = standardFare * _leisureExecMultiplier * (1 + taxRate);
 
     return CalculatedFare(
       leisureComfort: max(comfortFare, _minTripEarnings),

@@ -31,28 +31,35 @@ exports.notifyDriversOfNewRide = onDocumentCreated("rideRequests/{rideId}",
                        `Pickup: ${rideRequest.pickupAddress}`;
       console.log(logMessage);
 
+      // No top-level 'notification' field on Android → treated as a data-only
+      // message, so onBackgroundMessage fires and can show a properly grouped
+      // local notification instead of the OS displaying each one separately.
+      // iOS still gets a visible alert via the apns.payload.aps.alert field.
       const message = {
         topic: "online_drivers",
-        notification: {
-          title: "New Ride Request!",
-          body: `Pickup from: ${rideRequest.pickupAddress}`,
-        },
-        android: {
-          priority: "high",
-          notification: {
-            channelId: "default_channel",
-            sound: "default",
-            priority: "high",
-          },
-        },
+        android: {priority: "high"},
         apns: {
+          headers: {
+            "apns-push-type": "alert",
+            "apns-priority": "10",
+          },
           payload: {
-            aps: {sound: "default"},
+            aps: {
+              alert: {
+                title: "New Ride Request!",
+                body: `Pickup from: ${rideRequest.pickupAddress}`,
+              },
+              sound: "default",
+              contentAvailable: true,
+            },
           },
         },
         data: {
           click_action: "FLUTTER_NOTIFICATION_CLICK",
           rideId: rideId,
+          type: "ride_request",
+          title: "New Ride Request!",
+          body: `Pickup from: ${rideRequest.pickupAddress}`,
         },
       };
 
@@ -69,7 +76,57 @@ exports.notifyDriversOfNewRide = onDocumentCreated("rideRequests/{rideId}",
     });
 
 // =============================================================================
-// FUNCTION 2: CREATE STRIPE CHECKOUT SESSION (v2 Syntax)
+// FUNCTION 2: NOTIFY ON NEW CHAT MESSAGE (v2 Syntax)
+// =============================================================================
+exports.notifyOnNewChatMessage = onDocumentCreated(
+    "chats/{rideId}/messages/{messageId}",
+    async (event) => {
+      const snapshot = event.data;
+      if (!snapshot) return;
+
+      const msg = snapshot.data();
+      const receiverId = msg.receiverId;
+      const senderName = msg.senderName || "Your driver/passenger";
+      const text = msg.text || "New message";
+
+      if (!receiverId) return;
+
+      const message = {
+        topic: `user_${receiverId}`,
+        notification: {
+          title: senderName,
+          body: text.length > 100 ? text.substring(0, 97) + "..." : text,
+        },
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "default_channel",
+            sound: "default",
+            priority: "high",
+          },
+        },
+        apns: {
+          payload: {
+            aps: {sound: "default"},
+          },
+        },
+        data: {
+          click_action: "FLUTTER_NOTIFICATION_CLICK",
+          type: "chat",
+          rideId: event.params.rideId,
+        },
+      };
+
+      try {
+        const response = await admin.messaging().send(message);
+        console.log("Chat notification sent:", response);
+      } catch (error) {
+        console.error("Error sending chat notification:", error);
+      }
+    });
+
+// =============================================================================
+// FUNCTION 3: CREATE STRIPE CHECKOUT SESSION (v2 Syntax)
 // =============================================================================
 exports.createStripeCheckout = onCall(async (request) => {
   if (!request.auth) {
@@ -125,7 +182,7 @@ exports.createStripeCheckout = onCall(async (request) => {
 });
 
 // =============================================================================
-// FUNCTION 3: STRIPE WEBHOOK LISTENER (v2 Syntax)
+// FUNCTION 4: STRIPE WEBHOOK LISTENER (v2 Syntax)
 // =============================================================================
 exports.stripeWebhook = onRequest(async (req, res) => {
   const sig = req.headers["stripe-signature"];

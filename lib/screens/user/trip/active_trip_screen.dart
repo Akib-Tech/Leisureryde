@@ -261,20 +261,28 @@ class _ActiveTripCardState extends State<ActiveTripCard>
                                 IconButton(
                                   icon: const Icon(Icons.chat,
                                       color: Colors.blue),
-                                  onPressed: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => ChatScreen(
-                                        rideId: widget.rideId,
-                                        otherUserId:
-                                            viewModel.driverProfile!.uid,
-                                        otherUserName: viewModel
-                                            .driverProfile!.fullName,
-                                        otherUserImageUrl: viewModel
-                                            .driverProfile!.profileImageUrl,
+                                  onPressed: () {
+                                    final userName = context
+                                            .read<HomeViewModel>()
+                                            .userProfile
+                                            ?.fullName ??
+                                        '';
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ChatScreen(
+                                          rideId: widget.rideId,
+                                          otherUserId:
+                                              viewModel.driverProfile!.uid,
+                                          otherUserName: viewModel
+                                              .driverProfile!.fullName,
+                                          otherUserImageUrl: viewModel
+                                              .driverProfile!.profileImageUrl,
+                                          currentUserName: userName,
+                                        ),
                                       ),
-                                    ),
-                                  ),
+                                    );
+                                  },
                                 ),
                               ],
                             ),
@@ -303,33 +311,12 @@ class _ActiveTripCardState extends State<ActiveTripCard>
                         if (rideRequest.status == RideStatus.ongoing) ...[
                           const SizedBox(height: 16),
                           TripEndTimer(
+                            origin: rideRequest.pickupLocation,
                             destination: rideRequest.destinationLocation,
-                            driverLocationStream:
-                                viewModel.driverLatLngStream,
                           ),
                         ],
 
                         const SizedBox(height: 16),
-
-                        // Cancel allowed while driver hasn't started the trip
-                        if (rideRequest.status == RideStatus.pending ||
-                            rideRequest.status == RideStatus.accepted)
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.red,
-                              side: const BorderSide(color: Colors.red),
-                              minimumSize: const Size(double.infinity, 48),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            onPressed: () => viewModel.cancelTrip(),
-                            icon: const Icon(Icons.cancel_outlined),
-                            label: const Text(
-                              "Cancel Ride",
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
                       ],
                     ),
                   ),

@@ -107,17 +107,13 @@ class DatabaseService {
       if (!snapshot.exists) {
         throw Exception('Driver location document not found');
       }
-
       final data = snapshot.data() as Map<String, dynamic>? ?? {};
-
-      // Adjust field names according to how you store location in Firestore
-      final geoPoint = LatLng(data["latitude"],data["longitude"]);
-
-      if (geoPoint == null) {
+      final lat = (data["latitude"] as num?)?.toDouble();
+      final lng = (data["longitude"] as num?)?.toDouble();
+      if (lat == null || lng == null) {
         throw Exception('Location field missing in driver document');
       }
-
-      return LatLng(geoPoint.latitude, geoPoint.longitude);
+      return LatLng(lat, lng);
     });
   }
 
@@ -240,6 +236,16 @@ class DatabaseService {
     }
   }
 
+  Stream<List<RideRequest>> getUpcomingRidesStream(String uid) {
+    return _db
+        .collection('rideRequests')
+        .where('userId', isEqualTo: uid)
+        .where('status', whereIn: ['pending', 'accepted', 'enroute', 'ongoing'])
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => RideRequest.fromFirestore(d)).toList());
+  }
+
   Future<List<RideRequest>> getPastRides(String uid) async {
     try {
       final snapshot = await _db
@@ -254,6 +260,17 @@ class DatabaseService {
     } catch (e) {
       return [];
     }
+  }
+
+  Stream<List<RideRequest>> getPastRidesStream(String uid) {
+    return _db
+        .collection('rideRequests')
+        .where('userId', isEqualTo: uid)
+        .where('status', whereIn: ['completed', 'cancelled'])
+        .orderBy('createdAt', descending: true)
+        .limit(20)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => RideRequest.fromFirestore(d)).toList());
   }
 
   Future<String?> getCurrentRide(String uid) async {

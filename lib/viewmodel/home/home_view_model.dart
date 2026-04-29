@@ -139,8 +139,8 @@ class HomeViewModel extends ChangeNotifier {
       // If Firestore finds nothing, fall back to SharedPreferences rideId
       // to handle the edge case where Firestore is slow.
       await _checkForActiveRide();
-    } catch (error) {
-      debugPrint("Error initializing HomeViewModel: $error");
+    } catch (error, stack) {
+      debugPrint("Error initializing HomeViewModel: $error\n$stack");
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -153,6 +153,7 @@ class HomeViewModel extends ChangeNotifier {
 
   Future<void> _initializeIcons() async {
     _greenCarIcon = await getMarkerIcon('assets/icons/bluecar.png', 96);
+    mapViewModel.setDriverIcon(_greenCarIcon!);
   }
 
   void _onPaymentStateChanged() {
@@ -435,9 +436,16 @@ class HomeViewModel extends ChangeNotifier {
             _currentStep = HomeStep.activeTrip;
             _rideId = rideId;
 
-            final String? driverId = data['driverId'];
-            final driverLocationStream = _db.getDriverLatLngStream(driverId);
-            mapViewModel.startFollowingDriver(driverLocationStream);
+            // Stop showing all online drivers — the assigned driver will be
+            // tracked individually by ActiveTripViewModel via updateDriverPosition.
+            _driverSub?.cancel();
+            _driverMarkers.clear();
+
+            // Enable camera-following without opening a second Firestore listener.
+            // ActiveTripViewModel already subscribes to drivers/{id} and calls
+            // mapViewModel.updateDriverPosition() on every GPS tick; that method
+            // checks _isFollowingDriver to decide whether to move the camera.
+            mapViewModel.enableFollowing();
 
             // Safe notify — schedule after current build frame completes.
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -467,7 +475,9 @@ class HomeViewModel extends ChangeNotifier {
     mapViewModel.clearRoute();
     _currentStep = HomeStep.initial;
     _paymentViewModel.resetPayment();
-    _saveRideId(null); // Clear persisted rideId
+    _saveRideId(null);
+    // Resume showing nearby drivers now that no trip is active.
+    _listenToOnlineDrivers();
     if (!_isDisposed) notifyListeners();
   }
 
@@ -516,6 +526,13 @@ class HomeViewModel extends ChangeNotifier {
   /// Called when the app comes back from background or the user returns to this screen.
   Future<void> refreshOnScreenResume() async {
     debugPrint("🔄 refreshOnScreenResume() called");
+
+    // If the profile never loaded (auth wasn't ready or network failed on startup),
+    // retry the full initialization before doing anything else.
+    if (_userProfile == null) {
+      await _initialize();
+      return;
+    }
 
     // Re-initialize the map when the user returns from OS Settings after
     // granting location permission (currentPosition will be null until then).

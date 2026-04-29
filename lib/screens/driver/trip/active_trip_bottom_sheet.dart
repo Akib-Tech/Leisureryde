@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:leisureryde/screens/shared/timer/timer.dart';
 import 'package:provider/provider.dart';
 import '../../../models/ride_request_model.dart';
+import '../../../viewmodel/home/driver_home_view_model.dart';
 import '../../../viewmodel/ride/active_trip_driver_view_model.dart';
 import '../../../widgets/custom_loading_indicator.dart';
 import '../../shared/chat/chat_screen.dart';
@@ -252,18 +253,26 @@ class _ActiveTripDriverBottomSheetState
                                 IconButton(
                                   icon: const Icon(Icons.chat,
                                       color: Colors.blue),
-                                  onPressed: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => ChatScreen(
-                                        rideId: widget.rideId,
-                                        otherUserId: passenger.uid,
-                                        otherUserName: passenger.fullName,
-                                        otherUserImageUrl:
-                                            passenger.profileImageUrl,
+                                  onPressed: () {
+                                    final driverName = context
+                                            .read<DriverHomeViewModel>()
+                                            .driverProfile
+                                            ?.fullName ??
+                                        '';
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ChatScreen(
+                                          rideId: widget.rideId,
+                                          otherUserId: passenger.uid,
+                                          otherUserName: passenger.fullName,
+                                          otherUserImageUrl:
+                                              passenger.profileImageUrl,
+                                          currentUserName: driverName,
+                                        ),
                                       ),
-                                    ),
-                                  ),
+                                    );
+                                  },
                                 ),
                               ],
                             ),
@@ -273,8 +282,8 @@ class _ActiveTripDriverBottomSheetState
                           if (vm.rideRequest!.status == RideStatus.ongoing) ...[
                             const SizedBox(height: 12),
                             TripEndTimer(
+                              origin: vm.rideRequest!.pickupLocation,
                               destination: vm.userDestination,
-                              driverLocationStream: vm.driverLoc,
                             ),
                           ],
 

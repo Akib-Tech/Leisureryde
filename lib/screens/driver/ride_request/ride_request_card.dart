@@ -99,7 +99,7 @@ class _RideRequestCardState extends State<RideRequestCard> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '${(widget.request.distance / 1000).toStringAsFixed(1)} km',
+                '${(widget.request.distance * 0.621371).toStringAsFixed(1)} mi',
                 style: theme.textTheme.titleMedium,
               ),
               Text(

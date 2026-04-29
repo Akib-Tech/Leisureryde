@@ -8,14 +8,10 @@ import 'package:leisureryde/services/database_service.dart';
 
 import '../../models/ride_request_model.dart';
 
-
-
 class ActivityViewModel extends ChangeNotifier {
-  // Services
   final AuthService _authService = locator<AuthService>();
   final DatabaseService _databaseService = locator<DatabaseService>();
 
-  // State Properties
   bool _isLoading = true;
   bool get isLoading => _isLoading;
 
@@ -25,14 +21,14 @@ class ActivityViewModel extends ChangeNotifier {
   List<RideRequest> _pastRides = [];
   List<RideRequest> get pastRides => _pastRides;
 
-  // ✨ FIX 1: The constructor is now simple and correct for this ViewModel.
-  // It takes no parameters.
+  StreamSubscription<List<RideRequest>>? _upcomingSub;
+  StreamSubscription<List<RideRequest>>? _pastSub;
+
   ActivityViewModel() {
-    _fetchRides();
+    _subscribeToRides();
   }
 
-  // ✨ FIX 2: This is the ONLY logic that should be in this file.
-  Future<void> _fetchRides() async {
+  void _subscribeToRides() {
     final uid = _authService.currentUser?.uid;
     if (uid == null) {
       _isLoading = false;
@@ -40,18 +36,35 @@ class ActivityViewModel extends ChangeNotifier {
       return;
     }
 
-    try {
-      // Fetch both lists in parallel for better performance
-      final results = await Future.wait([
-        _databaseService.getUpcomingRides(uid),
-        _databaseService.getPastRides(uid),
-      ]);
-      _upcomingRides = results[0];
-      _pastRides = results[1];
-    } catch (e) {
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+    _upcomingSub = _databaseService.getUpcomingRidesStream(uid).listen(
+      (rides) {
+        _upcomingRides = rides;
+        _isLoading = false;
+        notifyListeners();
+      },
+      onError: (_) {
+        _isLoading = false;
+        notifyListeners();
+      },
+    );
+
+    _pastSub = _databaseService.getPastRidesStream(uid).listen(
+      (rides) {
+        _pastRides = rides;
+        _isLoading = false;
+        notifyListeners();
+      },
+      onError: (_) {
+        _isLoading = false;
+        notifyListeners();
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _upcomingSub?.cancel();
+    _pastSub?.cancel();
+    super.dispose();
   }
 }

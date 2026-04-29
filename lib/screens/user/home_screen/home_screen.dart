@@ -28,6 +28,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _showingCancelDialog = false;
   bool _showingRatingDialog = false;
   bool _isActiveTripCardCollapsed = false;
+  HomeViewModel? _vm;
 
   @override
   void initState() {
@@ -40,17 +41,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.didChangeDependencies();
     if (!_didScheduleInitialRefresh) {
       _didScheduleInitialRefresh = true;
-      context.read<HomeViewModel>().addListener(_onViewModelChanged);
+      _vm = context.read<HomeViewModel>();
+      _vm!.addListener(_onViewModelChanged);
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
-        await context.read<HomeViewModel>().refreshOnScreenResume();
+        await _vm!.refreshOnScreenResume();
       });
     }
   }
 
   void _onViewModelChanged() {
     if (!mounted) return;
-    final vm = context.read<HomeViewModel>();
+    final vm = _vm;
+    if (vm == null) return;
 
     if (vm.cancelledByDriver && !_showingCancelDialog) {
       _showingCancelDialog = true;
@@ -117,13 +120,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
-      context.read<HomeViewModel>().refreshOnScreenResume();
+      _vm?.refreshOnScreenResume();
     }
   }
 
   @override
   void dispose() {
-    context.read<HomeViewModel>().removeListener(_onViewModelChanged);
+    _vm?.removeListener(_onViewModelChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -141,7 +144,35 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               return const CustomLoadingIndicator();
             }
             if (viewModel.userProfile == null) {
-              return const Center(child: Text("Could not load user profile."));
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.person_off, size: 64, color: Colors.grey),
+                      const SizedBox(height: 16),
+                      const Text(
+                        "Could not load your profile",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "Check your connection and try again.",
+                        style: TextStyle(color: Colors.grey[600]),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: () => viewModel.refresh(),
+                        icon: const Icon(Icons.refresh),
+                        label: const Text("Retry"),
+                      ),
+                    ],
+                  ),
+                ),
+              );
             }
             if (viewModel.mapViewModel.currentPosition == null) {
               return _buildLocationError(context, viewModel);
@@ -150,6 +181,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               children: [
                 _buildMap(context, viewModel),
                 _buildHeader(context, viewModel.userProfile!),
+                if (viewModel.mapViewModel.isUserInteracting &&
+                    viewModel.currentStep == HomeStep.activeTrip)
+                  Positioned(
+                    bottom: _isActiveTripCardCollapsed ? 110 : 400,
+                    right: 16,
+                    child: FloatingActionButton.small(
+                      heroTag: 'user_recenter',
+                      onPressed: viewModel.mapViewModel.recenterCamera,
+                      backgroundColor: Colors.white,
+                      child: const Icon(Icons.my_location,
+                          color: Colors.black87),
+                    ),
+                  ),
                 Positioned(
                   bottom: 0,
                   left: 0,
@@ -219,6 +263,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         zoom: 15.0,
       ),
       onMapCreated: viewModel.mapViewModel.onMapCreated,
+      onCameraMoveStarted: viewModel.mapViewModel.onCameraMoveStarted,
+      onCameraIdle: viewModel.mapViewModel.onCameraIdle,
       myLocationEnabled: true,
       myLocationButtonEnabled: false,
       zoomControlsEnabled: false,
@@ -304,7 +350,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       case HomeStep.payment:
         return _buildPaymentCardContent(context, viewModel);
       case HomeStep.findingDriver:
-        return FindingDriverCard(key: const ValueKey(HomeStep.findingDriver), onCancel: viewModel.cancelRide);
+        return const FindingDriverCard(key: ValueKey(HomeStep.findingDriver));
       case HomeStep.activeTrip:
         debugPrint("Page already in active trip mode");
         return ActiveTripCard(
@@ -561,6 +607,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             _buildVehicleOption(context, icon: Icons.airport_shuttle, title: "Leisure Plus", subtitle: "Extra space, premium rides", price: fare.leisurePlus, isSelected: viewModel.selectedVehicle == 'Leisure Plus', onTap: () => viewModel.selectVehicle('Leisure Plus')),
             const Divider(),
             _buildVehicleOption(context, icon: Icons.local_taxi, title: "Leisure Exec", subtitle: "Luxury cars, top-rated drivers", price: fare.leisureExec, isSelected: viewModel.selectedVehicle == 'Leisure Exec', onTap: () => viewModel.selectVehicle('Leisure Exec')),
+            if (viewModel.selectedVehicle != null) ...[
+              const SizedBox(height: 12),
+              Builder(builder: (context) {
+                final selectedFare = fare.getFareForVehicle(viewModel.selectedVehicle!);
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: theme.primaryColor.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: theme.primaryColor.withOpacity(0.2)),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildPaymentDetailRow(theme, "Subtotal", "\$${FareCalculationService.subtotalFromTotal(selectedFare).toStringAsFixed(2)}"),
+                      const SizedBox(height: 6),
+                      _buildPaymentDetailRow(theme, "Tax (7%)", "\$${FareCalculationService.taxFromTotal(selectedFare).toStringAsFixed(2)}"),
+                      const Divider(height: 16),
+                      _buildPaymentDetailRow(theme, "Total", "\$${selectedFare.toStringAsFixed(2)}", isBold: true),
+                    ],
+                  ),
+                );
+              }),
+            ],
             const SizedBox(height: 20),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -744,13 +813,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildVehicleOption(BuildContext context, {required IconData icon, required String title, required String subtitle, required double price, required bool isSelected, required VoidCallback onTap}) {
     final theme = Theme.of(context);
+    final subtotal = FareCalculationService.subtotalFromTotal(price);
+    final tax = FareCalculationService.taxFromTotal(price);
     return ListTile(
       onTap: onTap,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       tileColor: isSelected ? theme.primaryColor.withOpacity(0.1) : null,
       leading: Icon(icon, size: 40, color: theme.primaryColor),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(subtitle, style: theme.textTheme.bodySmall),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(subtitle, style: theme.textTheme.bodySmall),
+          Text(
+            "\$${subtotal.toStringAsFixed(2)} + \$${tax.toStringAsFixed(2)} tax",
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[500], fontSize: 11),
+          ),
+        ],
+      ),
       trailing: Text("\$${price.toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
     );
   }
