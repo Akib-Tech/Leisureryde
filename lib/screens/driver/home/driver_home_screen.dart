@@ -182,6 +182,26 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
                           color: Colors.black87),
                     ),
                   ),
+                if (viewModel.activeRide != null)
+                  Positioned(
+                    bottom: _isActiveSheetCollapsed ? 174 : 494,
+                    right: 16,
+                    child: FloatingActionButton.small(
+                      heroTag: 'driver_voice',
+                      onPressed: viewModel.toggleVoice,
+                      backgroundColor: viewModel.voiceEnabled
+                          ? Colors.blue
+                          : Colors.white,
+                      child: Icon(
+                        viewModel.voiceEnabled
+                            ? Icons.volume_up
+                            : Icons.volume_off,
+                        color: viewModel.voiceEnabled
+                            ? Colors.white
+                            : Colors.black54,
+                      ),
+                    ),
+                  ),
               ],
             );
           },
@@ -330,6 +350,17 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Tooltip(
+                    message: 'Test voice',
+                    child: IconButton(
+                      icon: const Icon(Icons.record_voice_over, size: 22),
+                      color: Colors.blue,
+                      onPressed: viewModel.testVoice,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                     ),
                   ),
                 ],

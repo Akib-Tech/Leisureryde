@@ -1,5 +1,6 @@
 // --- Imports ---
-const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+const {onDocumentCreated, onDocumentUpdated} =
+  require("firebase-functions/v2/firestore");
 const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
 const {defineString} = require("firebase-functions/params");
 const admin = require("firebase-admin");
@@ -50,7 +51,6 @@ exports.notifyDriversOfNewRide = onDocumentCreated("rideRequests/{rideId}",
                 body: `Pickup from: ${rideRequest.pickupAddress}`,
               },
               sound: "default",
-              contentAvailable: true,
             },
           },
         },
@@ -126,7 +126,90 @@ exports.notifyOnNewChatMessage = onDocumentCreated(
     });
 
 // =============================================================================
-// FUNCTION 3: CREATE STRIPE CHECKOUT SESSION (v2 Syntax)
+// FUNCTION 3: NOTIFY PASSENGER OF RIDE STATUS CHANGES (v2 Syntax)
+// =============================================================================
+exports.notifyPassengerOfRideStatusChange = onDocumentUpdated(
+    "rideRequests/{rideId}",
+    async (event) => {
+      const before = event.data.before.data();
+      const after = event.data.after.data();
+
+      if (before.status === after.status) return;
+
+      const passengerId = after.passengerId;
+      if (!passengerId) return;
+
+      let title; let body;
+      switch (after.status) {
+        case "accepted":
+          title = "Driver Found!";
+          body = "Your driver is on the way to pick you up.";
+          break;
+        case "enroute":
+          title = "Driver Arriving!";
+          body = "Your driver is at your pickup location.";
+          break;
+        case "ongoing":
+          title = "Trip Started";
+          body = `Your trip to ${after.destinationAddress} has begun.`;
+          break;
+        case "completed":
+          title = "Trip Completed";
+          body = "You have arrived. Thanks for riding with LeisureRyde!";
+          break;
+        case "cancelled_by_driver":
+          title = "Ride Cancelled";
+          body = "Your driver has cancelled the ride.";
+          break;
+        case "cancelled":
+          title = "Ride Cancelled";
+          body = "Your ride has been cancelled.";
+          break;
+        default:
+          return;
+      }
+
+      const message = {
+        topic: `user_${passengerId}`,
+        notification: {title, body},
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "default_channel",
+            sound: "default",
+            priority: "high",
+          },
+        },
+        apns: {
+          headers: {
+            "apns-push-type": "alert",
+            "apns-priority": "10",
+          },
+          payload: {
+            aps: {
+              alert: {title, body},
+              sound: "default",
+            },
+          },
+        },
+        data: {
+          click_action: "FLUTTER_NOTIFICATION_CLICK",
+          type: "ride_status",
+          rideId: event.params.rideId,
+          status: after.status,
+        },
+      };
+
+      try {
+        const response = await admin.messaging().send(message);
+        console.log(`Passenger notified — status: ${after.status}:`, response);
+      } catch (error) {
+        console.error("Error sending passenger notification:", error);
+      }
+    });
+
+// =============================================================================
+// FUNCTION 5: CREATE STRIPE CHECKOUT SESSION (v2 Syntax)
 // =============================================================================
 exports.createStripeCheckout = onCall(async (request) => {
   if (!request.auth) {
@@ -182,7 +265,7 @@ exports.createStripeCheckout = onCall(async (request) => {
 });
 
 // =============================================================================
-// FUNCTION 4: STRIPE WEBHOOK LISTENER (v2 Syntax)
+// FUNCTION 6: STRIPE WEBHOOK LISTENER (v2 Syntax)
 // =============================================================================
 exports.stripeWebhook = onRequest(async (req, res) => {
   const sig = req.headers["stripe-signature"];

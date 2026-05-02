@@ -121,6 +121,26 @@ class _ActiveTripCardState extends State<ActiveTripCard>
                               ),
                             ),
                             const Spacer(),
+                            Consumer<HomeViewModel>(
+                              builder: (ctx, hvm, _) => IconButton(
+                                icon: Icon(
+                                  hvm.voiceEnabled
+                                      ? Icons.volume_up
+                                      : Icons.volume_off,
+                                  size: 20,
+                                  color: hvm.voiceEnabled
+                                      ? Theme.of(ctx).primaryColor
+                                      : Colors.grey[400],
+                                ),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: hvm.toggleVoice,
+                                tooltip: hvm.voiceEnabled
+                                    ? 'Mute voice'
+                                    : 'Unmute voice',
+                              ),
+                            ),
+                            const SizedBox(width: 8),
                             Icon(
                               _isCollapsed
                                   ? Icons.keyboard_arrow_up

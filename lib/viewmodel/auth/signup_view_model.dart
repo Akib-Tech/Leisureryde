@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:leisureryde/app/service_locator.dart';
 import 'package:leisureryde/screens/shared/main_screen/main_screen.dart';
@@ -21,6 +22,12 @@ class SignupViewModel extends ChangeNotifier {
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController confirmPasswordController = TextEditingController();
 
+  // Bank details (driver only)
+  final TextEditingController bankAccountNameController = TextEditingController();
+  final TextEditingController bankNameController = TextEditingController();
+  final TextEditingController accountNumberController = TextEditingController();
+  final TextEditingController bankCodeController = TextEditingController();
+
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
@@ -30,6 +37,35 @@ class SignupViewModel extends ChangeNotifier {
   void togglePasswordVisibility() {
     _isPasswordVisible = !_isPasswordVisible;
     notifyListeners();
+  }
+
+  DateTime? _dateOfBirth;
+  DateTime? get dateOfBirth => _dateOfBirth;
+
+  String _gender = '';
+  String get gender => _gender;
+
+  static const List<String> genderOptions = [
+    'Male',
+    'Female',
+    'Prefer not to say',
+  ];
+
+  void setDateOfBirth(DateTime date) {
+    _dateOfBirth = date;
+    notifyListeners();
+  }
+
+  void setGender(String value) {
+    _gender = value;
+    notifyListeners();
+  }
+
+  String get formattedDateOfBirth {
+    if (_dateOfBirth == null) return '';
+    return '${_dateOfBirth!.year}-'
+        '${_dateOfBirth!.month.toString().padLeft(2, '0')}-'
+        '${_dateOfBirth!.day.toString().padLeft(2, '0')}';
   }
 
   SignupType _signupType = SignupType.user;
@@ -94,8 +130,10 @@ class SignupViewModel extends ChangeNotifier {
           firstName: firstNameController.text.trim(),
           lastName: lastNameController.text.trim(),
           phone: phoneController.text.trim(),
+          dateOfBirth: formattedDateOfBirth,
+          gender: _gender,
         );
-      } else { // It's a driver
+      } else {
         await _authService.signUpAsDriver(
           email: emailController.text.trim(),
           password: passwordController.text.trim(),
@@ -103,6 +141,12 @@ class SignupViewModel extends ChangeNotifier {
           lastName: lastNameController.text.trim(),
           phone: phoneController.text.trim(),
           licenseFile: _selectedLicenseFile!,
+          dateOfBirth: formattedDateOfBirth,
+          gender: _gender,
+          bankAccountName: bankAccountNameController.text.trim(),
+          bankName: bankNameController.text.trim(),
+          accountNumber: accountNumberController.text.trim(),
+          bankCode: bankCodeController.text.trim(),
         );
       }
 
@@ -122,8 +166,10 @@ class SignupViewModel extends ChangeNotifier {
         // This is unlikely to happen here but is good practice.
       }
 
-    } catch (e) {
-      _showSnackBar(context, "Sign-up Failed: ${e.toString()}");
+    } on FirebaseAuthException catch (e) {
+      _showSnackBar(context, _friendlyAuthError(e.code));
+    } catch (_) {
+      _showSnackBar(context, "Something went wrong. Please try again.");
     } finally {
       // The 'finally' block ensures that no matter what happens (success or error),
       // we make one final check to turn off the loader. This is now a safeguard
@@ -136,6 +182,25 @@ class SignupViewModel extends ChangeNotifier {
   void _setLoading(bool value) {
     _isLoading = value;
     notifyListeners();
+  }
+
+  String _friendlyAuthError(String code) {
+    switch (code) {
+      case 'email-already-in-use':
+        return 'An account already exists with this email address.';
+      case 'invalid-email':
+        return 'Please enter a valid email address.';
+      case 'weak-password':
+        return 'Password is too weak. Please use at least 6 characters.';
+      case 'operation-not-allowed':
+        return 'Sign-up is currently unavailable. Please try again later.';
+      case 'network-request-failed':
+        return 'Network error. Please check your connection and try again.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please try again later.';
+      default:
+        return 'Sign-up failed. Please check your details and try again.';
+    }
   }
 
   void _showSnackBar(BuildContext context, String message) {
@@ -152,6 +217,10 @@ class SignupViewModel extends ChangeNotifier {
     phoneController.dispose();
     passwordController.dispose();
     confirmPasswordController.dispose();
+    bankAccountNameController.dispose();
+    bankNameController.dispose();
+    accountNumberController.dispose();
+    bankCodeController.dispose();
     super.dispose();
   }
 }

@@ -62,10 +62,15 @@ class AuthService extends ChangeNotifier {
     required String firstName,
     required String lastName,
     required String phone,
-    required File licenseFile, // Driver-specific file
+    required File licenseFile,
+    String dateOfBirth = '',
+    String gender = '',
+    String bankAccountName = '',
+    String bankName = '',
+    String accountNumber = '',
+    String bankCode = '',
   }) async {
     try {
-      // 1. Create the user in Firebase Auth
       final UserCredential userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
         email: email,
         password: password,
@@ -74,13 +79,11 @@ class AuthService extends ChangeNotifier {
       final User? newUser = userCredential.user;
 
       if (newUser != null) {
-        // 2. Upload the license file to Firebase Storage
         final String licenseUrl = await _storageService.uploadFile(
           licenseFile,
           'driver_licenses/${newUser.uid}/${licenseFile.path.split('/').last}',
         );
 
-        // 3. Create the driver profile in Firestore with the license URL
         await _databaseService.createDriverProfile(
           uid: newUser.uid,
           firstName: firstName,
@@ -88,6 +91,12 @@ class AuthService extends ChangeNotifier {
           email: email,
           phone: phone,
           licenseUrl: licenseUrl,
+          dateOfBirth: dateOfBirth,
+          gender: gender,
+          bankAccountName: bankAccountName,
+          bankName: bankName,
+          accountNumber: accountNumber,
+          bankCode: bankCode,
         );
       }
     } on FirebaseAuthException {
@@ -113,9 +122,10 @@ class AuthService extends ChangeNotifier {
     required String firstName,
     required String lastName,
     required String phone,
+    String dateOfBirth = '',
+    String gender = '',
   }) async {
     try {
-      // 1. Create the user in Firebase Authentication
       final UserCredential userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
         email: email,
         password: password,
@@ -130,6 +140,8 @@ class AuthService extends ChangeNotifier {
           lastName: lastName,
           email: email,
           phone: phone,
+          dateOfBirth: dateOfBirth,
+          gender: gender,
         );
       }
     } on FirebaseAuthException catch (e) {

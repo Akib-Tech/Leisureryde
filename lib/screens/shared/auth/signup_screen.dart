@@ -66,6 +66,10 @@ class SignupScreen extends StatelessWidget {
                         keyboardType: TextInputType.phone,
                       ),
                       const SizedBox(height: 20),
+                      _buildDateOfBirthField(context, viewModel),
+                      const SizedBox(height: 20),
+                      _buildGenderDropdown(context, viewModel),
+                      const SizedBox(height: 20),
                       _buildInputField(
                         viewModel: viewModel,
                         controller: viewModel.passwordController,
@@ -84,8 +88,10 @@ class SignupScreen extends StatelessWidget {
                         isPassword: true,
                       ),
 
-                      if (viewModel.signupType == SignupType.driver)
+                      if (viewModel.signupType == SignupType.driver) ...[
                         _buildLicenseUploader(context, viewModel),
+                        _buildBankDetailsSection(context, viewModel),
+                      ],
 
                       const SizedBox(height: 40),
                       const SizedBox(height: 40),
@@ -142,6 +148,89 @@ class SignupScreen extends StatelessWidget {
               onPressed: viewModel.togglePasswordVisibility,
             )
                 : null,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDateOfBirthField(BuildContext context, SignupViewModel viewModel) {
+    final theme = Theme.of(context);
+    final hasDate = viewModel.dateOfBirth != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Date of Birth', style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: viewModel.dateOfBirth ??
+                  DateTime.now().subtract(const Duration(days: 365 * 18)),
+              firstDate: DateTime(1920),
+              lastDate: DateTime.now().subtract(const Duration(days: 365 * 16)),
+              helpText: 'Select your date of birth',
+            );
+            if (picked != null) viewModel.setDateOfBirth(picked);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade400),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.calendar_today_outlined,
+                    color: hasDate ? theme.primaryColor : Colors.grey),
+                const SizedBox(width: 12),
+                Text(
+                  hasDate ? viewModel.formattedDateOfBirth : 'Select your date of birth',
+                  style: TextStyle(
+                    color: hasDate ? theme.textTheme.bodyLarge?.color : Colors.grey,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGenderDropdown(BuildContext context, SignupViewModel viewModel) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Gender', style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade400),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: viewModel.gender.isEmpty ? null : viewModel.gender,
+              hint: Row(
+                children: [
+                  const Icon(Icons.person_outline, color: Colors.grey),
+                  const SizedBox(width: 12),
+                  Text('Select your gender',
+                      style: TextStyle(color: Colors.grey.shade600)),
+                ],
+              ),
+              items: SignupViewModel.genderOptions.map((g) {
+                return DropdownMenuItem(value: g, child: Text(g));
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) viewModel.setGender(value);
+              },
+            ),
           ),
         ),
       ],
@@ -209,6 +298,50 @@ class SignupScreen extends StatelessWidget {
       ],
     );
   }
+  Widget _buildBankDetailsSection(BuildContext context, SignupViewModel viewModel) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Text(
+          'Bank Details',
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
+        const SizedBox(height: 8),
+        _buildInputField(
+          controller: viewModel.bankAccountNameController,
+          label: 'Account Holder Name',
+          hint: 'Name on the bank account',
+          icon: Icons.person_outline,
+        ),
+        const SizedBox(height: 16),
+        _buildInputField(
+          controller: viewModel.bankNameController,
+          label: 'Bank Name',
+          hint: 'e.g. Chase, Wells Fargo',
+          icon: Icons.account_balance_outlined,
+        ),
+        const SizedBox(height: 16),
+        _buildInputField(
+          controller: viewModel.accountNumberController,
+          label: 'Account Number',
+          hint: 'Your bank account number',
+          icon: Icons.numbers_outlined,
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: 16),
+        _buildInputField(
+          controller: viewModel.bankCodeController,
+          label: 'Routing / Sort Code',
+          hint: 'Bank routing or sort code',
+          icon: Icons.swap_horiz_outlined,
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
   // Place this inside the SignupScreen class
   Widget _buildUserTypeToggle(BuildContext context, SignupViewModel viewModel) {
     final theme = Theme.of(context);

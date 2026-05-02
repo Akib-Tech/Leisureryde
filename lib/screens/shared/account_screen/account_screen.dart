@@ -8,6 +8,7 @@ import 'package:leisureryde/viewmodel/account/account_view_model.dart';
 import 'package:leisureryde/widgets/custom_loading_indicator.dart';
 import '../../driver/vehicle/vehicle_info_screen.dart';
 import '../splash_screen/welcome_screen.dart';
+import 'edit_profile_screen.dart';
 import 'notications.dart';
 
 
@@ -94,6 +95,21 @@ class _AccountScreenState extends State<AccountScreen> {
     return _SettingsGroup(
       title: 'Settings & Preferences',
       children: [
+        _SettingsTile(
+          icon: Icons.edit_outlined,
+          title: 'Edit Profile',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ChangeNotifierProvider.value(
+                  value: viewModel,
+                  child: const EditProfileScreen(),
+                ),
+              ),
+            );
+          },
+        ),
+        const _Divider(),
         if (viewModel.isDriver) ...[
           _SettingsTile(
             icon: Icons.directions_car,
@@ -216,11 +232,28 @@ class _AccountScreenState extends State<AccountScreen> {
                 style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey.shade600),
                 overflow: TextOverflow.ellipsis,
               ),
+              if (user.phone.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  user.phone,
+                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey.shade500),
+                ),
+              ],
+              if (user.gender.isNotEmpty || user.dateOfBirth.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  [
+                    if (user.gender.isNotEmpty) user.gender,
+                    if (user.dateOfBirth.isNotEmpty) user.dateOfBirth,
+                  ].join('  ·  '),
+                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey.shade500),
+                ),
+              ],
               const SizedBox(height: 4),
               if (user is DriverProfile)
                 Row(
                   children: [
-                    Icon(Icons.star, color: Colors.amber, size: 18),
+                    const Icon(Icons.star, color: Colors.amber, size: 18),
                     const SizedBox(width: 4),
                     Text(
                       user.rating.toStringAsFixed(1),

@@ -622,7 +622,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     children: [
                       _buildPaymentDetailRow(theme, "Subtotal", "\$${FareCalculationService.subtotalFromTotal(selectedFare).toStringAsFixed(2)}"),
                       const SizedBox(height: 6),
-                      _buildPaymentDetailRow(theme, "Tax (7%)", "\$${FareCalculationService.taxFromTotal(selectedFare).toStringAsFixed(2)}"),
+                      _buildPaymentDetailRow(theme, "Tax", "\$${FareCalculationService.taxFromTotal(selectedFare).toStringAsFixed(2)}"),
                       const Divider(height: 16),
                       _buildPaymentDetailRow(theme, "Total", "\$${selectedFare.toStringAsFixed(2)}", isBold: true),
                     ],
@@ -695,7 +695,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               children: [
                 _buildPaymentDetailRow(theme, "Subtotal", "\$${FareCalculationService.subtotalFromTotal(selectedVehicleFare).toStringAsFixed(2)}"),
                 const SizedBox(height: 8),
-                _buildPaymentDetailRow(theme, "Tax (7%)", "\$${FareCalculationService.taxFromTotal(selectedVehicleFare).toStringAsFixed(2)}"),
+                _buildPaymentDetailRow(theme, "Tax", "\$${FareCalculationService.taxFromTotal(selectedVehicleFare).toStringAsFixed(2)}"),
                 const SizedBox(height: 8),
                 _buildPaymentDetailRow(theme, "Total", "\$${selectedVehicleFare.toStringAsFixed(2)}", isBold: true),
                 const SizedBox(height: 8),

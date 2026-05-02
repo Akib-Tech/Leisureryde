@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:leisureryde/app/service_locator.dart';
 import 'package:leisureryde/screens/shared/main_screen/main_screen.dart';
@@ -76,8 +77,10 @@ class LoginViewModel extends ChangeNotifier {
         MaterialPageRoute(builder: (_) => next),
             (route) => false,
       );
-    } catch (e) {
-      _showSnackBar(context, "Login Failed: $e");
+    } on FirebaseAuthException catch (e) {
+      _showSnackBar(context, _friendlyAuthError(e.code));
+    } catch (_) {
+      _showSnackBar(context, "Something went wrong. Please try again.");
     } finally {
       _setLoading(false);
     }
@@ -85,6 +88,27 @@ class LoginViewModel extends ChangeNotifier {
   void _setLoading(bool value) {
     _isLoading = value;
     notifyListeners();
+  }
+
+  String _friendlyAuthError(String code) {
+    switch (code) {
+      case 'user-not-found':
+        return 'No account found with this email address.';
+      case 'wrong-password':
+        return 'Incorrect password. Please try again.';
+      case 'invalid-credential':
+        return 'Incorrect email or password. Please try again.';
+      case 'invalid-email':
+        return 'Please enter a valid email address.';
+      case 'user-disabled':
+        return 'This account has been disabled. Please contact support.';
+      case 'too-many-requests':
+        return 'Too many failed attempts. Please try again later.';
+      case 'network-request-failed':
+        return 'Network error. Please check your connection and try again.';
+      default:
+        return 'Login failed. Please check your details and try again.';
+    }
   }
 
   void _showSnackBar(BuildContext context, String message) {

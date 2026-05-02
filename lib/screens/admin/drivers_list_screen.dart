@@ -74,6 +74,38 @@ class DriversListScreen extends StatelessWidget {
               ],
             ),
             const Divider(height: 24),
+            // Account Details Section
+            _buildSectionHeader(context, "Account Details"),
+            _buildDetailRow(context, Icons.phone_outlined, "Phone", driver.phone.isNotEmpty ? driver.phone : "—"),
+            _buildDetailRow(context, Icons.cake_outlined, "Date of Birth", driver.dateOfBirth.isNotEmpty ? driver.dateOfBirth : "—"),
+            _buildDetailRow(context, Icons.wc_outlined, "Gender", driver.gender.isNotEmpty ? driver.gender : "—"),
+            const SizedBox(height: 8),
+            _buildSectionHeader(context, "Vehicle"),
+            _buildDetailRow(context, Icons.directions_car_outlined, "Car Model", driver.carModel.isNotEmpty ? driver.carModel : "—"),
+            _buildDetailRow(context, Icons.confirmation_number_outlined, "Licence Plate", driver.licensePlate.isNotEmpty ? driver.licensePlate : "—"),
+            const SizedBox(height: 8),
+            _buildSectionHeader(context, "Stats"),
+            Row(
+              children: [
+                Expanded(child: _buildStatChip(context, Icons.star, driver.rating.toStringAsFixed(1), Colors.amber)),
+                const SizedBox(width: 8),
+                Expanded(child: _buildStatChip(context, Icons.local_taxi, "${driver.totalTrips} trips", Colors.blue)),
+                const SizedBox(width: 8),
+                Expanded(child: _buildStatChip(
+                  context,
+                  driver.isOnline ? Icons.circle : Icons.circle_outlined,
+                  driver.isOnline ? "Online" : "Offline",
+                  driver.isOnline ? Colors.green : Colors.grey,
+                )),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _buildSectionHeader(context, "Bank Details"),
+            _buildDetailRow(context, Icons.person_outline, "Account Holder", driver.bankAccountName.isNotEmpty ? driver.bankAccountName : "—"),
+            _buildDetailRow(context, Icons.account_balance_outlined, "Bank Name", driver.bankName.isNotEmpty ? driver.bankName : "—"),
+            _buildDetailRow(context, Icons.numbers_outlined, "Account Number", driver.accountNumber.isNotEmpty ? driver.accountNumber : "—"),
+            _buildDetailRow(context, Icons.swap_horiz_outlined, "Routing / Sort Code", driver.bankCode.isNotEmpty ? driver.bankCode : "—"),
+            const Divider(height: 24),
             // Documents Section
             _buildSectionHeader(context, "Documents"),
             _buildDocumentLink(context, "Driver's License", driver.licenseUrl),
@@ -171,6 +203,50 @@ class DriversListScreen extends StatelessWidget {
           activeColor: activeColor ?? theme.primaryColor,
         ),
       ],
+    );
+  }
+
+  Widget _buildDetailRow(BuildContext context, IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.grey[600]),
+          const SizedBox(width: 8),
+          Text("$label: ", style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatChip(BuildContext context, IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

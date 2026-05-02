@@ -12,8 +12,16 @@ class VehicleInfoScreen extends StatefulWidget {
 
 class _VehicleInfoScreenState extends State<VehicleInfoScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _bankFormKey = GlobalKey<FormState>();
   late final TextEditingController _carModelController;
   late final TextEditingController _licensePlateController;
+
+  late final TextEditingController _bankAccountNameController;
+  late final TextEditingController _bankNameController;
+  late final TextEditingController _accountNumberController;
+  late final TextEditingController _bankCodeController;
+
+  bool _isSavingBank = false;
 
   @override
   void initState() {
@@ -21,12 +29,20 @@ class _VehicleInfoScreenState extends State<VehicleInfoScreen> {
     final driverProfile = context.read<AccountViewModel>().driverProfile;
     _carModelController = TextEditingController(text: driverProfile?.carModel ?? '');
     _licensePlateController = TextEditingController(text: driverProfile?.licensePlate ?? '');
+    _bankAccountNameController = TextEditingController(text: driverProfile?.bankAccountName ?? '');
+    _bankNameController = TextEditingController(text: driverProfile?.bankName ?? '');
+    _accountNumberController = TextEditingController(text: driverProfile?.accountNumber ?? '');
+    _bankCodeController = TextEditingController(text: driverProfile?.bankCode ?? '');
   }
 
   @override
   void dispose() {
     _carModelController.dispose();
     _licensePlateController.dispose();
+    _bankAccountNameController.dispose();
+    _bankNameController.dispose();
+    _accountNumberController.dispose();
+    _bankCodeController.dispose();
     super.dispose();
   }
 
@@ -40,7 +56,34 @@ class _VehicleInfoScreenState extends State<VehicleInfoScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Vehicle information saved!')),
       );
-      FocusScope.of(context).unfocus(); // Hide keyboard
+      FocusScope.of(context).unfocus();
+    }
+  }
+
+  Future<void> _saveBankDetails() async {
+    if (!_bankFormKey.currentState!.validate()) return;
+    setState(() => _isSavingBank = true);
+    try {
+      await context.read<AccountViewModel>().updateBankDetails(
+            bankAccountName: _bankAccountNameController.text.trim(),
+            bankName: _bankNameController.text.trim(),
+            accountNumber: _accountNumberController.text.trim(),
+            bankCode: _bankCodeController.text.trim(),
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Bank details saved!')),
+        );
+        FocusScope.of(context).unfocus();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save bank details: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingBank = false);
     }
   }
 
@@ -80,6 +123,8 @@ class _VehicleInfoScreenState extends State<VehicleInfoScreen> {
             _buildVehicleDetailsForm(driverProfile),
             const SizedBox(height: 32),
             _buildDocumentsSection(viewModel, driverProfile),
+            const SizedBox(height: 32),
+            _buildBankDetailsForm(),
           ],
         ),
       ),
@@ -105,6 +150,90 @@ class _VehicleInfoScreenState extends State<VehicleInfoScreen> {
             decoration: const InputDecoration(labelText: 'License Plate Number', border: OutlineInputBorder()),
             validator: (value) => value!.isEmpty ? 'Please enter your license plate' : null,
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBankDetailsForm() {
+    return Form(
+      key: _bankFormKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('BANK DETAILS',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(color: Colors.grey)),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _bankAccountNameController,
+            decoration: const InputDecoration(
+              labelText: 'Account Holder Name',
+              prefixIcon: Icon(Icons.person_outline),
+              border: OutlineInputBorder(),
+            ),
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'Required' : null,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _bankNameController,
+            decoration: const InputDecoration(
+              labelText: 'Bank Name',
+              prefixIcon: Icon(Icons.account_balance_outlined),
+              border: OutlineInputBorder(),
+            ),
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'Required' : null,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _accountNumberController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Account Number',
+              prefixIcon: Icon(Icons.numbers_outlined),
+              border: OutlineInputBorder(),
+            ),
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'Required' : null,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _bankCodeController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Routing / Sort Code',
+              prefixIcon: Icon(Icons.swap_horiz_outlined),
+              border: OutlineInputBorder(),
+            ),
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'Required' : null,
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isSavingBank ? null : _saveBankDetails,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              child: _isSavingBank
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Save Bank Details',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ),
+          const SizedBox(height: 32),
         ],
       ),
     );

@@ -56,6 +56,26 @@ class DirectionsService {
           final durationValue = leg['duration']['value'] as int?; // in seconds
           final eta = durationValue != null ? DateTime.now().add(Duration(seconds: durationValue)) : null;
 
+          // Parse turn-by-turn steps for voice navigation.
+          final rawSteps = leg['steps'] as List<dynamic>? ?? [];
+          final steps = rawSteps.map<RouteStep>((s) {
+            final html = (s['html_instructions'] as String?) ?? '';
+            final clean = html
+                .replaceAll(RegExp(r'<[^>]*>'), ' ')
+                .replaceAll(RegExp(r'\s+'), ' ')
+                .trim();
+            final endLoc = s['end_location'] as Map<String, dynamic>?;
+            return RouteStep(
+              instruction: clean,
+              maneuver: s['maneuver'] as String?,
+              distanceMeters: (s['distance']?['value'] as int?) ?? 0,
+              endLocation: LatLng(
+                (endLoc?['lat'] as num?)?.toDouble() ?? 0.0,
+                (endLoc?['lng'] as num?)?.toDouble() ?? 0.0,
+              ),
+            );
+          }).toList();
+
           return DirectionsResult(
             polylinePoints: polylineCoordinates,
             distance: leg['distance']['text'],
@@ -67,6 +87,7 @@ class DirectionsService {
             eta: eta, // Pass the calculated ETA
             startLocation: origin, // Pass original LatLng as startLocation
             endLocation: destination, // Pass original LatLng as endLocation
+            steps: steps,
           );
 
           case 'ZERO_RESULTS':
@@ -106,32 +127,45 @@ class DirectionsService {
   }
 }
 
+/// A single maneuver step returned by the Directions API.
+class RouteStep {
+  final String instruction;   // HTML-stripped, speech-ready
+  final String? maneuver;     // e.g. "turn-left", "turn-right"
+  final int distanceMeters;
+  final LatLng endLocation;
+
+  const RouteStep({
+    required this.instruction,
+    this.maneuver,
+    required this.distanceMeters,
+    required this.endLocation,
+  });
+}
+
 class DirectionsResult {
   final List<LatLng> polylinePoints;
-  final String? distance; // Made nullable
-  final int? distanceValue; // Made nullable
-  final String? duration; // Made nullable
-  final int? durationValue; // Made nullable
+  final String? distance;
+  final int? distanceValue;
+  final String? duration;
+  final int? durationValue;
   final String startAddress;
   final String endAddress;
-  final DateTime? eta; // Make nullable
-  final LatLng startLocation; // Added
-  final LatLng endLocation; // Added
+  final DateTime? eta;
+  final LatLng startLocation;
+  final LatLng endLocation;
+  final List<RouteStep> steps;
 
   DirectionsResult({
     required this.polylinePoints,
-    this.distance, // No longer required
-    this.distanceValue, // No longer required
-    this.duration, // No longer required
-    this.durationValue, // No longer required
+    this.distance,
+    this.distanceValue,
+    this.duration,
+    this.durationValue,
     required this.startAddress,
     required this.endAddress,
-    this.eta, // No longer required
-    required this.startLocation, // Added
-    required this.endLocation, // Added
+    this.eta,
+    required this.startLocation,
+    required this.endLocation,
+    this.steps = const [],
   });
-
-// Getter for eta as previously discussed, but now based on nullable durationValue
-// Removed this getter to use the `eta` field directly, as it's cleaner to calculate once.
-// If `eta` in constructor is null, this will return null.
 }

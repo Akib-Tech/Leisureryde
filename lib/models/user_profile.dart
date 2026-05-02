@@ -14,8 +14,8 @@ class UserProfile {
   final bool isBlocked;
   final double rating;
   final bool pushNotificationsEnabled;
-
-
+  final String dateOfBirth; // "YYYY-MM-DD" or ''
+  final String gender;      // "Male" | "Female" | "Prefer not to say" | ''
 
   UserProfile({
     required this.uid,
@@ -28,7 +28,8 @@ class UserProfile {
     required this.isBlocked,
     required this.rating,
     this.pushNotificationsEnabled = true,
-
+    this.dateOfBirth = '',
+    this.gender = '',
   });
 
   factory UserProfile.fromFirestore(DocumentSnapshot doc) {
@@ -42,9 +43,10 @@ class UserProfile {
       role: UserRole.fromString(data['role'] ?? 'user'),
       profileImageUrl: data['profileImageUrl'] ?? '',
       isBlocked: data['isBlocked'] ?? false,
-      rating: data['rating']?? 5.0,
-      pushNotificationsEnabled: data['pushNotificationsEnabled'] ?? true, // NEW
-
+      rating: (data['rating'] ?? 5.0).toDouble(),
+      pushNotificationsEnabled: data['pushNotificationsEnabled'] ?? true,
+      dateOfBirth: data['dateOfBirth'] ?? '',
+      gender: data['gender'] ?? '',
     );
   }
 
@@ -60,8 +62,9 @@ class UserProfile {
     UserRole? role,
     bool? isBlocked,
     double? rating,
-    bool? pushNotificationsEnabled, // NEW
-
+    bool? pushNotificationsEnabled,
+    String? dateOfBirth,
+    String? gender,
   }) {
     return UserProfile(
       uid: uid ?? this.uid,
@@ -73,8 +76,9 @@ class UserProfile {
       role: role ?? this.role,
       isBlocked: isBlocked ?? this.isBlocked,
       rating: rating ?? this.rating,
-      pushNotificationsEnabled: pushNotificationsEnabled ?? this.pushNotificationsEnabled, // NEW
-
+      pushNotificationsEnabled: pushNotificationsEnabled ?? this.pushNotificationsEnabled,
+      dateOfBirth: dateOfBirth ?? this.dateOfBirth,
+      gender: gender ?? this.gender,
     );
   }
 }

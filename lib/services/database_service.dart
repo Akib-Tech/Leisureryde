@@ -17,6 +17,8 @@ class DatabaseService {
     required String lastName,
     required String email,
     required String phone,
+    String dateOfBirth = '',
+    String gender = '',
   }) async {
     try {
       await _db.collection('users').doc(uid).set({
@@ -25,6 +27,12 @@ class DatabaseService {
         'email': email,
         'phone': phone,
         'role': UserRole.user.name,
+        'profileImageUrl': '',
+        'isBlocked': false,
+        'rating': 5.0,
+        'pushNotificationsEnabled': true,
+        'dateOfBirth': dateOfBirth,
+        'gender': gender,
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
@@ -39,17 +47,33 @@ class DatabaseService {
     required String email,
     required String phone,
     required String licenseUrl,
+    String dateOfBirth = '',
+    String gender = '',
+    String bankAccountName = '',
+    String bankName = '',
+    String accountNumber = '',
+    String bankCode = '',
   }) async {
     try {
-      await _db.collection('users').doc(uid).set({ // <-- Same 'users' collection
+      await _db.collection('users').doc(uid).set({
         'firstName': firstName,
         'lastName': lastName,
         'email': email,
         'phone': phone,
         'licenseUrl': licenseUrl,
-        'role': UserRole.driver.name, // <-- Drivers get 'driver' role
+        'role': UserRole.driver.name,
+        'profileImageUrl': '',
         'isApproved': false,
         'isOnline': false,
+        'isBlocked': false,
+        'rating': 5.0,
+        'pushNotificationsEnabled': true,
+        'dateOfBirth': dateOfBirth,
+        'gender': gender,
+        'bankAccountName': bankAccountName,
+        'bankName': bankName,
+        'accountNumber': accountNumber,
+        'bankCode': bankCode,
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {

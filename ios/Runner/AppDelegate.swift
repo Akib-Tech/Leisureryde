@@ -10,7 +10,7 @@ import UserNotifications
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     GMSServices.provideAPIKey("AIzaSyBJIRixyDjY3bFicM3oG36yW0Vaj43FZWs")
-    UNUserNotificationCenter.current().delegate = self as? UNUserNotificationCenterDelegate
+    UNUserNotificationCenter.current().delegate = self
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }

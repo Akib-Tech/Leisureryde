@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:leisureryde/app/service_locator.dart';
 import 'package:leisureryde/models/ride_request_model.dart';
@@ -87,11 +88,59 @@ class HomeViewModel extends ChangeNotifier {
 
   PaymentViewModel get paymentViewModel => _paymentViewModel;
 
+  // ── Voice announcements ──────────────────────────────────────────────────
+  final FlutterTts _tts = FlutterTts();
+  bool _voiceEnabled = true;
+  bool get voiceEnabled => _voiceEnabled;
+  RideStatus? _lastAnnouncedStatus;
+
+  void toggleVoice() {
+    _voiceEnabled = !_voiceEnabled;
+    if (!_voiceEnabled) _tts.stop();
+    notifyListeners();
+  }
+
+  Future<void> _announceRideStatus(
+      RideStatus status, Map<String, dynamic> data) async {
+    if (!_voiceEnabled) return;
+    String text;
+    switch (status) {
+      case RideStatus.accepted:
+        final name = data['driverName'] as String? ?? 'Your driver';
+        text = 'Driver found! $name is on the way to pick you up.';
+        break;
+      case RideStatus.enroute:
+        text = 'Your driver has arrived at the pickup location.';
+        break;
+      case RideStatus.ongoing:
+        text = 'Your trip has started. Enjoy your ride!';
+        break;
+      case RideStatus.completed:
+        text = 'You have arrived. Thanks for riding with LeisureRyde!';
+        break;
+      case RideStatus.cancelled_by_driver:
+        final dName = data['driverName'] as String? ?? 'Your driver';
+        text = '$dName has cancelled the ride.';
+        break;
+      case RideStatus.cancelled:
+        text = 'Your ride has been cancelled.';
+        break;
+      default:
+        return;
+    }
+    await _tts.stop();
+    await _tts.speak(text);
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
   // SharedPreferences key — only used to persist the rideId across cold starts.
   // The step is ALWAYS derived from Firestore, never from SharedPreferences.
   static const String _kCurrentRideId = 'home_current_ride_id';
 
   HomeViewModel() {
+    _tts.setLanguage('en-US');
+    _tts.setSpeechRate(0.45);
+    _tts.setVolume(1.0);
     _initialize();
   }
 
@@ -409,6 +458,11 @@ class HomeViewModel extends ChangeNotifier {
 
         debugPrint("🔥 RIDE STATUS → Raw: '$rawStatus' | Enum: ${status.name} | Step: ${_currentStep.name}");
 
+        if (status != _lastAnnouncedStatus) {
+          _lastAnnouncedStatus = status;
+          _announceRideStatus(status, data);
+        }
+
         if (status.isTerminal) {
           debugPrint("🛑 Terminal status — resetting ride.");
           if (status == RideStatus.cancelled_by_driver) {
@@ -472,6 +526,7 @@ class HomeViewModel extends ChangeNotifier {
     _rideListener = null;
     _rideId = null;
     _selectedVehicle = null;
+    _lastAnnouncedStatus = null;
     mapViewModel.clearRoute();
     _currentStep = HomeStep.initial;
     _paymentViewModel.resetPayment();
@@ -593,11 +648,41 @@ class HomeViewModel extends ChangeNotifier {
     dismissRatingDialog();
   }
 
+  /// Clears all user-specific state so the next user who logs in gets a
+  /// fresh load via [refreshOnScreenResume] → [_initialize].
+  /// Called by AccountViewModel.signOut() before Firebase sign-out.
+  Future<void> resetUserData() async {
+    _driverSub?.cancel();
+    _driverSub = null;
+    _rideListener?.cancel();
+    _rideListener = null;
+
+    await _saveRideId(null);
+
+    _userProfile = null;
+    _savedPlaces = [];
+    _recentDestinations = [];
+    _rideId = null;
+    _currentStep = HomeStep.initial;
+    _cancelledByDriver = false;
+    _cancelledByDriverName = null;
+    _showRatingDialog = false;
+    _ratingRideId = null;
+    _ratingDriverId = null;
+    _ratingDriverName = null;
+    _driverMarkers.clear();
+    mapViewModel.clearLiveRoute();
+    mapViewModel.clearBookingRoute();
+
+    notifyListeners();
+  }
+
   bool _isDisposed = false;
 
   @override
   void dispose() {
     _isDisposed = true;
+    _tts.stop();
     mapViewModel.dispose();
     _driverSub?.cancel();
     _rideListener?.cancel();

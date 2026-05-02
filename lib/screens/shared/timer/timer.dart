@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:intl/intl.dart';
 
 import '../../../services/trip_eta_service.dart';
 
@@ -62,6 +63,12 @@ class _TripEndTimerState extends State<TripEndTimer> {
     final minutes = (seconds % 3600) ~/ 60;
     if (hours > 0) return '${hours}h ${minutes}m';
     return '$minutes min';
+  }
+
+  String _formatArrivalTime(int seconds) {
+    if (seconds <= 0) return '—';
+    final arrival = DateTime.now().add(Duration(seconds: seconds));
+    return DateFormat('h:mm a').format(arrival);
   }
 
   @override
@@ -145,6 +152,15 @@ class _TripEndTimerState extends State<TripEndTimer> {
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Arriving at ${_formatArrivalTime(_totalSeconds)}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.blue.shade700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],

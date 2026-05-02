@@ -13,6 +13,7 @@ import 'package:leisureryde/services/storage_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/push_notifications_service.dart';
+import '../home/home_view_model.dart';
 
 enum DocumentType {
   licenseUrl,
@@ -116,6 +117,32 @@ class AccountViewModel extends ChangeNotifier {
     }
   }
 
+  Future<void> updateBankDetails({
+    required String bankAccountName,
+    required String bankName,
+    required String accountNumber,
+    required String bankCode,
+  }) async {
+    final uid = userProfile?.uid;
+    if (uid == null || driverProfile == null) return;
+    try {
+      await _databaseService.updateUserProfileData(uid, {
+        'bankAccountName': bankAccountName,
+        'bankName': bankName,
+        'accountNumber': accountNumber,
+        'bankCode': bankCode,
+      });
+      _userProfile = driverProfile!.copyWith(
+        bankAccountName: bankAccountName,
+        bankName: bankName,
+        accountNumber: accountNumber,
+        bankCode: bankCode,
+      );
+      notifyListeners();
+    } catch (e) {
+    }
+  }
+
   Future<void> pickAndUploadDocument(BuildContext context, DocumentType documentType) async {
     final uid = userProfile?.uid;
     if (uid == null || driverProfile == null) return;
@@ -186,6 +213,39 @@ class AccountViewModel extends ChangeNotifier {
     }
   }
 
+  Future<void> updateProfile({
+    required String firstName,
+    required String lastName,
+    required String phone,
+    String dateOfBirth = '',
+    String gender = '',
+  }) async {
+    final uid = _userProfile?.uid;
+    if (uid == null) return;
+
+    final data = <String, dynamic>{
+      'firstName': firstName,
+      'lastName': lastName,
+      'phone': phone,
+      'dateOfBirth': dateOfBirth,
+      'gender': gender,
+    };
+
+    try {
+      await _databaseService.updateUserProfileData(uid, data);
+      _userProfile = _userProfile!.copyWith(
+        firstName: firstName,
+        lastName: lastName,
+        phone: phone,
+        dateOfBirth: dateOfBirth,
+        gender: gender,
+      );
+      notifyListeners();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   Future<void> deleteSavedPlace(String placeName) async {
     final uid = userProfile?.uid;
     if (uid == null) return;
@@ -212,6 +272,10 @@ class AccountViewModel extends ChangeNotifier {
     }
 
     await _authService.signOut();
+
+    // Reset the HomeViewModel singleton so the next user gets a fresh load.
+    await locator<HomeViewModel>().resetUserData();
+
     if (context.mounted) {
       Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const WelcomePage()), (route) => false);

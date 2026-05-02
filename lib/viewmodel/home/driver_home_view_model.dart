@@ -13,6 +13,7 @@ import 'package:leisureryde/services/directions_service.dart';
 import 'package:leisureryde/services/ride_service.dart';
 import '../../services/driver_locator.dart';
 import '../../services/push_notifications_service.dart';
+import '../../services/voice_navigation_service.dart';
 import '../maps/maps_viewmodel.dart';
 
 class DriverHomeViewModel extends ChangeNotifier {
@@ -67,6 +68,21 @@ class DriverHomeViewModel extends ChangeNotifier {
   StreamSubscription? _pendingReqSub;
 
   final NotificationService _notificationService = locator<NotificationService>();
+  final VoiceNavigationService _voiceNav = VoiceNavigationService();
+
+  // Tracks the last ride+status we called beginNewRoute() for, so that
+  // recalculations on the same leg call refreshSteps() instead.
+  String? _lastVoiceRideId;
+  RideStatus? _lastVoiceStatus;
+
+  bool get voiceEnabled => _voiceNav.isEnabled;
+
+  void toggleVoice() {
+    _voiceNav.toggle();
+    notifyListeners();
+  }
+
+  Future<void> testVoice() => _voiceNav.testSpeak();
 
   DriverHomeViewModel() {
     mapViewModel = MapViewModel();
@@ -268,6 +284,8 @@ class DriverHomeViewModel extends ChangeNotifier {
       if (ride.status == RideStatus.cancelled) {
         _rideCancelledByUser = true;
         _activeRide = null;
+        _lastVoiceRideId = null;
+        _lastVoiceStatus = null;
         _activeRideDocSubscription?.cancel();
         _activeRideDocSubscription = null;
         mapViewModel.clearRoute();
@@ -276,7 +294,12 @@ class DriverHomeViewModel extends ChangeNotifier {
       }
 
       if (ride.status.isTerminal) {
+        if (ride.status == RideStatus.completed) {
+          await _voiceNav.announceArrival();
+        }
         _activeRide = null;
+        _lastVoiceRideId = null;
+        _lastVoiceStatus = null;
         _activeRideDocSubscription?.cancel();
         _activeRideDocSubscription = null;
         mapViewModel.clearRoute();
@@ -352,6 +375,12 @@ class DriverHomeViewModel extends ChangeNotifier {
         mapViewModel.animateCameraToPosition(newPos);
       }
 
+      // Voice navigation — checked on every GPS tick regardless of the
+      // route-recalculation threshold so announcements are timely.
+      if (_activeRide != null) {
+        await _voiceNav.onPositionUpdate(newPos);
+      }
+
       // Only recalculate the route when the driver has moved > 30 m to avoid
       // hammering the Directions API on every GPS tick.
       if (_lastRouteCalcPosition == null ||
@@ -404,6 +433,19 @@ class DriverHomeViewModel extends ChangeNotifier {
 
       // Also update the destination marker so the driver knows where to go.
       _updateDestinationMarker(routeDestination);
+
+      // Feed steps to the voice service.  Only call beginNewRoute() when the
+      // ride or its status has genuinely changed; otherwise refreshSteps() so
+      // announcement flags are preserved across the 30 m recalculations.
+      final isNewLeg = _lastVoiceRideId != _activeRide!.id ||
+          _lastVoiceStatus != _activeRide!.status;
+      if (isNewLeg) {
+        _lastVoiceRideId = _activeRide!.id;
+        _lastVoiceStatus = _activeRide!.status;
+        await _voiceNav.beginNewRoute(result.steps);
+      } else {
+        _voiceNav.refreshSteps(result.steps);
+      }
     }
   }
 
@@ -494,6 +536,7 @@ class DriverHomeViewModel extends ChangeNotifier {
     _activeRideSubscription?.cancel();
     _activeRideDocSubscription?.cancel();
     _driverLocationSubscription?.cancel();
+    _voiceNav.dispose();
     super.dispose();
   }
 }

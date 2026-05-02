@@ -15,6 +15,11 @@ class DriverProfile extends UserProfile {
   final String vehicleRegistrationUrl;
   final String proofOfInsuranceUrl;
 
+  // Bank details
+  final String bankAccountName;
+  final String bankName;
+  final String accountNumber;
+  final String bankCode;
 
   DriverProfile({
     required super.uid,
@@ -32,9 +37,15 @@ class DriverProfile extends UserProfile {
     required this.carModel,
     required this.licensePlate,
     this.lastWentOnlineAt,
-    required super.pushNotificationsEnabled, // NEW: Pass to super constructor
+    required super.pushNotificationsEnabled,
     this.vehicleRegistrationUrl = '',
     this.proofOfInsuranceUrl = '',
+    super.dateOfBirth = '',
+    super.gender = '',
+    this.bankAccountName = '',
+    this.bankName = '',
+    this.accountNumber = '',
+    this.bankCode = '',
   }) : super(role: UserRole.driver);
 
   factory DriverProfile.fromFirestore(DocumentSnapshot doc) {
@@ -57,8 +68,13 @@ class DriverProfile extends UserProfile {
       lastWentOnlineAt: data['lastWentOnlineAt'] as Timestamp?,
       vehicleRegistrationUrl: data['vehicleRegistrationUrl'] ?? '',
       proofOfInsuranceUrl: data['proofOfInsuranceUrl'] ?? '',
-      pushNotificationsEnabled: data['pushNotificationsEnabled'] ?? true, // NEW
-
+      pushNotificationsEnabled: data['pushNotificationsEnabled'] ?? true,
+      dateOfBirth: data['dateOfBirth'] ?? '',
+      gender: data['gender'] ?? '',
+      bankAccountName: data['bankAccountName'] ?? '',
+      bankName: data['bankName'] ?? '',
+      accountNumber: data['accountNumber'] ?? '',
+      bankCode: data['bankCode'] ?? '',
     );
   }
 
@@ -82,8 +98,13 @@ class DriverProfile extends UserProfile {
     bool? isBlocked,
     String? vehicleRegistrationUrl,
     String? proofOfInsuranceUrl,
-    bool? pushNotificationsEnabled, // NEW
-
+    bool? pushNotificationsEnabled,
+    String? dateOfBirth,
+    String? gender,
+    String? bankAccountName,
+    String? bankName,
+    String? accountNumber,
+    String? bankCode,
   }) {
     return DriverProfile(
       uid: uid ?? this.uid,
@@ -103,8 +124,13 @@ class DriverProfile extends UserProfile {
       isBlocked: isBlocked ?? this.isBlocked,
       vehicleRegistrationUrl: vehicleRegistrationUrl ?? this.vehicleRegistrationUrl,
       proofOfInsuranceUrl: proofOfInsuranceUrl ?? this.proofOfInsuranceUrl,
-      pushNotificationsEnabled: pushNotificationsEnabled ?? this.pushNotificationsEnabled, // NEW
-
+      pushNotificationsEnabled: pushNotificationsEnabled ?? this.pushNotificationsEnabled,
+      dateOfBirth: dateOfBirth ?? this.dateOfBirth,
+      gender: gender ?? this.gender,
+      bankAccountName: bankAccountName ?? this.bankAccountName,
+      bankName: bankName ?? this.bankName,
+      accountNumber: accountNumber ?? this.accountNumber,
+      bankCode: bankCode ?? this.bankCode,
     );
   }
 }
