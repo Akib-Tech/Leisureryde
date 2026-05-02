@@ -6,6 +6,7 @@ import 'package:leisureryde/models/driver_profile.dart' show DriverProfile;
 import 'package:leisureryde/models/saved_places.dart';
 import 'package:leisureryde/viewmodel/account/account_view_model.dart';
 import 'package:leisureryde/widgets/custom_loading_indicator.dart';
+import '../../driver/bank/bank_details_screen.dart';
 import '../../driver/vehicle/vehicle_info_screen.dart';
 import '../splash_screen/welcome_screen.dart';
 import 'edit_profile_screen.dart';
@@ -115,15 +116,26 @@ class _AccountScreenState extends State<AccountScreen> {
             icon: Icons.directions_car,
             title: 'Vehicle Information',
             onTap: () {
-              // THE FIX IS HERE:
-              // We wrap the new screen in a ChangeNotifierProvider.value.
-              // This ensures the EXISTING viewModel instance is passed into the new route,
-              // making it available to VehicleInfoScreen.
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => ChangeNotifierProvider.value(
                     value: viewModel,
                     child: const VehicleInfoScreen(),
+                  ),
+                ),
+              );
+            },
+          ),
+          const _Divider(),
+          _SettingsTile(
+            icon: Icons.account_balance_outlined,
+            title: 'Bank Details',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ChangeNotifierProvider.value(
+                    value: viewModel,
+                    child: const BankDetailsScreen(),
                   ),
                 ),
               );
@@ -145,28 +157,6 @@ class _AccountScreenState extends State<AccountScreen> {
             );
           },
         ),
-        const _Divider(),
-        // _SettingsTile(
-        //   icon: Icons.lock,
-        //   title: 'Security',
-        //   onTap: () => Navigator.of(context).push(
-        //     MaterialPageRoute(builder: (_) => const SecurityScreen()),
-        //   ),
-        // ),
-        const _Divider(),
-     /*   _SettingsTile(
-          icon: Icons.help_outline,
-          title: 'Help & Support',
-          onTap: () => viewModel.launchUrlHelper('https://leisureryde.com/help', context),
-        ),
-        const _Divider(),
-        _SettingsTile(
-          icon: Icons.gavel,
-          title: 'Legal',
-          onTap: () => viewModel.launchUrlHelper('https://leisureryde.com/legal/terms', context),
-        ),
-
-      */
       ],
     );
   }

@@ -14,8 +14,8 @@ class PlacesService {
 
     final url = Uri.parse(
       'https://maps.googleapis.com/maps/api/place/autocomplete/json'
-          '?input=$input&key=$_apiKey&sessiontoken=$_sessionToken',
-          //'&components=country:us', // Optional: Restrict to a country
+          '?input=$input&key=$_apiKey&sessiontoken=$_sessionToken'
+          '&components=country:us', // Optional: Restrict to a country
     );
 
     try {
