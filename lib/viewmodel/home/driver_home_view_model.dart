@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:leisureryde/main.dart';
 import 'package:leisureryde/app/service_locator.dart';
 import 'package:leisureryde/models/driver_profile.dart';
 import 'package:leisureryde/models/ride_request_model.dart';
@@ -54,6 +53,13 @@ class DriverHomeViewModel extends ChangeNotifier {
   // Prevents hammering the Directions API on every GPS tick.
   LatLng? _lastRouteCalcPosition;
 
+  // Live ETA values from the most-recent Directions API result.
+  int _remainingSeconds = 0;
+  double _remainingDistanceMiles = 0.0;
+
+  int get remainingSeconds => _remainingSeconds;
+  double get remainingDistanceMiles => _remainingDistanceMiles;
+
   int _todayTrips = 0;
   double _todayEarnings = 0.0;
   double _hoursOnline = 0.0;
@@ -76,6 +82,17 @@ class DriverHomeViewModel extends ChangeNotifier {
   RideStatus? _lastVoiceStatus;
 
   bool get voiceEnabled => _voiceNav.isEnabled;
+
+  /// The current maneuver step — used to drive the on-screen navigation banner.
+  RouteStep? get currentNavStep => _voiceNav.currentStep;
+
+  /// The first upcoming step with an actual turn maneuver (non-null maneuver).
+  /// Used by the navigation banner to show the correct direction icon even
+  /// when the active step is a straight/head segment.
+  RouteStep? get nextNavManeuverStep => _voiceNav.nextManeuverStep;
+
+  /// Live distance to the next turn in metres.
+  int get distanceToNextTurnMeters => _voiceNav.distanceToNextTurnMeters;
 
   void toggleVoice() {
     _voiceNav.toggle();
@@ -214,8 +231,14 @@ class DriverHomeViewModel extends ChangeNotifier {
   /// The doc subscription takes over from here and handles all status changes.
   void preSetActiveRide(RideRequest ride) {
     _activeRide = ride;
+    // Reset the route-calc throttle so _drawRouteForActiveRide fires on the
+    // very next GPS tick (or immediately below) rather than waiting 30 m.
+    _lastRouteCalcPosition = null;
     notifyListeners();
     _subscribeToActiveRideDoc(ride.id);
+    // Draw the pickup route right away — the location listener won't redraw
+    // until the driver moves 30 m, which could be a long wait at a standstill.
+    _drawRouteForActiveRide();
   }
 
   Future<void> acceptRide(String rideId) async {
@@ -364,21 +387,24 @@ class DriverHomeViewModel extends ChangeNotifier {
       // Use num? cast — Firestore may store these as int or double.
       final lat = (data['latitude'] as num?)?.toDouble();
       final lng = (data['longitude'] as num?)?.toDouble();
+      final heading = (data['heading'] as num?)?.toDouble() ?? 0.0;
 
       if (lat == null || lng == null) return;
 
       final newPos = LatLng(lat, lng);
       _driverCurrentPosition = newPos;
 
-      // Keep the camera centred on the driver while a trip is active.
+      // Keep the camera centred on the driver and rotate the map to heading.
       if (_activeRide != null) {
-        mapViewModel.animateCameraToPosition(newPos);
+        mapViewModel.followWithBearing(newPos, heading);
       }
 
       // Voice navigation — checked on every GPS tick regardless of the
       // route-recalculation threshold so announcements are timely.
       if (_activeRide != null) {
         await _voiceNav.onPositionUpdate(newPos);
+        // Notify so the navigation banner updates its distance counter.
+        notifyListeners();
       }
 
       // Only recalculate the route when the driver has moved > 30 m to avoid
@@ -434,6 +460,14 @@ class DriverHomeViewModel extends ChangeNotifier {
       // Also update the destination marker so the driver knows where to go.
       _updateDestinationMarker(routeDestination);
 
+      // Update live ETA — refreshed every time the driver moves 30 m.
+      _remainingSeconds = result.durationValue ?? 0;
+      _remainingDistanceMiles = ((result.distanceValue ?? 0) * 0.000621371);
+
+      // Feed the freshest polyline to the voice service for off-route detection
+      // before updating the steps.
+      _voiceNav.setPolyline(result.polylinePoints);
+
       // Feed steps to the voice service.  Only call beginNewRoute() when the
       // ride or its status has genuinely changed; otherwise refreshSteps() so
       // announcement flags are preserved across the 30 m recalculations.
@@ -444,7 +478,7 @@ class DriverHomeViewModel extends ChangeNotifier {
         _lastVoiceStatus = _activeRide!.status;
         await _voiceNav.beginNewRoute(result.steps);
       } else {
-        _voiceNav.refreshSteps(result.steps);
+        await _voiceNav.refreshSteps(result.steps);
       }
     }
   }

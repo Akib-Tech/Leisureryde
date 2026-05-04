@@ -30,7 +30,7 @@ class RideDetailScreen extends StatelessWidget {
             children: [
               _buildDetailRow("From", ride.pickupAddress),
               _buildDetailRow("To", ride.destinationAddress),
-              _buildDetailRow("Distance", "${ride.distance.toStringAsFixed(2)} km"),
+              _buildDetailRow("Distance", "${ride.distance.toStringAsFixed(2)} mi"),
             ],
           ),
           _buildSectionCard(

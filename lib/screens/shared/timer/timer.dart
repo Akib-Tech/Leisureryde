@@ -8,12 +8,15 @@ import '../../../services/trip_eta_service.dart';
 /// The value is fetched once when the trip starts and displayed statically —
 /// no countdown, no live driver-location tracking.
 class TripEndTimer extends StatefulWidget {
-  final LatLng? origin;       // pickup location
-  final LatLng? destination;  // drop-off location
-
-  // Kept for call-site compatibility but no longer used by the widget.
+  final LatLng? origin;
+  final LatLng? destination;
   final Stream<LatLng>? driverLocationStream;
   final VoidCallback? onTripAlmostEnded;
+
+  /// When provided, the widget skips the API call and displays these
+  /// live values (updated by the ViewModel on every route recalculation).
+  final int? liveRemainingSeconds;
+  final double? liveRemainingDistanceMiles;
 
   const TripEndTimer({
     super.key,
@@ -21,6 +24,8 @@ class TripEndTimer extends StatefulWidget {
     required this.destination,
     this.driverLocationStream,
     this.onTripAlmostEnded,
+    this.liveRemainingSeconds,
+    this.liveRemainingDistanceMiles,
   });
 
   @override
@@ -35,7 +40,26 @@ class _TripEndTimerState extends State<TripEndTimer> {
   @override
   void initState() {
     super.initState();
-    _fetchTripDuration();
+    if (widget.liveRemainingSeconds != null) {
+      _totalSeconds = widget.liveRemainingSeconds!;
+      _totalMiles = widget.liveRemainingDistanceMiles ?? 0.0;
+      _isLoading = false;
+    } else {
+      _fetchTripDuration();
+    }
+  }
+
+  @override
+  void didUpdateWidget(TripEndTimer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.liveRemainingSeconds != null &&
+        widget.liveRemainingSeconds != oldWidget.liveRemainingSeconds) {
+      setState(() {
+        _totalSeconds = widget.liveRemainingSeconds!;
+        _totalMiles = widget.liveRemainingDistanceMiles ?? 0.0;
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _fetchTripDuration() async {

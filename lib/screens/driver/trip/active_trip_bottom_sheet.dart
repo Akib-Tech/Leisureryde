@@ -278,12 +278,22 @@ class _ActiveTripDriverBottomSheetState
                             ),
                           ),
 
-                          // Trip timer — shown for both driver during ongoing
+                          // Trip timer — shown during ongoing, fed with live
+                          // ETA values from DriverHomeViewModel so it updates
+                          // every time the route is recalculated (~30 m).
                           if (vm.rideRequest!.status == RideStatus.ongoing) ...[
                             const SizedBox(height: 12),
-                            TripEndTimer(
-                              origin: vm.rideRequest!.pickupLocation,
-                              destination: vm.userDestination,
+                            Consumer<DriverHomeViewModel>(
+                              builder: (_, driverVm, __) => TripEndTimer(
+                                origin: vm.rideRequest!.pickupLocation,
+                                destination: vm.userDestination,
+                                liveRemainingSeconds: driverVm.remainingSeconds > 0
+                                    ? driverVm.remainingSeconds
+                                    : null,
+                                liveRemainingDistanceMiles: driverVm.remainingDistanceMiles > 0
+                                    ? driverVm.remainingDistanceMiles
+                                    : null,
+                              ),
                             ),
                           ],
 

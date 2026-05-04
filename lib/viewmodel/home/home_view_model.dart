@@ -414,7 +414,7 @@ class HomeViewModel extends ChangeNotifier {
         pickupAddress: directionsResult.startAddress,
         destinationAddress: directionsResult.endAddress,
         fare: fare,
-        distance: directionsResult.distanceValue! / 1000.0,
+        distance: directionsResult.distanceValue! * 0.000621371,
         createdAt: DateTime.now(),
         paymentId: _paymentViewModel.currentPaymentId!,
       );

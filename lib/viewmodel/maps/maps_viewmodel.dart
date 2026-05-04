@@ -15,6 +15,9 @@ class MapViewModel extends ChangeNotifier {
   LatLng? _driverPosition;
   LatLng? get driverPosition => _driverPosition;
 
+  double _currentHeading = 0.0;
+  double get currentHeading => _currentHeading;
+
   bool _isFollowingDriver = false;
   bool get isFollowingDriver => _isFollowingDriver;
 
@@ -97,13 +100,17 @@ class MapViewModel extends ChangeNotifier {
   /// Called by the GoogleMap widget's onCameraMoveStarted callback.
   /// Distinguishes user gestures from programmatic moves.
   void onCameraMoveStarted() {
-    if (_isProgrammaticMove) return; // ignore our own animateCamera calls
+    if (_isProgrammaticMove) {
+      // Consume the flag for this one programmatic event only.
+      // The NEXT onCameraMoveStarted will be a genuine user gesture.
+      _isProgrammaticMove = false;
+      return;
+    }
     _isUserInteracting = true;
     notifyListeners();
   }
 
   /// Called by the GoogleMap widget's onCameraIdle callback.
-  /// Clears the programmatic-move guard so the next user gesture is detected.
   void onCameraIdle() {
     _isProgrammaticMove = false;
   }
@@ -112,12 +119,29 @@ class MapViewModel extends ChangeNotifier {
   void recenterCamera() {
     _isUserInteracting = false;
     if (_isFollowingDriver && _driverPosition != null) {
-      _animateToPosition(_driverPosition!);
+      followWithBearing(_driverPosition!, _currentHeading);
     } else if (_currentPosition != null) {
       _animateToPosition(
           LatLng(_currentPosition!.latitude, _currentPosition!.longitude));
     }
     notifyListeners();
+  }
+
+  /// Animates the camera to [position] while rotating the map to [heading].
+  /// Used during active navigation so the road ahead is always at the top.
+  void followWithBearing(LatLng position, double heading) {
+    if (_mapController == null || _isUserInteracting) return;
+    _isProgrammaticMove = true;
+    _mapController!.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: position,
+          bearing: heading,
+          zoom: 17.0,
+          tilt: 0.0,
+        ),
+      ),
+    );
   }
 
   Future<Position?> getCurrentUserLocation() async {
@@ -291,6 +315,7 @@ class MapViewModel extends ChangeNotifier {
   /// icon always faces the direction of travel.
   void updateDriverPosition(LatLng newPosition, {double heading = 0.0}) {
     _driverPosition = newPosition;
+    _currentHeading = heading;
 
     _markers.removeWhere((m) => m.markerId == _driverMarkerId);
     _markers.add(

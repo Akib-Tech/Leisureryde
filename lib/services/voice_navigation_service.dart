@@ -22,9 +22,36 @@ class VoiceNavigationService {
 
   bool _is300mSpoken = false;
   bool _is50mSpoken = false;
+  bool _is15mSpoken = false;
+  bool _isApproachingDestinationSpoken = false;
+  bool _isArrivedAtDestinationSpoken = false;
 
   // Guards the initial "Starting navigation …" announcement.
   bool _startAnnounced = false;
+
+  // Live distance to the next maneuver — updated on every GPS tick.
+  int _distanceToNextTurnMeters = 0;
+
+  // Route polyline used for off-route detection.
+  List<LatLng> _polylinePoints = [];
+  bool _deviationSpoken = false;
+  bool _announceNextRefresh = false;
+
+  /// The step currently being navigated (first in the remaining list).
+  RouteStep? get currentStep => _steps.isNotEmpty ? _steps.first : null;
+
+  /// The first step in the list that carries a real maneuver (turn/uturn/etc).
+  /// Used by the navigation banner to show the correct direction icon and
+  /// instruction even when the active step is a straight/head segment.
+  RouteStep? get nextManeuverStep {
+    for (final step in _steps) {
+      if (step.maneuver != null) return step;
+    }
+    return _steps.isNotEmpty ? _steps.first : null;
+  }
+
+  /// Metres remaining until the next maneuver. Updated on every GPS tick.
+  int get distanceToNextTurnMeters => _distanceToNextTurnMeters;
 
   bool _isEnabled = true;
   bool get isEnabled => _isEnabled;
@@ -44,6 +71,14 @@ class VoiceNavigationService {
   // Public API called by DriverHomeViewModel
   // ---------------------------------------------------------------------------
 
+  /// Updates the route polyline used for off-route detection.
+  /// Call this every time a new route is calculated, before [beginNewRoute]
+  /// or [refreshSteps].
+  void setPolyline(List<LatLng> points) {
+    _polylinePoints = points;
+    _deviationSpoken = false;
+  }
+
   /// Called once when a brand-new route begins (new ride, or status changes
   /// from accepted → ongoing which means a different destination).
   Future<void> beginNewRoute(List<RouteStep> steps) async {
@@ -51,6 +86,12 @@ class VoiceNavigationService {
     _startAnnounced = false;
     _is300mSpoken = false;
     _is50mSpoken = false;
+    _is15mSpoken = false;
+    _isApproachingDestinationSpoken = false;
+    _isArrivedAtDestinationSpoken = false;
+    _announceNextRefresh = false;
+    _deviationSpoken = false;
+    _distanceToNextTurnMeters = steps.isNotEmpty ? steps.first.distanceMeters : 0;
     _trackedEndLocation = steps.isNotEmpty ? steps.first.endLocation : null;
 
     if (!_isEnabled || steps.isEmpty) return;
@@ -70,7 +111,7 @@ class VoiceNavigationService {
   /// Called on every route recalculation (same ride, same status — just the
   /// driver has moved ~30 m). Steps are updated without resetting spoken flags
   /// unless the first maneuver has genuinely changed.
-  void refreshSteps(List<RouteStep> steps) {
+  Future<void> refreshSteps(List<RouteStep> steps) async {
     if (steps.isEmpty) {
       _steps = steps;
       return;
@@ -84,19 +125,50 @@ class VoiceNavigationService {
         _metersApart(_trackedEndLocation!, newTarget) > 50) {
       _is300mSpoken = false;
       _is50mSpoken = false;
+      _is15mSpoken = false;
       _trackedEndLocation = newTarget;
     }
 
     _steps = steps;
+
+    // If the driver went off-route and we flagged a refresh announcement,
+    // speak the updated first instruction now.
+    if (_announceNextRefresh && _isEnabled) {
+      _announceNextRefresh = false;
+      final first = nextManeuverStep ?? steps.first;
+      await _speak(
+        'Route updated. In ${_formatDistance(steps.first.distanceMeters)}, '
+        '${first.instruction}.',
+      );
+    }
   }
 
   /// Called on every driver GPS tick. Triggers voice announcements when the
-  /// driver is 300 m or 50 m from the next maneuver.
+  /// driver is 300 m or 50 m from the next maneuver, and detects off-route
+  /// deviation.
   Future<void> onPositionUpdate(LatLng position) async {
     if (!_isEnabled || _steps.isEmpty) return;
 
     final step = _steps.first;
     final dist = _metersApart(position, step.endLocation);
+
+    // Update live distance counter for the banner widget.
+    _distanceToNextTurnMeters = dist.round();
+
+    // Off-route detection — check if driver has strayed > 100 m from the
+    // calculated polyline. Announce once; the ViewModel will recalculate and
+    // call refreshSteps which then announces the updated route.
+    if (_polylinePoints.isNotEmpty) {
+      final distToRoute = _minDistanceToPolyline(position);
+      if (distToRoute > 100 && !_deviationSpoken) {
+        _deviationSpoken = true;
+        _announceNextRefresh = true;
+        await _speak('You have left the route. Recalculating.');
+        return;
+      }
+      // Back on route — reset so the next deviation can be announced.
+      if (distToRoute < 50) _deviationSpoken = false;
+    }
 
     // Initial announcement if beginNewRoute hasn't fired yet
     // (can happen if steps arrive before the first GPS tick).
@@ -107,12 +179,36 @@ class VoiceNavigationService {
       );
       if (step.distanceMeters <= 300) _is300mSpoken = true;
       if (step.distanceMeters <= 50) _is50mSpoken = true;
+      if (step.distanceMeters <= 15) _is15mSpoken = true;
+      return;
+    }
+
+    // On the final step, warn the driver they are near the destination so they
+    // can prepare to end the trip before tapping the button.
+    if (_steps.length == 1 && dist <= 100 && !_isApproachingDestinationSpoken) {
+      _isApproachingDestinationSpoken = true;
+      await _speak('You are approaching your destination. Please prepare to end the trip.');
+      return;
+    }
+
+    // On the final step, announce exact arrival so the driver knows to end trip.
+    if (_steps.length == 1 && dist <= 15 && !_isArrivedAtDestinationSpoken) {
+      _isArrivedAtDestinationSpoken = true;
+      _is15mSpoken = true;
+      await _speak('You have arrived at your destination.');
+      return;
+    }
+
+    // At-turn cue — spoken right as the driver reaches the maneuver.
+    if (dist <= 15 && !_is15mSpoken) {
+      _is15mSpoken = true;
+      await _speak(step.instruction);
       return;
     }
 
     if (dist <= 50 && !_is50mSpoken) {
       _is50mSpoken = true;
-      await _speak(step.instruction);
+      await _speak('Now, ${step.instruction}.');
       return;
     }
 
@@ -138,7 +234,7 @@ class VoiceNavigationService {
   Future<void> testSpeak() async {
     await _speak(
       'LeisureRyde navigation is ready. '
-      'In 300 meters, turn right onto Main Street.',
+      'In 0.2 miles, turn right onto Main Street.',
     );
   }
 
@@ -157,13 +253,21 @@ class VoiceNavigationService {
   }
 
   String _formatDistance(int meters) {
-    if (meters >= 1000) {
-      return '${(meters / 1000.0).toStringAsFixed(1)} kilometers';
+    if (meters <= 0) return '0.1 miles';
+    final miles = meters * 0.000621371;
+    final milesStr = miles >= 0.1
+        ? miles.toStringAsFixed(1)
+        : miles.toStringAsFixed(2);
+    return '$milesStr ${milesStr == '1.0' ? 'mile' : 'miles'}';
+  }
+
+  double _minDistanceToPolyline(LatLng position) {
+    double min = double.infinity;
+    for (final point in _polylinePoints) {
+      final d = _metersApart(position, point);
+      if (d < min) min = d;
     }
-    if (meters <= 0) return '50 meters';
-    // Round to the nearest 50 m for natural speech.
-    final rounded = ((meters / 50).round() * 50).clamp(50, 950);
-    return '$rounded meters';
+    return min == double.infinity ? 0 : min;
   }
 
   double _metersApart(LatLng a, LatLng b) {

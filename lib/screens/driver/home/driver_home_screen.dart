@@ -6,6 +6,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../models/ride_request_model.dart';
 import '../../../viewmodel/home/driver_home_view_model.dart';
 import '../../../widgets/custom_loading_indicator.dart';
+import '../../../widgets/navigation_banner.dart';
 import '../ride_request/ride_requests_screen.dart';
 import '../trip/active_trip_bottom_sheet.dart';
 
@@ -157,7 +158,20 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
             return Stack(
               children: [
                 _buildMap(context, viewModel),
-                _buildHeader(context, viewModel),
+                // Show turn-by-turn banner during active trip; normal header otherwise.
+                if (viewModel.activeRide != null)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: NavigationBanner(
+                      step: viewModel.currentNavStep,
+                      distanceMeters: viewModel.distanceToNextTurnMeters,
+                      upcomingTurnStep: viewModel.nextNavManeuverStep,
+                    ),
+                  )
+                else
+                  _buildHeader(context, viewModel),
                 if (viewModel.isOnline)
                   viewModel.activeRide != null
                       ? ActiveTripDriverBottomSheet(
@@ -241,7 +255,10 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
       markers: viewModel.mapViewModel.markers,
       polylines: viewModel.mapViewModel.polylines,
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 160,
+        // During navigation the banner is ~100 dp tall; normal header is ~160.
+        top: viewModel.activeRide != null
+            ? MediaQuery.of(context).padding.top + 100
+            : MediaQuery.of(context).padding.top + 160,
         bottom: bottomPadding,
       ),
     );

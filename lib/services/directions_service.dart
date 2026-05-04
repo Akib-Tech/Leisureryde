@@ -17,6 +17,7 @@ class DirectionsService {
       'https://maps.googleapis.com/maps/api/directions/json?'
           'origin=${origin.latitude},${origin.longitude}'
           '&destination=${destination.latitude},${destination.longitude}'
+          '&units=imperial'
           '&key=$_apiKey',
     );
 

@@ -202,7 +202,7 @@ class _RideRequestCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 12),
         ),
         child: Text(
-          "Accept (${(request.distance / 1000).toStringAsFixed(1)} km)",
+          "Accept (${request.distance.toStringAsFixed(1)} mi)",
         ),
       ),
     );
