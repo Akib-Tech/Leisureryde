@@ -99,7 +99,7 @@ class VoiceNavigationService {
     final first = steps.first;
     await _speak(
       'Starting navigation. '
-      'In ${_formatDistance(first.distanceMeters)}, ${first.instruction}.',
+      'Head onto ${_formatDistance(first.distanceMeters)}, ${first.instruction}.',
     );
     _startAnnounced = true;
 
@@ -237,6 +237,9 @@ class VoiceNavigationService {
       'In 0.2 miles, turn right onto Main Street.',
     );
   }
+
+  /// Speak any one-off status announcement (e.g. ride accepted, arrived, trip started).
+  Future<void> announce(String text) => _speak(text);
 
   Future<void> dispose() async {
     await _tts.stop();

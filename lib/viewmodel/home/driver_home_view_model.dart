@@ -74,7 +74,7 @@ class DriverHomeViewModel extends ChangeNotifier {
   StreamSubscription? _pendingReqSub;
 
   final NotificationService _notificationService = locator<NotificationService>();
-  final VoiceNavigationService _voiceNav = VoiceNavigationService();
+  final VoiceNavigationService _voiceNav = locator<VoiceNavigationService>();
 
   // Tracks the last ride+status we called beginNewRoute() for, so that
   // recalculations on the same leg call refreshSteps() instead.

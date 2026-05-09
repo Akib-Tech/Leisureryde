@@ -8,6 +8,7 @@ import '../../models/ride_request_model.dart';
 import '../../models/user_profile.dart';
 import '../../services/database_service.dart';
 import '../../services/ride_service.dart';
+import '../../services/voice_navigation_service.dart';
 
 class ActiveTripDriverViewModel extends ChangeNotifier {
   final String rideId;
@@ -30,6 +31,7 @@ class ActiveTripDriverViewModel extends ChangeNotifier {
   UserProfile? get passengerProfile => _passenger;
 
   StreamSubscription<DocumentSnapshot>? _rideSub;
+  bool _acceptedAnnouncementMade = false;
 
   ActiveTripDriverViewModel({required this.rideId}) {
     _initialize();
@@ -66,6 +68,13 @@ class ActiveTripDriverViewModel extends ChangeNotifier {
 
       _loading = false;
       notifyListeners();
+
+      if (!_acceptedAnnouncementMade && _ride!.status == RideStatus.accepted) {
+        _acceptedAnnouncementMade = true;
+        locator<VoiceNavigationService>().announce(
+          "Head on to your pickup at ${_ride!.pickupAddress}",
+        );
+      }
     });
 
 
@@ -73,10 +82,15 @@ class ActiveTripDriverViewModel extends ChangeNotifier {
   }
 
   Future<void> markArrived() async {
+    final name = _passenger?.firstName ?? 'your passenger';
+    final pickup = _ride?.pickupAddress ?? '';
+    locator<VoiceNavigationService>().announce("Pick up $name at $pickup");
     await _updateStatus('enroute');
   }
 
   Future<void> startTrip() async {
+    final destination = _ride?.destinationAddress ?? '';
+    locator<VoiceNavigationService>().announce("Heading to drop-off at $destination");
     await _updateStatus('ongoing');
   }
 

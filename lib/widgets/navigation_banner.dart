@@ -90,13 +90,16 @@ class NavigationBanner extends StatelessWidget {
       case 'turn-slight-right':
         return Icons.turn_right;
       case 'uturn-left':
-      case 'uturn-right':
         return Icons.u_turn_left;
+      case 'uturn-right':
+        return Icons.u_turn_right;
       case 'fork-left':
       case 'ramp-left':
+      case 'keep-left':
         return Icons.fork_left;
       case 'fork-right':
       case 'ramp-right':
+      case 'keep-right':
         return Icons.fork_right;
       case 'merge':
         return Icons.merge_type;

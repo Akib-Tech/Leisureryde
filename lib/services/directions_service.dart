@@ -61,14 +61,11 @@ class DirectionsService {
           final rawSteps = leg['steps'] as List<dynamic>? ?? [];
           final steps = rawSteps.map<RouteStep>((s) {
             final html = (s['html_instructions'] as String?) ?? '';
-            final clean = html
-                .replaceAll(RegExp(r'<[^>]*>'), ' ')
-                .replaceAll(RegExp(r'\s+'), ' ')
-                .trim();
+            final maneuver = s['maneuver'] as String?;
             final endLoc = s['end_location'] as Map<String, dynamic>?;
             return RouteStep(
-              instruction: clean,
-              maneuver: s['maneuver'] as String?,
+              instruction: _buildInstruction(html, maneuver),
+              maneuver: maneuver,
               distanceMeters: (s['distance']?['value'] as int?) ?? 0,
               endLocation: LatLng(
                 (endLoc?['lat'] as num?)?.toDouble() ?? 0.0,
@@ -126,6 +123,68 @@ class DirectionsService {
 
     return null; // Return null if any error or unsuccessful status
   }
+
+  // Builds a spoken instruction using the machine-readable maneuver code and
+  // the road name extracted from Google's bold-tagged HTML. This avoids
+  // cardinal directions ("Head north") in favour of left/right language.
+  static String _buildInstruction(String html, String? maneuver) {
+    // Google always bolds the road/destination name — extract all such parts.
+    final boldParts = RegExp(r'<b>(.*?)<\/b>')
+        .allMatches(html)
+        .map((m) => m.group(1) ?? '')
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    const maneuverPhrases = <String, String>{
+      'turn-left': 'Turn left',
+      'turn-sharp-left': 'Turn sharp left',
+      'turn-slight-left': 'Bear left',
+      'turn-right': 'Turn right',
+      'turn-sharp-right': 'Turn sharp right',
+      'turn-slight-right': 'Bear right',
+      'straight': 'Continue straight',
+      'uturn-left': 'Make a U-turn',
+      'uturn-right': 'Make a U-turn',
+      'fork-left': 'Keep left',
+      'fork-right': 'Keep right',
+      'keep-left': 'Keep left',
+      'keep-right': 'Keep right',
+      'ramp-left': 'Take the left ramp',
+      'ramp-right': 'Take the right ramp',
+      'merge': 'Merge',
+      'roundabout-left': 'At the roundabout, turn left',
+      'roundabout-right': 'At the roundabout, turn right',
+      'ferry': 'Take the ferry',
+      'ferry-train': 'Take the train ferry',
+    };
+
+    // Null maneuver = first "Head <cardinal>" step. Use "Continue" instead of
+    // cardinal directions so any driver can follow without map knowledge.
+    final action = maneuver != null
+        ? (maneuverPhrases[maneuver] ?? _cleanHtml(html))
+        : 'Continue';
+
+    if (boldParts.isEmpty) return action;
+
+    // Roundabout steps bold both the exit number and the road; the last bold
+    // segment is always the destination road name.
+    final road = boldParts.last;
+
+    // Turns and merges transition onto a new road; all others continue on one.
+    const ontoManeuvers = {
+      'turn-left', 'turn-sharp-left', 'turn-slight-left',
+      'turn-right', 'turn-sharp-right', 'turn-slight-right',
+      'merge', 'ramp-left', 'ramp-right',
+      'ferry', 'ferry-train', 'roundabout-left', 'roundabout-right',
+    };
+    final connector =
+        (maneuver != null && ontoManeuvers.contains(maneuver)) ? ' onto ' : ' on ';
+
+    return '$action$connector$road';
+  }
+
+  static String _cleanHtml(String html) =>
+      html.replaceAll(RegExp(r'<[^>]*>'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
 /// A single maneuver step returned by the Directions API.
@@ -170,3 +229,4 @@ class DirectionsResult {
     this.steps = const [],
   });
 }
+
