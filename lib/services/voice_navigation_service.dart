@@ -97,10 +97,10 @@ class VoiceNavigationService {
     if (!_isEnabled || steps.isEmpty) return;
 
     final first = steps.first;
-    await _speak(
+  /*  await _speak(
       'Starting navigation. '
       'Head onto ${_formatDistance(first.distanceMeters)}, ${first.instruction}.',
-    );
+    );*/
     _startAnnounced = true;
 
     // Mark thresholds already covered so we don't double-announce.
