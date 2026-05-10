@@ -45,4 +45,4 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-/functions/ .env.leisureryde-3ca0b
+/functions/.env.leisureryde-3ca0b
