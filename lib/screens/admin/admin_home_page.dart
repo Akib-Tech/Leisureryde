@@ -7,6 +7,7 @@ import 'package:leisureryde/services/auth_service.dart';
 import 'package:provider/provider.dart';
 
 import '../../viewmodel/admin/admin_view_model.dart';
+import 'company_funds_screen.dart';
 import 'drivers_earning_screen.dart';
 import 'drivers_list_screen.dart';
 
@@ -19,7 +20,13 @@ class AdminHomePage extends StatelessWidget {
       create: (_) => AdminDashboardViewModel(),
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("Admin Dashboard"),
+          title: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("LeisureRyde", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text("Admin Dashboard", style: TextStyle(fontSize: 12)),
+            ],
+          ),
           actions: [
             IconButton(
               icon: const Icon(Icons.logout),
@@ -91,6 +98,7 @@ class AdminHomePage extends StatelessWidget {
                   // --- UPDATED NAVIGATION ---
                   _buildNavigationTile(context, title: "Ride History", icon: Icons.receipt_long_outlined, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RideHistoryScreen()))),
                   _buildNavigationTile(context, title: "Driver Earnings", icon: Icons.account_balance_wallet_outlined, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DriverEarningsScreen()))),
+                  _buildNavigationTile(context, title: "Company Funds", icon: Icons.business_center_outlined, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CompanyFundsScreen()))),
                 ],
               ),
             );

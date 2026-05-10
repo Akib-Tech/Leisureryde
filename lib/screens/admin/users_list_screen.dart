@@ -5,8 +5,21 @@ import 'package:provider/provider.dart';
 
 import '../../viewmodel/admin/user_view_model.dart';
 
-class UsersListScreen extends StatelessWidget {
+class UsersListScreen extends StatefulWidget {
   const UsersListScreen({super.key});
+
+  @override
+  State<UsersListScreen> createState() => _UsersListScreenState();
+}
+
+class _UsersListScreenState extends State<UsersListScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,21 +34,58 @@ class UsersListScreen extends StatelessWidget {
             if (viewModel.isLoading) {
               return const Center(child: CircularProgressIndicator());
             }
-            if (viewModel.users.isEmpty) {
-              return const Center(child: Text("No users found."));
-            }
             return RefreshIndicator(
               onRefresh: viewModel.fetchUsers,
-              child: ListView.builder(
-                padding: const EdgeInsets.all(8),
-                itemCount: viewModel.users.length,
-                itemBuilder: (context, index) {
-                  final user = viewModel.users[index];
-                  return _buildUserCard(context, user, viewModel);
-                },
+              child: Column(
+                children: [
+                  _buildSearchBar(context, viewModel),
+                  Expanded(
+                    child: viewModel.filteredUsers.isEmpty
+                        ? Center(
+                            child: Text(
+                              _searchController.text.isNotEmpty
+                                  ? "No users match your search."
+                                  : "No users found.",
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                            itemCount: viewModel.filteredUsers.length,
+                            itemBuilder: (context, index) {
+                              final user = viewModel.filteredUsers[index];
+                              return _buildUserCard(context, user, viewModel);
+                            },
+                          ),
+                  ),
+                ],
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar(BuildContext context, UsersViewModel viewModel) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      child: TextField(
+        controller: _searchController,
+        onChanged: viewModel.setSearchQuery,
+        decoration: InputDecoration(
+          hintText: 'Search by name, email or phone...',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _searchController.clear();
+                    viewModel.setSearchQuery('');
+                  },
+                )
+              : null,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
         ),
       ),
     );
@@ -56,7 +106,9 @@ class UsersListScreen extends StatelessWidget {
                 CircleAvatar(
                   radius: 28,
                   backgroundImage: user.profileImageUrl.isNotEmpty ? NetworkImage(user.profileImageUrl) : null,
-                  child: user.profileImageUrl.isEmpty ? Text(user.firstName.isNotEmpty ? user.firstName[0].toUpperCase() : 'U', style: theme.textTheme.headlineSmall) : null,
+                  child: user.profileImageUrl.isEmpty
+                      ? Text(user.firstName.isNotEmpty ? user.firstName[0].toUpperCase() : 'U', style: theme.textTheme.headlineSmall)
+                      : null,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -65,7 +117,8 @@ class UsersListScreen extends StatelessWidget {
                     children: [
                       Text(user.fullName, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
                       Text(user.email, style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[600])),
-                      if (user.phone.isNotEmpty) Text(user.phone, style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[600])),
+                      if (user.phone.isNotEmpty)
+                        Text(user.phone, style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[600])),
                     ],
                   ),
                 ),
@@ -76,24 +129,19 @@ class UsersListScreen extends StatelessWidget {
               context: context,
               label: user.isBlocked ? "Unblock" : "Block",
               value: user.isBlocked,
-              onChanged: (newValue) => viewModel.updateUserBlockStatus(user.uid, newValue),
+              onChanged: (v) => viewModel.updateUserBlockStatus(user.uid, v),
               activeColor: Colors.red,
             ),
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => UserRideHistoryScreen(
-                        userId: user.uid,
-                        personName: user.firstName,
-                      ),
-                    ),
-                  );
-                },
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => UserRideHistoryScreen(userId: user.uid, personName: user.firstName),
+                  ),
+                ),
                 icon: const Icon(Icons.history),
                 label: const Text("View Ride History"),
               ),
@@ -116,11 +164,7 @@ class UsersListScreen extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: theme.textTheme.titleMedium),
-        Switch(
-          value: value,
-          onChanged: onChanged,
-          activeColor: activeColor ?? theme.primaryColor,
-        ),
+        Switch(value: value, onChanged: onChanged, activeColor: activeColor ?? theme.primaryColor),
       ],
     );
   }

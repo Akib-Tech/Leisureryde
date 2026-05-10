@@ -9,10 +9,25 @@ class UsersViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   List<UserProfile> _users = [];
-  List<UserProfile> get users => _users;
+  String _searchQuery = '';
+
+  List<UserProfile> get filteredUsers {
+    if (_searchQuery.isEmpty) return _users;
+    final q = _searchQuery.toLowerCase();
+    return _users.where((u) =>
+      u.fullName.toLowerCase().contains(q) ||
+      u.email.toLowerCase().contains(q) ||
+      u.phone.contains(q),
+    ).toList();
+  }
 
   UsersViewModel() {
     fetchUsers();
+  }
+
+  void setSearchQuery(String query) {
+    _searchQuery = query;
+    notifyListeners();
   }
 
   Future<void> fetchUsers() async {
@@ -21,6 +36,7 @@ class UsersViewModel extends ChangeNotifier {
     try {
       _users = await _adminService.getUsers();
     } catch (e) {
+      debugPrint('Error fetching users: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -35,7 +51,6 @@ class UsersViewModel extends ChangeNotifier {
         _users[index] = _users[index].copyWith(isBlocked: isBlocked);
         notifyListeners();
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 }

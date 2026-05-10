@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'package:leisureryde/models/ride_request_model.dart';
 import 'package:leisureryde/services/admin_service.dart';
 
-
 class RideHistoryViewModel extends ChangeNotifier {
   final AdminService _adminService = AdminService();
 
@@ -11,14 +10,39 @@ class RideHistoryViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   List<RideRequest> _rides = [];
-  Map<String, List<RideRequest>> _groupedRides = {};
-  Map<String, List<RideRequest>> get groupedRides => _groupedRides;
+  String _searchQuery = '';
 
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
+  Map<String, List<RideRequest>> get groupedRides {
+    final source = _searchQuery.isEmpty
+        ? _rides
+        : _rides.where((r) {
+            final q = _searchQuery.toLowerCase();
+            return r.passengerName.toLowerCase().contains(q) ||
+                (r.driverName?.toLowerCase().contains(q) ?? false) ||
+                r.pickupAddress.toLowerCase().contains(q) ||
+                r.destinationAddress.toLowerCase().contains(q);
+          }).toList();
+
+    final grouped = <String, List<RideRequest>>{};
+    for (final ride in source) {
+      final key = DateFormat('MMMM yyyy').format(ride.createdAt);
+      (grouped[key] ??= []).add(ride);
+    }
+    return grouped;
+  }
+
+  bool get hasRides => _rides.isNotEmpty;
+
   RideHistoryViewModel() {
     fetchRides();
+  }
+
+  void setSearchQuery(String query) {
+    _searchQuery = query;
+    notifyListeners();
   }
 
   Future<void> fetchRides() async {
@@ -27,7 +51,6 @@ class RideHistoryViewModel extends ChangeNotifier {
     notifyListeners();
     try {
       _rides = await _adminService.getRideRequests();
-      _groupRidesByMonth();
     } catch (e) {
       _errorMessage = "Error fetching ride history: $e";
       debugPrint(_errorMessage);
@@ -35,18 +58,5 @@ class RideHistoryViewModel extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
-  }
-
-  void _groupRidesByMonth() {
-    final newGroupedRides = <String, List<RideRequest>>{};
-    for (final ride in _rides) {
-      // Format date to a "Month Year" string to use as a key
-      final monthKey = DateFormat('MMMM yyyy').format(ride.createdAt);
-      if (newGroupedRides[monthKey] == null) {
-        newGroupedRides[monthKey] = [];
-      }
-      newGroupedRides[monthKey]!.add(ride);
-    }
-    _groupedRides = newGroupedRides;
   }
 }

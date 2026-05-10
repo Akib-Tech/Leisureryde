@@ -6,8 +6,21 @@ import 'package:provider/provider.dart';
 import '../../viewmodel/admin/ride_history_view_model.dart';
 import 'ride_details_screen.dart';
 
-class RideHistoryScreen extends StatelessWidget {
+class RideHistoryScreen extends StatefulWidget {
   const RideHistoryScreen({super.key});
+
+  @override
+  State<RideHistoryScreen> createState() => _RideHistoryScreenState();
+}
+
+class _RideHistoryScreenState extends State<RideHistoryScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,44 +35,80 @@ class RideHistoryScreen extends StatelessWidget {
             if (viewModel.isLoading) {
               return const Center(child: CircularProgressIndicator());
             }
-
             if (viewModel.errorMessage != null) {
               return Center(child: Text(viewModel.errorMessage!));
             }
-
-            if (viewModel.groupedRides.isEmpty) {
-              return const Center(
-                child: Text("No ride history found.", style: TextStyle(fontSize: 16)),
-              );
+            if (!viewModel.hasRides) {
+              return const Center(child: Text("No ride history found.", style: TextStyle(fontSize: 16)));
             }
 
-            final months = viewModel.groupedRides.keys.toList();
+            final grouped = viewModel.groupedRides;
+            final months = grouped.keys.toList();
 
             return RefreshIndicator(
               onRefresh: viewModel.fetchRides,
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                itemCount: months.length,
-                itemBuilder: (context, index) {
-                  final month = months[index];
-                  final ridesForMonth = viewModel.groupedRides[month]!;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-                        child: Text(
-                          month,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      ...ridesForMonth.map((ride) => _buildRideCard(context, ride)).toList(),
-                    ],
-                  );
-                },
+              child: Column(
+                children: [
+                  _buildSearchBar(context, viewModel),
+                  Expanded(
+                    child: grouped.isEmpty
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(32),
+                              child: Text("No rides match your search.", style: TextStyle(color: Colors.grey)),
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            itemCount: months.length,
+                            itemBuilder: (context, index) {
+                              final month = months[index];
+                              final ridesForMonth = grouped[month]!;
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                                    child: Text(
+                                      month,
+                                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                  ...ridesForMonth.map((ride) => _buildRideCard(context, ride)),
+                                ],
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar(BuildContext context, RideHistoryViewModel viewModel) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      child: TextField(
+        controller: _searchController,
+        onChanged: viewModel.setSearchQuery,
+        decoration: InputDecoration(
+          hintText: 'Search by passenger, driver or address...',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _searchController.clear();
+                    viewModel.setSearchQuery('');
+                  },
+                )
+              : null,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
         ),
       ),
     );
@@ -79,7 +128,7 @@ class RideHistoryScreen extends StatelessWidget {
           children: [
             Container(
               width: 5,
-              height: 100, // Adjust height as needed
+              height: 100,
               decoration: BoxDecoration(
                 color: statusColor,
                 borderRadius: const BorderRadius.only(
@@ -117,7 +166,7 @@ class RideHistoryScreen extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(Icons.location_on, size: 16, color: Colors.green),
+                        const Icon(Icons.location_on, size: 16, color: Colors.green),
                         const SizedBox(width: 8),
                         Expanded(child: Text(ride.destinationAddress, overflow: TextOverflow.ellipsis, maxLines: 1)),
                       ],

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:leisureryde/models/driver_profile.dart';
 import 'package:leisureryde/models/ride_request_model.dart';
 import 'package:leisureryde/services/admin_service.dart';
+import 'package:leisureryde/services/fare_calculation_service.dart';
 
-// A helper class to hold the processed earnings data for one driver
 class DriverEarningSummary {
   final String driverId;
   final String driverName;
@@ -39,8 +40,14 @@ class DriverEarningsViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final completedRides = await _adminService.getCompletedRides();
-      _earnings = _processRidesToEarnings(completedRides);
+      final results = await Future.wait([
+        _adminService.getCompletedRides(),
+        _adminService.getDrivers(),
+      ]);
+      final rides = results[0] as List<RideRequest>;
+      final drivers = results[1] as List<DriverProfile>;
+      final driverNames = {for (final d in drivers) d.uid: d.fullName};
+      _earnings = _processRidesToEarnings(rides, driverNames);
     } catch (e) {
       _errorMessage = "Error fetching driver earnings: $e";
       debugPrint(_errorMessage);
@@ -50,35 +57,39 @@ class DriverEarningsViewModel extends ChangeNotifier {
     }
   }
 
-  List<DriverEarningSummary> _processRidesToEarnings(List<RideRequest> rides) {
+  List<DriverEarningSummary> _processRidesToEarnings(
+    List<RideRequest> rides,
+    Map<String, String> driverNames,
+  ) {
     final Map<String, List<RideRequest>> ridesByDriver = {};
-
-    // Group rides by driverId
     for (final ride in rides) {
       if (ride.driverId != null && ride.driverId!.isNotEmpty) {
         (ridesByDriver[ride.driverId!] ??= []).add(ride);
       }
     }
 
-    // Calculate summary for each driver
     final List<DriverEarningSummary> summaries = [];
     ridesByDriver.forEach((driverId, driverRides) {
       if (driverRides.isNotEmpty) {
-        final totalEarnings = driverRides.fold<double>(0, (sum, ride) => sum + ride.fare);
-        summaries.add(
-          DriverEarningSummary(
-            driverId: driverId,
-            driverName: driverRides.first.driverName ?? 'Unknown Driver',
-            totalRides: driverRides.length,
-            totalEarnings: totalEarnings,
-          ),
+        // Prefer driverName on the ride; fall back to the driver profile lookup
+        final name = (driverRides.first.driverName?.isNotEmpty == true)
+            ? driverRides.first.driverName!
+            : driverNames[driverId] ?? 'Unknown Driver';
+
+        final totalEarnings = driverRides.fold<double>(
+          0,
+          (sum, ride) => sum + ride.fare * FareCalculationService.driverShareRate,
         );
+        summaries.add(DriverEarningSummary(
+          driverId: driverId,
+          driverName: name,
+          totalRides: driverRides.length,
+          totalEarnings: totalEarnings,
+        ));
       }
     });
 
-    // Sort by highest earnings
     summaries.sort((a, b) => b.totalEarnings.compareTo(a.totalEarnings));
-
     return summaries;
   }
 }
