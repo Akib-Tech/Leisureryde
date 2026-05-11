@@ -597,6 +597,10 @@ class HomeViewModel extends ChangeNotifier {
       await mapViewModel.initialize();
       _isLoading = false;
       notifyListeners();
+    } else {
+      // Force the map controller to redraw its tiles — fixes the iOS blank/static
+      // map that occurs when the GL rendering context is suspended in background.
+      await mapViewModel.refreshMap();
     }
 
     final uid = _auth.currentUser?.uid;

@@ -40,8 +40,12 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
       final vm = _vm;
-      if (vm != null && vm.mapViewModel.currentPosition == null) {
+      if (vm == null) return;
+      if (vm.mapViewModel.currentPosition == null) {
         vm.requestLocationPermission();
+      } else {
+        // Force map tile redraw — fixes the iOS blank/static map after backgrounding.
+        vm.mapViewModel.refreshMap();
       }
     }
   }

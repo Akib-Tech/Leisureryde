@@ -28,16 +28,16 @@ class FareCalculationService {
     double distanceInMiles = distanceInMeters * 0.000621371;
     double durationInMinutes = durationInSeconds / 60;
 
-    // Standard calculation + booking fee
-    double standardFare = _baseFare +
+    // Metered portion — scales with vehicle tier (Uber-consistent behaviour).
+    // The booking fee is a fixed platform charge and must NOT be multiplied.
+    double meteredFare = _baseFare +
         (distanceInMiles * _perMile) +
-        (durationInMinutes * _perMinute) +
-        _bookingFee;
+        (durationInMinutes * _perMinute);
 
-    // Calculate fare for each vehicle type (total includes tax)
-    double comfortFare = standardFare * _leisureComfortMultiplier * (1 + taxRate);
-    double plusFare = standardFare * _leisurePlusMultiplier * (1 + taxRate);
-    double execFare = standardFare * _leisureExecMultiplier * (1 + taxRate);
+    // Booking fee is flat per trip regardless of vehicle type, then tax on total.
+    double comfortFare = (meteredFare * _leisureComfortMultiplier + _bookingFee) * (1 + taxRate);
+    double plusFare    = (meteredFare * _leisurePlusMultiplier    + _bookingFee) * (1 + taxRate);
+    double execFare    = (meteredFare * _leisureExecMultiplier    + _bookingFee) * (1 + taxRate);
 
     return CalculatedFare(
       leisureComfort: max(comfortFare, _minTripEarnings),

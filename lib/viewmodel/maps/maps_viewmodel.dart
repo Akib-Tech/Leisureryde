@@ -357,6 +357,18 @@ class MapViewModel extends ChangeNotifier {
     _animateToPosition(position);
   }
 
+  /// Forces the map to redraw by nudging the camera to the current position.
+  /// Call this whenever the app resumes from background to fix the iOS
+  /// blank/static tile bug that occurs when the GL context is suspended.
+  Future<void> refreshMap() async {
+    final pos = _currentPosition;
+    if (_mapController == null || pos == null) return;
+    _isProgrammaticMove = true;
+    await _mapController!.animateCamera(
+      CameraUpdate.newLatLng(LatLng(pos.latitude, pos.longitude)),
+    );
+  }
+
   Future<void> fitDriverAndDestination(
       LatLng driverLocation, LatLng destination) async {
     if (_mapController == null) return;

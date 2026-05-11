@@ -5,6 +5,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import 'directions_service.dart';
 
+// Needed for Platform check
+import 'dart:io' show Platform;
+
 /// Manages turn-by-turn voice announcements during an active trip.
 ///
 /// Sits entirely on top of the existing map/route stack — it reads the
@@ -65,6 +68,22 @@ class VoiceNavigationService {
     await _tts.setSpeechRate(0.45);
     await _tts.setVolume(1.0);
     await _tts.setPitch(1.0);
+
+    // iOS requires an audio session to be configured so TTS keeps working
+    // after the app returns from background (otherwise the AVAudioSession
+    // is interrupted and speech is silently dropped).
+    if (Platform.isIOS) {
+      await _tts.setSharedInstance(true);
+      await _tts.setIosAudioCategory(
+        IosTextToSpeechAudioCategory.playback,
+        [
+          IosTextToSpeechAudioCategoryOptions.allowBluetooth,
+          IosTextToSpeechAudioCategoryOptions.allowBluetoothA2DP,
+          IosTextToSpeechAudioCategoryOptions.mixWithOthers,
+        ],
+        IosTextToSpeechAudioMode.defaultMode,
+      );
+    }
   }
 
   // ---------------------------------------------------------------------------
