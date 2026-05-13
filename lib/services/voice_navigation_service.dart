@@ -26,7 +26,6 @@ class VoiceNavigationService {
   bool _is300mSpoken = false;
   bool _is50mSpoken = false;
   bool _is15mSpoken = false;
-  bool _isApproachingDestinationSpoken = false;
   bool _isArrivedAtDestinationSpoken = false;
 
   // Guards the initial "Starting navigation …" announcement.
@@ -106,7 +105,6 @@ class VoiceNavigationService {
     _is300mSpoken = false;
     _is50mSpoken = false;
     _is15mSpoken = false;
-    _isApproachingDestinationSpoken = false;
     _isArrivedAtDestinationSpoken = false;
     _announceNextRefresh = false;
     _deviationSpoken = false;
@@ -171,8 +169,9 @@ class VoiceNavigationService {
     final step = _steps.first;
     final dist = _metersApart(position, step.endLocation);
 
-    // Update live distance counter for the banner widget.
-    _distanceToNextTurnMeters = dist.round();
+    // Banner shows distance to the next REAL maneuver, skipping over any
+    // intermediate straight/continue steps.
+    _distanceToNextTurnMeters = _distanceToNextRealManeuver(position);
 
     // Off-route detection — check if driver has strayed > 100 m from the
     // calculated polyline. Announce once; the ViewModel will recalculate and
@@ -185,32 +184,10 @@ class VoiceNavigationService {
         await _speak('You have left the route. Recalculating.');
         return;
       }
-      // Back on route — reset so the next deviation can be announced.
       if (distToRoute < 50) _deviationSpoken = false;
     }
 
-    // Initial announcement if beginNewRoute hasn't fired yet
-    // (can happen if steps arrive before the first GPS tick).
-    if (!_startAnnounced) {
-      _startAnnounced = true;
-      await _speak(
-        'In ${_formatDistance(step.distanceMeters)}, ${step.instruction}.',
-      );
-      if (step.distanceMeters <= 300) _is300mSpoken = true;
-      if (step.distanceMeters <= 50) _is50mSpoken = true;
-      if (step.distanceMeters <= 15) _is15mSpoken = true;
-      return;
-    }
-
-    // On the final step, warn the driver they are near the destination so they
-    // can prepare to end the trip before tapping the button.
-    if (_steps.length == 1 && dist <= 100 && !_isApproachingDestinationSpoken) {
-      _isApproachingDestinationSpoken = true;
-      await _speak('You are approaching your destination. Please prepare to end the trip.');
-      return;
-    }
-
-    // On the final step, announce exact arrival so the driver knows to end trip.
+    // Always announce arrival at the final destination regardless of step type.
     if (_steps.length == 1 && dist <= 15 && !_isArrivedAtDestinationSpoken) {
       _isArrivedAtDestinationSpoken = true;
       _is15mSpoken = true;
@@ -218,7 +195,25 @@ class VoiceNavigationService {
       return;
     }
 
-    // At-turn cue — spoken right as the driver reaches the maneuver.
+    // Straight and null-maneuver steps are silently tracked — no voice cue.
+    // Only turns, forks, ramps, roundabouts, etc. trigger announcements.
+    final bool isRealManeuver = step.maneuver != null && step.maneuver != 'straight';
+
+    // Initial announcement fallback (fires if beginNewRoute ran before first tick).
+    if (!_startAnnounced) {
+      _startAnnounced = true;
+      if (isRealManeuver) {
+        await _speak('In ${_formatDistance(dist.round())}, ${step.instruction}.');
+        if (dist <= 300) _is300mSpoken = true;
+        if (dist <= 50) _is50mSpoken = true;
+        if (dist <= 15) _is15mSpoken = true;
+      }
+      return;
+    }
+
+    if (!isRealManeuver) return;
+
+    // At-turn cue — spoken right as the driver reaches the maneuver point.
     if (dist <= 15 && !_is15mSpoken) {
       _is15mSpoken = true;
       await _speak(step.instruction);
@@ -290,6 +285,24 @@ class VoiceNavigationService {
       if (d < min) min = d;
     }
     return min == double.infinity ? 0 : min;
+  }
+
+  // Returns metres from [position] to the nearest upcoming step that has a
+  // real maneuver (turn, fork, ramp, roundabout, etc.), summing through any
+  // intermediate straight/continue steps. Used to keep the banner accurate
+  // even when the driver is currently on a straight segment.
+  int _distanceToNextRealManeuver(LatLng position) {
+    if (_steps.isEmpty) return 0;
+    double dist = _metersApart(position, _steps.first.endLocation);
+    final String? m = _steps.first.maneuver;
+    if (m != null && m != 'straight') return dist.round();
+    for (int i = 1; i < _steps.length; i++) {
+      final s = _steps[i];
+      final String? sm = s.maneuver;
+      if (sm != null && sm != 'straight') return dist.round();
+      dist += s.distanceMeters;
+    }
+    return dist.round();
   }
 
   double _metersApart(LatLng a, LatLng b) {
