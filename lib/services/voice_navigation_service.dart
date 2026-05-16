@@ -50,7 +50,7 @@ class VoiceNavigationService {
   /// instruction even when the active step is a straight/head segment.
   RouteStep? get nextManeuverStep {
     for (final step in _steps) {
-      if (step.maneuver != null) return step;
+      if (step.maneuver != null && step.maneuver != 'straight') return step;
     }
     return _steps.isNotEmpty ? _steps.first : null;
   }
@@ -225,40 +225,42 @@ class VoiceNavigationService {
       return;
     }
 
-    // Straight and null-maneuver steps are silently tracked — no voice cue.
-    // Only turns, forks, ramps, roundabouts, etc. trigger announcements.
-    final bool isRealManeuver = step.maneuver != null && step.maneuver != 'straight';
+    // Look ahead through any straight/null steps to find the next real turn.
+    // This is the same look-ahead used by the navigation banner (_distanceToNextTurnMeters),
+    // applied now to voice so announcements fire even when the current step is straight.
+    final upcomingTurn = nextManeuverStep;
+    final int distToTurn = _distanceToNextTurnMeters;
 
     // Initial announcement fallback (fires if beginNewRoute ran before first tick).
     if (!_startAnnounced) {
       _startAnnounced = true;
-      if (isRealManeuver) {
-        await _speak('In ${_formatDistance(dist.round())}, ${step.instruction}.');
-        if (dist <= 300) _is300mSpoken = true;
-        if (dist <= 50) _is50mSpoken = true;
-        if (dist <= 15) _is15mSpoken = true;
+      if (upcomingTurn != null) {
+        await _speak('In ${_formatDistance(distToTurn)}, ${upcomingTurn.instruction}.');
+        if (distToTurn <= 300) _is300mSpoken = true;
+        if (distToTurn <= 50) _is50mSpoken = true;
+        if (distToTurn <= 15) _is15mSpoken = true;
       }
       return;
     }
 
-    if (!isRealManeuver) return;
+    if (upcomingTurn == null) return;
 
     // At-turn cue — spoken right as the driver reaches the maneuver point.
-    if (dist <= 15 && !_is15mSpoken) {
+    if (distToTurn <= 15 && !_is15mSpoken) {
       _is15mSpoken = true;
-      await _speak(step.instruction);
+      await _speak(upcomingTurn.instruction);
       return;
     }
 
-    if (dist <= 50 && !_is50mSpoken) {
+    if (distToTurn <= 50 && !_is50mSpoken) {
       _is50mSpoken = true;
-      await _speak('Now, ${step.instruction}.');
+      await _speak('Now, ${upcomingTurn.instruction}.');
       return;
     }
 
-    if (dist <= 300 && !_is300mSpoken) {
+    if (distToTurn <= 300 && !_is300mSpoken) {
       _is300mSpoken = true;
-      await _speak('In ${_formatDistance(dist.round())}, ${step.instruction}.');
+      await _speak('In ${_formatDistance(distToTurn)}, ${upcomingTurn.instruction}.');
     }
   }
 

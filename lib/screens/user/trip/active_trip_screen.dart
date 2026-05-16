@@ -310,18 +310,42 @@ class _ActiveTripCardState extends State<ActiveTripCard>
                           const SizedBox(height: 4),
                         ],
 
-                        // Destination row
+                        // Pickup → Destination route row
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.location_on,
-                                color: theme.primaryColor, size: 18),
+                            Column(
+                              children: [
+                                const Icon(Icons.radio_button_checked,
+                                    color: Colors.green, size: 16),
+                                Container(
+                                    width: 2,
+                                    height: 20,
+                                    color: Colors.grey.shade300),
+                                Icon(Icons.location_on,
+                                    color: theme.primaryColor, size: 16),
+                              ],
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Text(
-                                rideRequest.destinationAddress,
-                                style: theme.textTheme.bodyMedium,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    rideRequest.pickupAddress,
+                                    style: theme.textTheme.bodyMedium,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    rideRequest.destinationAddress,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                        fontWeight: FontWeight.w600),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
                               ),
                             ),
                           ],

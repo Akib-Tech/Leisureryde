@@ -206,6 +206,48 @@ class _ActiveTripDriverBottomSheetState
                               ),
                             ),
                           ),
+                          const SizedBox(height: 12),
+
+                          // Pickup → Destination route summary
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Column(
+                                children: [
+                                  const Icon(Icons.radio_button_checked,
+                                      color: Colors.green, size: 16),
+                                  Container(
+                                      width: 2,
+                                      height: 20,
+                                      color: Colors.grey.shade300),
+                                  Icon(Icons.location_on,
+                                      color: t.primaryColor, size: 16),
+                                ],
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      vm.rideRequest!.pickupAddress,
+                                      style: t.textTheme.bodyMedium,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      vm.rideRequest!.destinationAddress,
+                                      style: t.textTheme.bodyMedium?.copyWith(
+                                          fontWeight: FontWeight.w600),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                           const SizedBox(height: 16),
 
                           // Passenger info

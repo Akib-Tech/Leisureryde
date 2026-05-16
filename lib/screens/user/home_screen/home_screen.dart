@@ -530,20 +530,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.location_on, color: theme.primaryColor, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        directions.endAddress,
-                        style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
+                _buildRouteAddressRow(theme, directions.startAddress, directions.endAddress),
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -601,7 +588,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(width: 48),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 4),
+            _buildRouteAddressRow(theme, directions.startAddress, directions.endAddress),
+            const Divider(height: 24),
             _buildVehicleOption(context, icon: Icons.directions_car, title: "Leisure Comfort", subtitle: "Affordable, everyday rides", price: fare.leisureComfort, isSelected: viewModel.selectedVehicle == 'Leisure Comfort', onTap: () => viewModel.selectVehicle('Leisure Comfort')),
             const Divider(),
             _buildVehicleOption(context, icon: Icons.airport_shuttle, title: "Leisure Plus", subtitle: "Extra space, premium rides", price: fare.leisurePlus, isSelected: viewModel.selectedVehicle == 'Leisure Plus', onTap: () => viewModel.selectVehicle('Leisure Plus')),
@@ -700,8 +689,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 _buildPaymentDetailRow(theme, "Total", "\$${selectedVehicleFare.toStringAsFixed(2)}", isBold: true),
                 const SizedBox(height: 8),
                 _buildPaymentDetailRow(theme, "Vehicle Type", viewModel.selectedVehicle!),
-                const SizedBox(height: 8),
-                _buildPaymentDetailRow(theme, "Destination", directions.endAddress, isSubtitle: true),
+                const SizedBox(height: 12),
+                _buildRouteAddressRow(theme, directions.startAddress, directions.endAddress),
                 const SizedBox(height: 20),
                 ListTile(
                   leading: Icon(Icons.credit_card, color: theme.primaryColor),
@@ -744,6 +733,42 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildRouteAddressRow(ThemeData theme, String pickupAddress, String destinationAddress) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          children: [
+            const Icon(Icons.radio_button_checked, color: Colors.green, size: 18),
+            Container(width: 2, height: 22, color: Colors.grey.shade300),
+            Icon(Icons.location_on, color: theme.primaryColor, size: 18),
+          ],
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                pickupAddress,
+                style: theme.textTheme.bodyMedium,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                destinationAddress,
+                style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
