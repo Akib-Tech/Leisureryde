@@ -39,6 +39,9 @@ class VoiceNavigationService {
   bool _deviationSpoken = false;
   bool _announceNextRefresh = false;
 
+  // Whether the current leg is navigating to the pickup (true) or destination (false).
+  bool _isPickupLeg = true;
+
   /// The step currently being navigated (first in the remaining list).
   RouteStep? get currentStep => _steps.isNotEmpty ? _steps.first : null;
 
@@ -89,6 +92,12 @@ class VoiceNavigationService {
   // Public API called by DriverHomeViewModel
   // ---------------------------------------------------------------------------
 
+  /// Sets whether the current navigation leg is heading to the pickup (true)
+  /// or the final destination (false). Must be called before [beginNewRoute].
+  void setLegContext(bool isPickupLeg) {
+    _isPickupLeg = isPickupLeg;
+  }
+
   /// Updates the route polyline used for off-route detection.
   /// Call this every time a new route is calculated, before [beginNewRoute]
   /// or [refreshSteps].
@@ -114,15 +123,34 @@ class VoiceNavigationService {
     if (!_isEnabled || steps.isEmpty) return;
 
     final first = steps.first;
-  /*  await _speak(
-      'Starting navigation. '
-      'Head onto ${_formatDistance(first.distanceMeters)}, ${first.instruction}.',
-    );*/
     _startAnnounced = true;
 
     // Mark thresholds already covered so we don't double-announce.
     if (first.distanceMeters <= 300) _is300mSpoken = true;
     if (first.distanceMeters <= 50) _is50mSpoken = true;
+
+    // For the destination leg, startTrip() has already finished its announcement
+    // (it is awaited before _updateStatus fires). Announce the first upcoming turn
+    // now so the driver knows immediately what to expect.
+    // Pickup leg stays silent here — the acceptance announcement is still playing
+    // when beginNewRoute fires (the Directions API call takes ~1-2 s), and calling
+    // _speak() would stop() the TTS mid-sentence.
+    if (!_isPickupLeg) {
+      // Sum the distances of all straight/null-maneuver steps to find how far
+      // away the first real turn is from the route start.
+      double distToFirstTurn = 0;
+      for (final s in steps) {
+        if (s.maneuver != null && s.maneuver != 'straight') break;
+        distToFirstTurn += s.distanceMeters;
+      }
+      final firstTurn = nextManeuverStep;
+      if (firstTurn != null && distToFirstTurn > 300) {
+        await _speak(
+          'In ${_formatDistance(distToFirstTurn.round())}, ${firstTurn.instruction}.',
+        );
+        _is300mSpoken = true; // suppress the automatic 300 m re-announcement
+      }
+    }
   }
 
   /// Called on every route recalculation (same ride, same status — just the
@@ -187,11 +215,13 @@ class VoiceNavigationService {
       if (distToRoute < 50) _deviationSpoken = false;
     }
 
-    // Always announce arrival at the final destination regardless of step type.
+    // Always announce arrival at the end of the route regardless of step type.
     if (_steps.length == 1 && dist <= 15 && !_isArrivedAtDestinationSpoken) {
       _isArrivedAtDestinationSpoken = true;
       _is15mSpoken = true;
-      await _speak('You have arrived at your destination.');
+      await _speak(_isPickupLeg
+          ? 'You have arrived at the pickup location.'
+          : 'You have arrived at your destination.');
       return;
     }
 

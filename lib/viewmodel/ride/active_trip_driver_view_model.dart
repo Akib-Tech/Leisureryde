@@ -82,15 +82,17 @@ class ActiveTripDriverViewModel extends ChangeNotifier {
   }
 
   Future<void> markArrived() async {
-    final name = _passenger?.firstName ?? 'your passenger';
-    final pickup = _ride?.pickupAddress ?? '';
-    locator<VoiceNavigationService>().announce("Pick up $name at $pickup");
+    // Voice navigation already announced "You have arrived at the pickup
+    // location" based on GPS proximity. No duplicate announcement needed here.
     await _updateStatus('enroute');
   }
 
   Future<void> startTrip() async {
     final destination = _ride?.destinationAddress ?? '';
-    locator<VoiceNavigationService>().announce("Heading to drop-off at $destination");
+    // Await so the TTS finishes before the status update triggers route
+    // recalculation — otherwise a GPS tick could interrupt this announcement.
+    await locator<VoiceNavigationService>().announce(
+        "Trip started. Heading to $destination.");
     await _updateStatus('ongoing');
   }
 

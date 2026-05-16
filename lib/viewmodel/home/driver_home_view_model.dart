@@ -234,6 +234,15 @@ class DriverHomeViewModel extends ChangeNotifier {
     // Reset the route-calc throttle so _drawRouteForActiveRide fires on the
     // very next GPS tick (or immediately below) rather than waiting 30 m.
     _lastRouteCalcPosition = null;
+    // Seed the driver position from the map's device GPS so the initial
+    // _drawRouteForActiveRide() call below doesn't bail out early when the
+    // Realtime Database stream hasn't fired its first tick yet.
+    if (_driverCurrentPosition == null && mapViewModel.currentPosition != null) {
+      _driverCurrentPosition = LatLng(
+        mapViewModel.currentPosition!.latitude,
+        mapViewModel.currentPosition!.longitude,
+      );
+    }
     notifyListeners();
     _subscribeToActiveRideDoc(ride.id);
     // Draw the pickup route right away — the location listener won't redraw
@@ -467,6 +476,10 @@ class DriverHomeViewModel extends ChangeNotifier {
       // Feed the freshest polyline to the voice service for off-route detection
       // before updating the steps.
       _voiceNav.setPolyline(result.polylinePoints);
+
+      // Tell the voice service which leg we are on so arrival announcements
+      // say "pickup location" vs "destination" as appropriate.
+      _voiceNav.setLegContext(_activeRide!.status != RideStatus.ongoing);
 
       // Feed steps to the voice service.  Only call beginNewRoute() when the
       // ride or its status has genuinely changed; otherwise refreshSteps() so
