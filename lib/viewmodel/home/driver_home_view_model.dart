@@ -231,12 +231,16 @@ class DriverHomeViewModel extends ChangeNotifier {
   /// The doc subscription takes over from here and handles all status changes.
   void preSetActiveRide(RideRequest ride) {
     _activeRide = ride;
-    // Reset the route-calc throttle so _drawRouteForActiveRide fires on the
-    // very next GPS tick (or immediately below) rather than waiting 30 m.
     _lastRouteCalcPosition = null;
+    // Clear stale voice-nav steps from any previous ride so GPS ticks that
+    // fire before the new route is calculated cannot trigger a false
+    // "arrived at pickup" announcement.
+    _lastVoiceRideId = null;
+    _lastVoiceStatus = null;
+    _voiceNav.reset();
     // Seed the driver position from the map's device GPS so the initial
     // _drawRouteForActiveRide() call below doesn't bail out early when the
-    // Realtime Database stream hasn't fired its first tick yet.
+    // location stream hasn't fired its first tick yet.
     if (_driverCurrentPosition == null && mapViewModel.currentPosition != null) {
       _driverCurrentPosition = LatLng(
         mapViewModel.currentPosition!.latitude,
@@ -318,6 +322,7 @@ class DriverHomeViewModel extends ChangeNotifier {
         _activeRide = null;
         _lastVoiceRideId = null;
         _lastVoiceStatus = null;
+        _voiceNav.reset();
         _activeRideDocSubscription?.cancel();
         _activeRideDocSubscription = null;
         mapViewModel.clearRoute();
@@ -328,6 +333,8 @@ class DriverHomeViewModel extends ChangeNotifier {
       if (ride.status.isTerminal) {
         if (ride.status == RideStatus.completed) {
           await _voiceNav.announceArrival();
+        } else {
+          _voiceNav.reset();
         }
         _activeRide = null;
         _lastVoiceRideId = null;
@@ -497,24 +504,18 @@ class DriverHomeViewModel extends ChangeNotifier {
   }
 
   void _updateDestinationMarker(LatLng destination) {
-    mapViewModel.markers.removeWhere(
-          (marker) => marker.markerId == const MarkerId('destination'),
-    );
-    mapViewModel.markers.add(
-      Marker(
-        markerId: const MarkerId('destination'),
-        position: destination,
-        infoWindow: InfoWindow(
-          title: _activeRide!.status == RideStatus.ongoing ? 'Destination' : 'Pickup',
-        ),
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-          _activeRide!.status == RideStatus.ongoing
-              ? BitmapDescriptor.hueRed
-              : BitmapDescriptor.hueGreen,
-        ),
+    mapViewModel.updateMarker(Marker(
+      markerId: const MarkerId('destination'),
+      position: destination,
+      infoWindow: InfoWindow(
+        title: _activeRide!.status == RideStatus.ongoing ? 'Destination' : 'Pickup',
       ),
-    );
-    mapViewModel.notifyListeners();
+      icon: BitmapDescriptor.defaultMarkerWithHue(
+        _activeRide!.status == RideStatus.ongoing
+            ? BitmapDescriptor.hueRed
+            : BitmapDescriptor.hueGreen,
+      ),
+    ));
   }
 
   void _stopListeningToActiveRide() {

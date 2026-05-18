@@ -287,6 +287,23 @@ class VoiceNavigationService {
   /// Speak any one-off status announcement (e.g. ride accepted, arrived, trip started).
   Future<void> announce(String text) => _speak(text);
 
+  /// Clears all navigation state without making any announcement.
+  /// Call this when a new ride is accepted so stale steps from a previous
+  /// (cancelled/completed) ride cannot trigger false arrival announcements.
+  void reset() {
+    _steps = [];
+    _startAnnounced = false;
+    _is300mSpoken = false;
+    _is50mSpoken = false;
+    _is15mSpoken = false;
+    _isArrivedAtDestinationSpoken = false;
+    _announceNextRefresh = false;
+    _deviationSpoken = false;
+    _trackedEndLocation = null;
+    _distanceToNextTurnMeters = 0;
+    _polylinePoints = [];
+  }
+
   Future<void> dispose() async {
     await _tts.stop();
   }
