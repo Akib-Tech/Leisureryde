@@ -144,13 +144,8 @@ class AuthService extends ChangeNotifier {
           gender: gender,
         );
       }
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'weak-password') {
-        throw Exception('The password provided is too weak.');
-      } else if (e.code == 'email-already-in-use') {
-        throw Exception('An account already exists for that email.');
-      }
-      rethrow; // Rethrow for generic errors
+    } on FirebaseAuthException {
+      rethrow;
     } catch (e) {
       rethrow;
     }

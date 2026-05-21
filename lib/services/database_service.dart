@@ -81,6 +81,11 @@ class DatabaseService {
     }
   }
 
+  Future<bool> profileExists(String uid) async {
+    final doc = await _db.collection('users').doc(uid).get();
+    return doc.exists;
+  }
+
   Future<UserProfile> getUserProfile(String uid) async {
     try {
       final doc = await _db.collection('users').doc(uid).get();

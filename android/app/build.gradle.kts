@@ -1,3 +1,4 @@
+import java.util.Base64
 import java.util.Properties
 
 plugins {
@@ -5,6 +6,16 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Decode --dart-define-from-file values passed by Flutter at build time.
+val dartDefines: Map<String, String> = run {
+    val encoded = project.findProperty("dart-defines") as String? ?: return@run emptyMap()
+    encoded.split(",").associate { entry ->
+        val decoded = String(Base64.getDecoder().decode(entry))
+        val idx = decoded.indexOf('=')
+        decoded.substring(0, idx) to decoded.substring(idx + 1)
+    }
 }
 
 // Load signing credentials from android/key.properties (never commit that file to git).
@@ -44,6 +55,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
+        manifestPlaceholders["googleMapsApiKey"] = dartDefines["GOOGLE_MAPS_API_KEY_ANDROID"] ?: ""
     }
 
     buildTypes {

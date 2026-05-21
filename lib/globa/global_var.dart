@@ -2,9 +2,10 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import 'dart:io' show Platform;
 
-final String googleMapKey = Platform.isAndroid
-    ? "AIzaSyBJIRixyDjY3bFicM3oG36yW0Vaj43FZWs"
-    : "AIzaSyCafvoLv-uc357oW0ceC2PzFsodhdnVlu8";
+const _androidKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY_ANDROID');
+const _iosKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY_IOS');
+
+final String googleMapKey = Platform.isAndroid ? _androidKey : _iosKey;
 
 
 

@@ -7,13 +7,17 @@ import 'package:leisureryde/app/service_locator.dart';
 import 'package:leisureryde/screens/shared/main_screen/main_screen.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/database_service.dart';
 import '../../services/push_notifications_service.dart';
+import '../../services/storage_service.dart';
 
 enum SignupType { user, driver }
 
 class SignupViewModel extends ChangeNotifier {
   final AuthService _authService = locator<AuthService>();
   final NotificationService _notificationService = locator<NotificationService>();
+  final DatabaseService _databaseService = locator<DatabaseService>();
+  final StorageService _storageService = locator<StorageService>();
 
   final TextEditingController emailController = TextEditingController();
   final TextEditingController firstNameController = TextEditingController();
@@ -167,7 +171,11 @@ class SignupViewModel extends ChangeNotifier {
       }
 
     } on FirebaseAuthException catch (e) {
-      _showSnackBar(context, _friendlyAuthError(e.code));
+      if (e.code == 'email-already-in-use') {
+        await _tryMigrateAccount(context);
+      } else {
+        _showSnackBar(context, _friendlyAuthError(e.code));
+      }
     } catch (_) {
       _showSnackBar(context, "Something went wrong. Please try again.");
     } finally {
@@ -179,6 +187,76 @@ class SignupViewModel extends ChangeNotifier {
       }
     }
   }
+  // Called when signup returns email-already-in-use (account exists from a previous
+  // version of the app). Signs in with the supplied password, creates a Firestore
+  // profile if one doesn't exist yet, then proceeds normally.
+  Future<void> _tryMigrateAccount(BuildContext context) async {
+    try {
+      await _authService.signInWithEmail(
+        emailController.text.trim(),
+        passwordController.text.trim(),
+      );
+
+      final uid = _authService.currentUser!.uid;
+      final hasProfile = await _databaseService.profileExists(uid);
+
+      if (!hasProfile) {
+        if (_signupType == SignupType.user) {
+          await _databaseService.createUserProfile(
+            uid: uid,
+            email: emailController.text.trim(),
+            firstName: firstNameController.text.trim(),
+            lastName: lastNameController.text.trim(),
+            phone: phoneController.text.trim(),
+            dateOfBirth: formattedDateOfBirth,
+            gender: _gender,
+          );
+        } else {
+          final licenseUrl = _selectedLicenseFile != null
+              ? await _storageService.uploadFile(
+                  _selectedLicenseFile!,
+                  'driver_licenses/$uid/${_selectedLicenseFile!.path.split('/').last}',
+                )
+              : '';
+          await _databaseService.createDriverProfile(
+            uid: uid,
+            email: emailController.text.trim(),
+            firstName: firstNameController.text.trim(),
+            lastName: lastNameController.text.trim(),
+            phone: phoneController.text.trim(),
+            licenseUrl: licenseUrl,
+            dateOfBirth: formattedDateOfBirth,
+            gender: _gender,
+            bankAccountName: bankAccountNameController.text.trim(),
+            bankName: bankNameController.text.trim(),
+            accountNumber: accountNumberController.text.trim(),
+            bankCode: bankCodeController.text.trim(),
+          );
+        }
+      }
+
+      _notificationService.initialize(uid);
+      _setLoading(false);
+
+      if (context.mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainScreen()),
+          (route) => false,
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      _setLoading(false);
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential' || e.code == 'user-not-found') {
+        _showSnackBar(context, 'This email is already registered. Please log in or reset your password.');
+      } else {
+        _showSnackBar(context, _friendlyAuthError(e.code));
+      }
+    } catch (_) {
+      _setLoading(false);
+      _showSnackBar(context, 'Something went wrong. Please try again.');
+    }
+  }
+
   void _setLoading(bool value) {
     _isLoading = value;
     notifyListeners();

@@ -9,7 +9,8 @@ import UserNotifications
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    GMSServices.provideAPIKey("AIzaSyBJIRixyDjY3bFicM3oG36yW0Vaj43FZWs")
+    let mapsKey = Bundle.main.object(forInfoDictionaryKey: "GOOGLE_MAPS_API_KEY_IOS") as? String ?? ""
+    GMSServices.provideAPIKey(mapsKey)
     UNUserNotificationCenter.current().delegate = self
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
