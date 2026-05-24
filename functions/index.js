@@ -2,18 +2,18 @@
 const {onDocumentCreated, onDocumentUpdated} =
   require("firebase-functions/v2/firestore");
 const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
-const {defineString} = require("firebase-functions/params");
+const {defineSecret} = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const stripe = require("stripe");
 
 admin.initializeApp();
 
 // Define the secret parameters your functions will use.
-const stripeSecretKey = defineString("STRIPE_SECRET_KEY");
-const stripeWebhookSecret = defineString("STRIPE_WEBHOOK_SECRET");
+const stripeSecretKey = defineSecret("STRIPE_SECRET_LIVE_KEY");
+const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_LIVE_KEY");
 
 // Initialize Stripe with the secret key parameter's value.
-const stripeClient = stripe(stripeSecretKey.value());
+const stripeClient = () => stripe(stripeSecretKey.value());
 
 // =============================================================================
 // FUNCTION 1: NOTIFY DRIVERS OF NEW RIDES (v2 Syntax)
@@ -211,87 +211,92 @@ exports.notifyPassengerOfRideStatusChange = onDocumentUpdated(
 // =============================================================================
 // FUNCTION 5: CREATE STRIPE CHECKOUT SESSION (v2 Syntax)
 // =============================================================================
-exports.createStripeCheckout = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated",
-        "You must be logged in to make a payment.");
-  }
+exports.createStripeCheckout = onCall(
+    {secrets: [stripeSecretKey]},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated",
+            "You must be logged in to make a payment.");
+      }
 
-  const userId = request.auth.uid;
-  const {amount, currency, bookingId} = request.data;
+      const userId = request.auth.uid;
+      const {amount, currency, bookingId} = request.data;
 
-  if (!amount || !currency || !bookingId) {
-    throw new HttpsError("invalid-argument", "Missing required payment data.");
-  }
+      if (!amount || !currency || !bookingId) {
+        throw new HttpsError("invalid-argument",
+            "Missing required payment data.");
+      }
 
-  const paymentRef = admin.firestore().collection("payments").doc();
-  const paymentId = paymentRef.id;
+      const paymentRef = admin.firestore().collection("payments").doc();
+      const paymentId = paymentRef.id;
 
-  try {
-    const session = await stripeClient.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: "payment",
-      line_items: [{
-        price_data: {
+      try {
+        const session = await stripeClient().checkout.sessions.create({
+          payment_method_types: ["card"],
+          mode: "payment",
+          line_items: [{
+            price_data: {
+              currency: currency,
+              unit_amount: Math.round(parseFloat(amount) * 100),
+              product_data: {name: "Leisure Ryde Service"},
+            },
+            quantity: 1,
+          }],
+          success_url: "https://example.com/success",
+          cancel_url: "https://example.com/cancel",
+          metadata: {
+            payment_id: paymentId,
+            user_id: userId,
+          },
+        });
+
+        await paymentRef.set({
+          userId: userId,
+          bookingId: bookingId,
+          amount: parseFloat(amount),
           currency: currency,
-          unit_amount: Math.round(parseFloat(amount) * 100),
-          product_data: {name: "Leisure Ryde Service"},
-        },
-        quantity: 1,
-      }],
-      success_url: "https://example.com/success",
-      cancel_url: "https://example.com/cancel",
-      metadata: {
-        payment_id: paymentId,
-        user_id: userId,
-      },
-    });
+          status: "pending",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          stripeSessionId: session.id,
+        });
 
-    await paymentRef.set({
-      userId: userId,
-      bookingId: bookingId,
-      amount: parseFloat(amount),
-      currency: currency,
-      status: "pending",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      stripeSessionId: session.id,
+        return {checkoutUrl: session.url, paymentId: paymentId};
+      } catch (error) {
+        console.error("Stripe session creation failed:", error);
+        throw new HttpsError("internal", "Could not create a payment session.");
+      }
     });
-
-    return {checkoutUrl: session.url, paymentId: paymentId};
-  } catch (error) {
-    console.error("Stripe session creation failed:", error);
-    throw new HttpsError("internal", "Could not create a payment session.");
-  }
-});
 
 // =============================================================================
 // FUNCTION 6: STRIPE WEBHOOK LISTENER (v2 Syntax)
 // =============================================================================
-exports.stripeWebhook = onRequest(async (req, res) => {
-  const sig = req.headers["stripe-signature"];
-  const endpointSecret = stripeWebhookSecret.value();
+exports.stripeWebhook = onRequest(
+    {secrets: [stripeSecretKey, stripeWebhookSecret]},
+    async (req, res) => {
+      const sig = req.headers["stripe-signature"];
+      const endpointSecret = stripeWebhookSecret.value();
 
-  let event;
-  try {
-    event = stripeClient.webhooks.constructEvent(
-        req.rawBody, sig, endpointSecret);
-  } catch (err) {
-    console.error("Webhook signature verification failed.", err.message);
-    res.status(400).send(`Webhook Error: ${err.message}`);
-    return;
-  }
+      let event;
+      try {
+        event = stripeClient().webhooks.constructEvent(
+            req.rawBody, sig, endpointSecret);
+      } catch (err) {
+        console.error("Webhook signature verification failed.", err.message);
+        res.status(400).send(`Webhook Error: ${err.message}`);
+        return;
+      }
 
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object;
-    const paymentId = session.metadata.payment_id;
+      if (event.type === "checkout.session.completed") {
+        const session = event.data.object;
+        const paymentId = session.metadata.payment_id;
 
-    await admin.firestore().collection("payments").doc(paymentId).update({
-      status: "succeeded",
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      stripePaymentIntentId: session.payment_intent,
+        await admin.firestore().collection("payments").doc(paymentId).update({
+          status: "succeeded",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          stripePaymentIntentId: session.payment_intent,
+        });
+        console.log(`Updated payment ${paymentId} to 'succeeded'.`);
+      }
+
+      res.json({received: true});
     });
-    console.log(`Updated payment ${paymentId} to 'succeeded'.`);
-  }
-
-  res.json({received: true});
-});
