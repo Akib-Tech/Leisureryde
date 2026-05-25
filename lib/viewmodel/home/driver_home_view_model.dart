@@ -9,6 +9,7 @@ import 'package:leisureryde/models/ride_request_model.dart';
 import 'package:leisureryde/services/auth_service.dart';
 import 'package:leisureryde/services/database_service.dart';
 import 'package:leisureryde/services/directions_service.dart';
+import 'package:leisureryde/services/fare_calculation_service.dart';
 import 'package:leisureryde/services/ride_service.dart';
 import '../../services/driver_locator.dart';
 import '../../services/push_notifications_service.dart';
@@ -190,11 +191,8 @@ class DriverHomeViewModel extends ChangeNotifier {
         .listen((docs) {
       _todayTrips = docs.length;
       _todayEarnings = docs.fold(0.0, (sum, doc) {
-        final fare = doc['fare'];
-        if (fare is int) return sum + fare.toDouble();
-        if (fare is double) return sum + fare;
-        if (fare is String) return sum + (double.tryParse(fare) ?? 0.0);
-        return sum;
+        final fare = _parseFare(doc['fare']);
+        return sum + FareCalculationService.driverEarnings(fare);
       });
       notifyListeners();
     });
@@ -213,6 +211,12 @@ class DriverHomeViewModel extends ChangeNotifier {
       final duration = DateTime.now().difference(lastOnlineTimestamp.toDate());
       _hoursOnline = duration.inMinutes / 60.0;
     }
+  }
+
+  double _parseFare(dynamic fare) {
+    if (fare is num) return fare.toDouble();
+    if (fare is String) return double.tryParse(fare) ?? 0.0;
+    return 0.0;
   }
 
   void _stopListeningToStats() {
@@ -536,7 +540,10 @@ class DriverHomeViewModel extends ChangeNotifier {
     try {
       final docs = await _databaseService.getTodaysTripsStream(_driverProfile!.uid).first;
       _todayTrips = docs.length;
-      _todayEarnings = docs.fold(0.0, (sum, doc) => sum + (doc['fare'] ?? 0.0));
+      _todayEarnings = docs.fold(0.0, (sum, doc) {
+        final fare = _parseFare(doc['fare']);
+        return sum + FareCalculationService.driverEarnings(fare);
+      });
 
       final lastOnlineTimestamp = _driverProfile!.lastWentOnlineAt;
       if (lastOnlineTimestamp != null) {

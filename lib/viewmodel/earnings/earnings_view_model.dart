@@ -5,6 +5,7 @@ import '../../models/ride_request_model.dart';
 import '../../models/driver_profile.dart';
 import '../../services/auth_service.dart';
 import '../../services/database_service.dart';
+import '../../services/fare_calculation_service.dart';
 
 class EarningsViewModel extends ChangeNotifier {
   final _db = FirebaseFirestore.instance;
@@ -72,7 +73,11 @@ class EarningsViewModel extends ChangeNotifier {
 
       _totalTrips = completed.docs.length;
       _totalEarnings = completed.docs.fold(
-          0.0, (sum, doc) => sum + ((doc['fare'] ?? 0.0) as num).toDouble());
+        0.0,
+        (sum, doc) => sum + FareCalculationService.driverEarnings(
+          (doc['fare'] as num?)?.toDouble() ?? 0.0,
+        ),
+      );
 
       // Simple hours logic — based on driver's last online entry
       if (_driverProfile?.lastWentOnlineAt != null) {
