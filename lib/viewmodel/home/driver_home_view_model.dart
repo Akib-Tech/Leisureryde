@@ -191,6 +191,7 @@ class DriverHomeViewModel extends ChangeNotifier {
         .listen((docs) {
       _todayTrips = docs.length;
       _todayEarnings = docs.fold(0.0, (sum, doc) {
+       
         final fare = _parseFare(doc['fare']);
         return sum + FareCalculationService.driverEarnings(fare);
       });
@@ -212,13 +213,11 @@ class DriverHomeViewModel extends ChangeNotifier {
       _hoursOnline = duration.inMinutes / 60.0;
     }
   }
-
-  double _parseFare(dynamic fare) {
+ double _parseFare(dynamic fare) {
     if (fare is num) return fare.toDouble();
     if (fare is String) return double.tryParse(fare) ?? 0.0;
     return 0.0;
   }
-
   void _stopListeningToStats() {
     _dailyStatsSub?.cancel();
     _pendingReqSub?.cancel();
@@ -235,16 +234,12 @@ class DriverHomeViewModel extends ChangeNotifier {
   /// The doc subscription takes over from here and handles all status changes.
   void preSetActiveRide(RideRequest ride) {
     _activeRide = ride;
+    // Reset the route-calc throttle so _drawRouteForActiveRide fires on the
+    // very next GPS tick (or immediately below) rather than waiting 30 m.
     _lastRouteCalcPosition = null;
-    // Clear stale voice-nav steps from any previous ride so GPS ticks that
-    // fire before the new route is calculated cannot trigger a false
-    // "arrived at pickup" announcement.
-    _lastVoiceRideId = null;
-    _lastVoiceStatus = null;
-    _voiceNav.reset();
     // Seed the driver position from the map's device GPS so the initial
     // _drawRouteForActiveRide() call below doesn't bail out early when the
-    // location stream hasn't fired its first tick yet.
+    // Realtime Database stream hasn't fired its first tick yet.
     if (_driverCurrentPosition == null && mapViewModel.currentPosition != null) {
       _driverCurrentPosition = LatLng(
         mapViewModel.currentPosition!.latitude,
@@ -326,7 +321,6 @@ class DriverHomeViewModel extends ChangeNotifier {
         _activeRide = null;
         _lastVoiceRideId = null;
         _lastVoiceStatus = null;
-        _voiceNav.reset();
         _activeRideDocSubscription?.cancel();
         _activeRideDocSubscription = null;
         mapViewModel.clearRoute();
@@ -337,8 +331,6 @@ class DriverHomeViewModel extends ChangeNotifier {
       if (ride.status.isTerminal) {
         if (ride.status == RideStatus.completed) {
           await _voiceNav.announceArrival();
-        } else {
-          _voiceNav.reset();
         }
         _activeRide = null;
         _lastVoiceRideId = null;
@@ -508,18 +500,24 @@ class DriverHomeViewModel extends ChangeNotifier {
   }
 
   void _updateDestinationMarker(LatLng destination) {
-    mapViewModel.updateMarker(Marker(
-      markerId: const MarkerId('destination'),
-      position: destination,
-      infoWindow: InfoWindow(
-        title: _activeRide!.status == RideStatus.ongoing ? 'Destination' : 'Pickup',
+    mapViewModel.markers.removeWhere(
+          (marker) => marker.markerId == const MarkerId('destination'),
+    );
+    mapViewModel.markers.add(
+      Marker(
+        markerId: const MarkerId('destination'),
+        position: destination,
+        infoWindow: InfoWindow(
+          title: _activeRide!.status == RideStatus.ongoing ? 'Destination' : 'Pickup',
+        ),
+        icon: BitmapDescriptor.defaultMarkerWithHue(
+          _activeRide!.status == RideStatus.ongoing
+              ? BitmapDescriptor.hueRed
+              : BitmapDescriptor.hueGreen,
+        ),
       ),
-      icon: BitmapDescriptor.defaultMarkerWithHue(
-        _activeRide!.status == RideStatus.ongoing
-            ? BitmapDescriptor.hueRed
-            : BitmapDescriptor.hueGreen,
-      ),
-    ));
+    );
+    mapViewModel.notifyListeners();
   }
 
   void _stopListeningToActiveRide() {
@@ -540,11 +538,11 @@ class DriverHomeViewModel extends ChangeNotifier {
     try {
       final docs = await _databaseService.getTodaysTripsStream(_driverProfile!.uid).first;
       _todayTrips = docs.length;
-      _todayEarnings = docs.fold(0.0, (sum, doc) {
+       _todayEarnings = docs.fold(0.0, (sum, doc) {
         final fare = _parseFare(doc['fare']);
         return sum + FareCalculationService.driverEarnings(fare);
       });
-
+      
       final lastOnlineTimestamp = _driverProfile!.lastWentOnlineAt;
       if (lastOnlineTimestamp != null) {
         _hoursOnline = DateTime.now().difference(lastOnlineTimestamp.toDate()).inMinutes / 60.0;

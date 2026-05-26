@@ -123,6 +123,7 @@ class VoiceNavigationService {
     if (!_isEnabled || steps.isEmpty) return;
 
     final first = steps.first;
+    _startAnnounced = true;
 
     // Mark thresholds already covered so we don't double-announce.
     if (first.distanceMeters <= 300) _is300mSpoken = true;
@@ -147,7 +148,6 @@ class VoiceNavigationService {
         await _speak(
           'In ${_formatDistance(distToFirstTurn.round())}, ${firstTurn.instruction}.',
         );
-        _startAnnounced = true;
         _is300mSpoken = true; // suppress the automatic 300 m re-announcement
       }
     }
@@ -182,10 +182,9 @@ class VoiceNavigationService {
       _announceNextRefresh = false;
       final first = nextManeuverStep ?? steps.first;
       await _speak(
-        'Route updated. In ${_formatDistance(_distanceFromRouteStartToNextRealManeuver(steps))}, '
+        'Route updated. In ${_formatDistance(steps.first.distanceMeters)}, '
         '${first.instruction}.',
       );
-      _startAnnounced = true;
     }
   }
 
@@ -288,23 +287,6 @@ class VoiceNavigationService {
   /// Speak any one-off status announcement (e.g. ride accepted, arrived, trip started).
   Future<void> announce(String text) => _speak(text);
 
-  /// Clears all navigation state without making any announcement.
-  /// Call this when a new ride is accepted so stale steps from a previous
-  /// (cancelled/completed) ride cannot trigger false arrival announcements.
-  void reset() {
-    _steps = [];
-    _startAnnounced = false;
-    _is300mSpoken = false;
-    _is50mSpoken = false;
-    _is15mSpoken = false;
-    _isArrivedAtDestinationSpoken = false;
-    _announceNextRefresh = false;
-    _deviationSpoken = false;
-    _trackedEndLocation = null;
-    _distanceToNextTurnMeters = 0;
-    _polylinePoints = [];
-  }
-
   Future<void> dispose() async {
     await _tts.stop();
   }
@@ -353,17 +335,6 @@ class VoiceNavigationService {
       dist += s.distanceMeters;
     }
     return dist.round();
-  }
-
-  int _distanceFromRouteStartToNextRealManeuver(List<RouteStep> steps) {
-    if (steps.isEmpty) return 0;
-    int dist = 0;
-    for (final step in steps) {
-      dist += step.distanceMeters;
-      final maneuver = step.maneuver;
-      if (maneuver != null && maneuver != 'straight') return dist;
-    }
-    return dist;
   }
 
   double _metersApart(LatLng a, LatLng b) {

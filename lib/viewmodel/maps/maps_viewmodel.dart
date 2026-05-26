@@ -187,8 +187,8 @@ class MapViewModel extends ChangeNotifier {
   }
 
   void _setBookingRoutePolyline(List<LatLng> points) {
-    _polylines = {
-      ..._polylines.where((p) => p.polylineId != _bookingRouteId),
+    _polylines.removeWhere((p) => p.polylineId == _bookingRouteId);
+    _polylines.add(
       Polyline(
         polylineId: _bookingRouteId,
         points: points,
@@ -198,7 +198,7 @@ class MapViewModel extends ChangeNotifier {
         endCap: Cap.roundCap,
         jointType: JointType.round,
       ),
-    };
+    );
   }
 
   /// Replaces the live driver-route polyline with [points].
@@ -207,52 +207,51 @@ class MapViewModel extends ChangeNotifier {
   /// flash when redrawn on each GPS tick (dashed lines cause a visible
   /// phase-reset artifact on every update).
   void setLiveRoutePolyline(List<LatLng> points) {
-    _polylines = {
-      ..._polylines.where((p) => p.polylineId != _liveRouteId),
+    _polylines.removeWhere((p) => p.polylineId == _liveRouteId);
+    _polylines.add(
       Polyline(
         polylineId: _liveRouteId,
         points: points,
-        color: const Color(0xFF1565C0),
+        color: const Color(0xFF1565C0), // deep blue — distinct from the azure car marker
         width: 6,
         startCap: Cap.roundCap,
         endCap: Cap.roundCap,
         jointType: JointType.round,
       ),
-    };
+    );
     notifyListeners();
   }
 
   /// Removes the live-route polyline without touching the booking route.
   void clearLiveRoute() {
-    _polylines = Set.from(_polylines.where((p) => p.polylineId != _liveRouteId));
+    _polylines.removeWhere((p) => p.polylineId == _liveRouteId);
     notifyListeners();
   }
 
   /// Removes only the static booking route (origin → destination).
   /// Call this when the trip becomes ongoing so only the live route is visible.
   void clearBookingRoute() {
-    _polylines = Set.from(_polylines.where((p) => p.polylineId != _bookingRouteId));
+    _polylines.removeWhere((p) => p.polylineId == _bookingRouteId);
     notifyListeners();
   }
 
   void _addRouteMarkers(LatLng origin, LatLng destination) {
-    _markers = {
-      ..._markers.where((m) =>
-          m.markerId != const MarkerId('origin') &&
-          m.markerId != const MarkerId('destination')),
-      Marker(
+    _markers
+      ..removeWhere((m) =>
+          m.markerId == const MarkerId('origin') ||
+          m.markerId == const MarkerId('destination'))
+      ..add(Marker(
         markerId: const MarkerId('origin'),
         position: origin,
         infoWindow: const InfoWindow(title: 'Pickup'),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-      ),
-      Marker(
+      ))
+      ..add(Marker(
         markerId: const MarkerId('destination'),
         position: destination,
         infoWindow: const InfoWindow(title: 'Destination'),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-      ),
-    };
+      ));
   }
 
   void _moveCameraToRoute(List<LatLng> points) {
@@ -281,12 +280,12 @@ class MapViewModel extends ChangeNotifier {
   }
 
   void clearRoute() {
-    _polylines = {};
+    _polylines.clear();
     _directionsResult = null;
     _errorMessage = null;
-    _markers = Set.from(_markers.where((m) =>
-        m.markerId != const MarkerId('origin') &&
-        m.markerId != const MarkerId('destination')));
+    _markers.removeWhere((m) =>
+        m.markerId == const MarkerId('origin') ||
+        m.markerId == const MarkerId('destination'));
     stopFollowingDriver();
   }
 
@@ -318,8 +317,8 @@ class MapViewModel extends ChangeNotifier {
     _driverPosition = newPosition;
     _currentHeading = heading;
 
-    _markers = {
-      ..._markers.where((m) => m.markerId != _driverMarkerId),
+    _markers.removeWhere((m) => m.markerId == _driverMarkerId);
+    _markers.add(
       Marker(
         markerId: _driverMarkerId,
         position: newPosition,
@@ -330,7 +329,7 @@ class MapViewModel extends ChangeNotifier {
         flat: true,
         infoWindow: const InfoWindow(title: 'Your Driver'),
       ),
-    };
+    );
 
     // Move camera only when following is active AND the user hasn't manually
     // panned the map (pausing auto-follow until they tap re-center).
@@ -347,17 +346,7 @@ class MapViewModel extends ChangeNotifier {
     _isFollowingDriver = false;
     _isUserInteracting = false;
     _driverPosition = null;
-    _markers = Set.from(_markers.where((m) => m.markerId != _driverMarkerId));
-  }
-
-  /// Adds or replaces a single marker by its markerId, creating a new Set so
-  /// GoogleMap's diff engine detects the change.
-  void updateMarker(Marker marker) {
-    _markers = {
-      ..._markers.where((m) => m.markerId != marker.markerId),
-      marker,
-    };
-    notifyListeners();
+    _markers.removeWhere((m) => m.markerId == _driverMarkerId);
   }
 
   // ─── Camera helpers ───────────────────────────────────────────────────────
