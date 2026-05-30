@@ -41,10 +41,12 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
     if (state == AppLifecycleState.resumed && mounted) {
       final vm = _vm;
       if (vm == null) return;
+      // Re-init TTS first — Android may have killed the engine while backgrounded.
+      vm.reinitializeVoice();
       if (vm.mapViewModel.currentPosition == null) {
         vm.requestLocationPermission();
       } else {
-        // Force map tile redraw — fixes the iOS blank/static map after backgrounding.
+        // Force map tile redraw — fixes the blank/static map after backgrounding.
         vm.mapViewModel.refreshMap();
       }
     }

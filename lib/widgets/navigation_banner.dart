@@ -25,8 +25,13 @@ class NavigationBanner extends StatelessWidget {
     if (step == null) return const SizedBox.shrink();
 
     // Use the upcoming turn step for icon + instruction when the current step
-    // is a straight/head step (maneuver == null); otherwise use current step.
-    final displayStep = (step!.maneuver == null && upcomingTurnStep != null)
+    // is a straight/head segment (maneuver == null OR 'straight'). Google can
+    // return either value for a continue-straight step at an intersection.
+    // In both cases distanceMeters is the distance to the next REAL turn, so
+    // the banner instruction must match that turn — not say "Continue straight."
+    final bool currentStepIsNonTurn =
+        step!.maneuver == null || step!.maneuver == 'straight';
+    final displayStep = (currentStepIsNonTurn && upcomingTurnStep != null)
         ? upcomingTurnStep!
         : step!;
 

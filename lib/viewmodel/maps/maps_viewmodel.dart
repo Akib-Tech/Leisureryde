@@ -31,6 +31,12 @@ class MapViewModel extends ChangeNotifier {
   // programmatic moves; there is no built-in isGesture flag in google_maps_flutter).
   bool _isProgrammaticMove = false;
 
+  // Throttle camera animations — at most one move per 600 ms so a burst of
+  // GPS ticks (e.g. after returning from background) doesn't queue up a flood
+  // of animateCamera calls that make the map appear frozen.
+  DateTime? _lastCameraMove;
+  static const _cameraThrottle = Duration(milliseconds: 600);
+
   StreamSubscription<LatLng>? _driverStreamSubscription;
 
   bool _isLoading = true;
@@ -131,6 +137,9 @@ class MapViewModel extends ChangeNotifier {
   /// Used during active navigation so the road ahead is always at the top.
   void followWithBearing(LatLng position, double heading) {
     if (_mapController == null || _isUserInteracting) return;
+    final now = DateTime.now();
+    if (_lastCameraMove != null && now.difference(_lastCameraMove!) < _cameraThrottle) return;
+    _lastCameraMove = now;
     _isProgrammaticMove = true;
     _mapController!.animateCamera(
       CameraUpdate.newCameraPosition(
@@ -357,16 +366,23 @@ class MapViewModel extends ChangeNotifier {
     _animateToPosition(position);
   }
 
-  /// Forces the map to redraw by nudging the camera to the current position.
-  /// Call this whenever the app resumes from background to fix the iOS
-  /// blank/static tile bug that occurs when the GL context is suspended.
+  /// Forces the map to redraw by snapping the camera to the current position.
+  /// Call this whenever the app resumes from background to fix the blank/static
+  /// tile bug that occurs when the GL context is suspended.
+  /// Uses moveCamera (instant) rather than animateCamera so it doesn't compete
+  /// with the burst of GPS-tick animations that flush right after resume.
   Future<void> refreshMap() async {
     final pos = _currentPosition;
     if (_mapController == null || pos == null) return;
     _isProgrammaticMove = true;
-    await _mapController!.animateCamera(
-      CameraUpdate.newLatLng(LatLng(pos.latitude, pos.longitude)),
-    );
+    _lastCameraMove = DateTime.now(); // suppress the next throttled GPS tick
+    try {
+      await _mapController!.moveCamera(
+        CameraUpdate.newLatLng(LatLng(pos.latitude, pos.longitude)),
+      );
+    } catch (_) {
+      // GL surface may not be fully ready immediately after resume — ignore.
+    }
   }
 
   Future<void> fitDriverAndDestination(
@@ -390,7 +406,9 @@ class MapViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _driverStreamSubscription?.cancel();
-    _mapController?.dispose();
+    // Do NOT call _mapController?.dispose() — the GoogleMap widget owns the
+    // controller lifecycle. Disposing it here releases the native GL surface
+    // and causes subsequent animateCamera calls to silently hang.
     super.dispose();
   }
 }

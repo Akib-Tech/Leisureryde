@@ -209,7 +209,7 @@ class DatabaseService {
       final snapshot = await _db
           .collection('rideRequests')
           .where('userId', isEqualTo: uid)
-          .where('status', isEqualTo: RideStatus.completed.toString())
+          .where('status', isEqualTo: RideStatus.completed.name)
           .orderBy('createdAt', descending: true)
           .limit(10)
           .get();

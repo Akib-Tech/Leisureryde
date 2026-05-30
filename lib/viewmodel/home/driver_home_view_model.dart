@@ -102,6 +102,10 @@ class DriverHomeViewModel extends ChangeNotifier {
 
   Future<void> testVoice() => _voiceNav.testSpeak();
 
+  /// Called by the screen's lifecycle observer when the app returns from
+  /// background. Re-initialises the TTS engine which Android may have killed.
+  Future<void> reinitializeVoice() => _voiceNav.reinitialize();
+
   DriverHomeViewModel() {
     mapViewModel = MapViewModel();
     initializeDriverHome();
@@ -419,6 +423,12 @@ class DriverHomeViewModel extends ChangeNotifier {
         notifyListeners();
       }
 
+      // If the voice service detected an off-route deviation it sets
+      // needsRouteRefresh. Force an immediate Directions API call instead of
+      // waiting for the driver to move another 30 m — otherwise the driver
+      // hears "Recalculating" but the updated route announcement never fires.
+      if (_voiceNav.needsRouteRefresh) _lastRouteCalcPosition = null;
+
       // Only recalculate the route when the driver has moved > 30 m to avoid
       // hammering the Directions API on every GPS tick.
       if (_lastRouteCalcPosition == null ||
@@ -431,9 +441,11 @@ class DriverHomeViewModel extends ChangeNotifier {
 
   /// Draws the correct polyline into mapViewModel based on ride status:
   ///
-  /// - accepted / enroute  → driver current position → passenger pickup
-  /// - ongoing             → driver current position → passenger destination
-  /// - anything else       → clear the route
+  /// - accepted   → driver current position → passenger pickup (navigation active)
+  /// - enroute    → driver has arrived at pickup; clear route + skip voice so the
+  ///                "arrived at pickup" announcement is not repeated
+  /// - ongoing    → driver current position → passenger destination (navigation active)
+  /// - anything else → clear the route
   ///
   /// Because this writes into mapViewModel (which the GoogleMap widget reads),
   /// the polyline persists even when the driver navigates away and returns —
@@ -441,11 +453,24 @@ class DriverHomeViewModel extends ChangeNotifier {
   Future<void> _drawRouteForActiveRide() async {
     if (_activeRide == null || _driverCurrentPosition == null) return;
 
+    // enroute = driver is physically at the pickup, waiting for the passenger.
+    // No routing or voice navigation is needed:
+    //   • Calling the Directions API from origin≈destination wastes quota.
+    //   • beginNewRoute() would reset _isArrivedAtDestinationSpoken, causing a
+    //     second "arrived at pickup" announcement on the next GPS tick.
+    if (_activeRide!.status == RideStatus.enroute) {
+      mapViewModel.clearLiveRoute();
+      // Record the status so the accepted→ongoing transition correctly calls
+      // beginNewRoute() for the destination leg.
+      _lastVoiceRideId = _activeRide!.id;
+      _lastVoiceStatus = _activeRide!.status;
+      return;
+    }
+
     LatLng routeDestination;
 
     switch (_activeRide!.status) {
       case RideStatus.accepted:
-      case RideStatus.enroute:
         routeDestination = _activeRide!.pickupLocation;
         break;
 

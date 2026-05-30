@@ -88,6 +88,17 @@ class VoiceNavigationService {
     }
   }
 
+  /// Re-applies TTS settings after the app returns from background.
+  /// On Android the TTS engine service can be killed by the OS while the app
+  /// is backgrounded; calling this on AppLifecycleState.resumed ensures the
+  /// engine is available again before the next announcement.
+  Future<void> reinitialize() async {
+    try {
+      await _tts.stop();
+      await _initTts();
+    } catch (_) {}
+  }
+
   // ---------------------------------------------------------------------------
   // Public API called by DriverHomeViewModel
   // ---------------------------------------------------------------------------
@@ -271,6 +282,11 @@ class VoiceNavigationService {
     _steps = [];
   }
 
+  /// True when off-route was detected and we're waiting for a fresh route.
+  /// DriverHomeViewModel reads this to force an immediate Directions API call
+  /// rather than waiting for the driver to move 30 m.
+  bool get needsRouteRefresh => _announceNextRefresh;
+
   void toggle() {
     _isEnabled = !_isEnabled;
     if (!_isEnabled) _tts.stop();
@@ -310,13 +326,36 @@ class VoiceNavigationService {
     return '$milesStr ${milesStr == '1.0' ? 'mile' : 'miles'}';
   }
 
+  /// Returns the shortest distance (metres) from [position] to the polyline,
+  /// measured perpendicularly to each segment rather than to individual points.
+  /// Point-distance gives large false readings on long straight segments
+  /// (e.g. highways), triggering bogus off-route "Recalculating" announcements.
   double _minDistanceToPolyline(LatLng position) {
+    if (_polylinePoints.isEmpty) return 0;
     double min = double.infinity;
-    for (final point in _polylinePoints) {
-      final d = _metersApart(position, point);
+    for (int i = 0; i < _polylinePoints.length - 1; i++) {
+      final d = _distanceToSegment(position, _polylinePoints[i], _polylinePoints[i + 1]);
       if (d < min) min = d;
     }
-    return min == double.infinity ? 0 : min;
+    // Fall back to the last point when only one point exists.
+    if (min == double.infinity) return _metersApart(position, _polylinePoints.first);
+    return min;
+  }
+
+  /// Perpendicular (or endpoint) distance from [p] to the segment [a]→[b].
+  /// Uses a planar Cartesian approximation which is accurate enough for the
+  /// short polyline segments produced by the Directions API (< 500 m each).
+  double _distanceToSegment(LatLng p, LatLng a, LatLng b) {
+    final dx = b.longitude - a.longitude;
+    final dy = b.latitude - a.latitude;
+    final len2 = dx * dx + dy * dy;
+    if (len2 == 0) return _metersApart(p, a); // degenerate segment (same point)
+    final t = ((p.longitude - a.longitude) * dx + (p.latitude - a.latitude) * dy) / len2;
+    final closest = LatLng(
+      a.latitude + t.clamp(0.0, 1.0) * dy,
+      a.longitude + t.clamp(0.0, 1.0) * dx,
+    );
+    return _metersApart(p, closest);
   }
 
   // Returns metres from [position] to the nearest upcoming step that has a
