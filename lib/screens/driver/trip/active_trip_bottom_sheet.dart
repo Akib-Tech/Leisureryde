@@ -420,11 +420,15 @@ class _ActiveTripDriverBottomSheetState
         ? ride.pickupLocation
         : ride.destinationLocation;
 
+  final origin = driverVm.driverCurrentPosition;
+  final fromParam = origin != null
+      ? '&from=ll.${origin.latitude},${origin.longitude}'
+      : '';
     final wazeUri = Uri.parse(
-      'waze://?ll=${dest.latitude},${dest.longitude}&navigate=yes',
+      'waze://?ll=${dest.latitude},${dest.longitude}&navigate=yes$fromParam',
     );
     final fallbackUri = Uri.parse(
-      'https://waze.com/ul?ll=${dest.latitude},${dest.longitude}&navigate=yes',
+      'https://waze.com/ul?ll=${dest.latitude},${dest.longitude}&navigate=yes$fromParam',
     );
 
     driverVm.muteVoiceForExternalApp();

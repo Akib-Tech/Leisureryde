@@ -48,7 +48,8 @@ class DriverHomeViewModel extends ChangeNotifier {
   DriverLocationUpdater? _locUpdater;
 
   // The driver's own current position — updated from their GPS.
-  LatLng? _driverCurrentPosition;
+  LatLng? _driverCurrentPosition; 
+  LatLng? get driverCurrentPosition => _driverCurrentPosition;
 
   // Last position at which we recalculated the route.
   // Prevents hammering the Directions API on every GPS tick.
