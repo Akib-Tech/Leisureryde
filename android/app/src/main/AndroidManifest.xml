@@ -16,6 +16,7 @@
         </intent>
 
         <!-- (Optional but Recommended) This specifically allows checking for WhatsApp -->
+        <package android:name="com.waze" />
         <package android:name="com.whatsapp" />
         <package android:name="com.whatsapp.w4b" /> <!-- For WhatsApp Business -->
     </queries>

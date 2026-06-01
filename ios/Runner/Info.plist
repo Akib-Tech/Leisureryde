@@ -49,6 +49,12 @@
 	<key>GOOGLE_MAPS_API_KEY_IOS</key>
 	<string>$(GOOGLE_MAPS_API_KEY_IOS)</string>
 
+	<key>LSApplicationQueriesSchemes</key>
+  	<array>
+    	<string>waze</string>
+  	</array>
+
+
 	<!-- Location — passengers use WhenInUse; drivers need Always for background tracking -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>LeisureRyde needs your location to show nearby drivers and calculate your route.</string>
