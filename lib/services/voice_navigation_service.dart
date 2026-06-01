@@ -5,33 +5,42 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import 'directions_service.dart';
 
-// Needed for Platform check
 import 'dart:io' show Platform;
 
 /// Manages turn-by-turn voice announcements during an active trip.
 ///
-/// Sits entirely on top of the existing map/route stack — it reads the
-/// [RouteStep] list produced by [DirectionsService] and speaks via TTS
-/// when the driver approaches each maneuver. Nothing in [MapViewModel] or
-/// the polyline rendering is touched by this service.
+/// Announcement schedule (per turn):
+///   • 50 m  — "Now, turn left onto Oak Street."   (advance warning)
+///   • 15 m  — "Turn left onto Oak Street."         (action cue)
+///   • arrival — "You have arrived at …"
+///
+/// Maneuvers treated as silent (no voice, visual banner only):
+///   null maneuver (departure/head steps), 'straight', 'turn-slight-left',
+///   'turn-slight-right' — these are road curves and drifts, not real turns.
 class VoiceNavigationService {
   final FlutterTts _tts = FlutterTts();
 
   List<RouteStep> _steps = [];
 
+  // Maneuvers that produce no voice announcement — banner still shows them.
+  static const _silentManeuvers = {
+    'straight',
+    'turn-slight-left',
+    'turn-slight-right',
+  };
+
   // End-location of the step we are currently tracking so we can tell when
   // route recalculations advance us to a different maneuver.
   LatLng? _trackedEndLocation;
 
-  bool _is300mSpoken = false;
   bool _is50mSpoken = false;
   bool _is15mSpoken = false;
   bool _isArrivedAtDestinationSpoken = false;
 
-  // Guards the initial "Starting navigation …" announcement.
+  // Guards the initial departure announcement.
   bool _startAnnounced = false;
 
-  // Live distance to the next maneuver — updated on every GPS tick.
+  // Live distance to the next real maneuver — updated on every GPS tick.
   int _distanceToNextTurnMeters = 0;
 
   // Route polyline used for off-route detection.
@@ -45,17 +54,18 @@ class VoiceNavigationService {
   /// The step currently being navigated (first in the remaining list).
   RouteStep? get currentStep => _steps.isNotEmpty ? _steps.first : null;
 
-  /// The first step in the list that carries a real maneuver (turn/uturn/etc).
-  /// Used by the navigation banner to show the correct direction icon and
-  /// instruction even when the active step is a straight/head segment.
+  /// The first step with a genuine turn maneuver (not a drift/straight/departure).
+  /// Used by the navigation banner and voice threshold checks.
   RouteStep? get nextManeuverStep {
     for (final step in _steps) {
-      if (step.maneuver != null && step.maneuver != 'straight') return step;
+      if (step.maneuver != null && !_silentManeuvers.contains(step.maneuver)) {
+        return step;
+      }
     }
     return _steps.isNotEmpty ? _steps.first : null;
   }
 
-  /// Metres remaining until the next maneuver. Updated on every GPS tick.
+  /// Metres remaining until the next real maneuver. Updated on every GPS tick.
   int get distanceToNextTurnMeters => _distanceToNextTurnMeters;
 
   bool _isEnabled = true;
@@ -71,9 +81,6 @@ class VoiceNavigationService {
     await _tts.setVolume(1.0);
     await _tts.setPitch(1.0);
 
-    // iOS requires an audio session to be configured so TTS keeps working
-    // after the app returns from background (otherwise the AVAudioSession
-    // is interrupted and speech is silently dropped).
     if (Platform.isIOS) {
       await _tts.setSharedInstance(true);
       await _tts.setIosAudioCategory(
@@ -90,8 +97,7 @@ class VoiceNavigationService {
 
   /// Re-applies TTS settings after the app returns from background.
   /// On Android the TTS engine service can be killed by the OS while the app
-  /// is backgrounded; calling this on AppLifecycleState.resumed ensures the
-  /// engine is available again before the next announcement.
+  /// is backgrounded.
   Future<void> reinitialize() async {
     try {
       await _tts.stop();
@@ -103,26 +109,25 @@ class VoiceNavigationService {
   // Public API called by DriverHomeViewModel
   // ---------------------------------------------------------------------------
 
-  /// Sets whether the current navigation leg is heading to the pickup (true)
-  /// or the final destination (false). Must be called before [beginNewRoute].
   void setLegContext(bool isPickupLeg) {
     _isPickupLeg = isPickupLeg;
   }
 
-  /// Updates the route polyline used for off-route detection.
-  /// Call this every time a new route is calculated, before [beginNewRoute]
-  /// or [refreshSteps].
   void setPolyline(List<LatLng> points) {
     _polylinePoints = points;
     _deviationSpoken = false;
   }
 
-  /// Called once when a brand-new route begins (new ride, or status changes
-  /// from accepted → ongoing which means a different destination).
-  Future<void> beginNewRoute(List<RouteStep> steps) async {
+  /// Called once when a brand-new route begins (new ride, accepted→ongoing leg
+  /// change, or an off-route reroute). Resets announcement flags and speaks the
+  /// first upcoming turn so the driver knows what to do next.
+  ///
+  /// [isRerouting] — true when called after an off-route recalculation.
+  /// On reroutes the pickup-leg silence is lifted so the driver still hears the
+  /// new direction even when heading to pickup.
+  Future<void> beginNewRoute(List<RouteStep> steps, {bool isRerouting = false}) async {
     _steps = steps;
     _startAnnounced = false;
-    _is300mSpoken = false;
     _is50mSpoken = false;
     _is15mSpoken = false;
     _isArrivedAtDestinationSpoken = false;
@@ -133,40 +138,36 @@ class VoiceNavigationService {
 
     if (!_isEnabled || steps.isEmpty) return;
 
-    final first = steps.first;
     _startAnnounced = true;
 
-    // Mark thresholds already covered so we don't double-announce.
-    if (first.distanceMeters <= 300) _is300mSpoken = true;
-    if (first.distanceMeters <= 50) _is50mSpoken = true;
+    // Pre-suppress thresholds already covered at route start.
+    if (steps.first.distanceMeters <= 50) _is50mSpoken = true;
 
-    // For the destination leg, startTrip() has already finished its announcement
-    // (it is awaited before _updateStatus fires). Announce the first upcoming turn
-    // now so the driver knows immediately what to expect.
-    // Pickup leg stays silent here — the acceptance announcement is still playing
-    // when beginNewRoute fires (the Directions API call takes ~1-2 s), and calling
-    // _speak() would stop() the TTS mid-sentence.
-    if (!_isPickupLeg) {
-      // Sum the distances of all straight/null-maneuver steps to find how far
-      // away the first real turn is from the route start.
+    // Speak the first upcoming real turn when:
+    //   • destination leg (always), or
+    //   • pickup leg rerouted (the acceptance announcement is long past)
+    // Pickup-leg initial route stays silent — acceptance announcement still playing.
+    final bool shouldAnnounce = !_isPickupLeg || isRerouting;
+    if (shouldAnnounce) {
       double distToFirstTurn = 0;
       for (final s in steps) {
-        if (s.maneuver != null && s.maneuver != 'straight') break;
+        if (s.maneuver != null && !_silentManeuvers.contains(s.maneuver)) break;
         distToFirstTurn += s.distanceMeters;
       }
       final firstTurn = nextManeuverStep;
-      if (firstTurn != null && distToFirstTurn > 300) {
+      // Only announce if the first real turn is further than 50 m —
+      // the 50m/15m cues handle it automatically when very close.
+      if (firstTurn != null && distToFirstTurn > 50) {
         await _speak(
           'In ${_formatDistance(distToFirstTurn.round())}, ${firstTurn.instruction}.',
         );
-        _is300mSpoken = true; // suppress the automatic 300 m re-announcement
       }
     }
   }
 
-  /// Called on every route recalculation (same ride, same status — just the
-  /// driver has moved ~30 m). Steps are updated without resetting spoken flags
-  /// unless the first maneuver has genuinely changed.
+  /// Called on every route recalculation (driver moved ~30 m, same ride/status).
+  /// Steps are updated; announcement flags are preserved unless the tracked
+  /// maneuver waypoint has genuinely changed (driver passed a turn).
   Future<void> refreshSteps(List<RouteStep> steps) async {
     if (steps.isEmpty) {
       _steps = steps;
@@ -175,11 +176,9 @@ class VoiceNavigationService {
 
     final newTarget = steps.first.endLocation;
 
-    // If the closest maneuver's waypoint is more than 50 m away from what we
-    // were tracking, the driver has passed the old turn — reset for the new one.
+    // Driver has passed the old maneuver — reset for the next one.
     if (_trackedEndLocation != null &&
         _metersApart(_trackedEndLocation!, newTarget) > 50) {
-      _is300mSpoken = false;
       _is50mSpoken = false;
       _is15mSpoken = false;
       _trackedEndLocation = newTarget;
@@ -187,34 +186,24 @@ class VoiceNavigationService {
 
     _steps = steps;
 
-    // If the driver went off-route and we flagged a refresh announcement,
-    // speak the updated first instruction now.
-    if (_announceNextRefresh && _isEnabled) {
+    // Off-route recalculation: clear the flag silently.
+    // The 50m/15m cues will announce the updated turn when the driver is close.
+    if (_announceNextRefresh) {
       _announceNextRefresh = false;
-      final first = nextManeuverStep ?? steps.first;
-      await _speak(
-        'Route updated. In ${_formatDistance(steps.first.distanceMeters)}, '
-        '${first.instruction}.',
-      );
     }
   }
 
-  /// Called on every driver GPS tick. Triggers voice announcements when the
-  /// driver is 300 m or 50 m from the next maneuver, and detects off-route
-  /// deviation.
+  /// Called on every driver GPS tick. Triggers voice announcements at 50 m and
+  /// 15 m from the next real maneuver, and detects off-route deviation.
   Future<void> onPositionUpdate(LatLng position) async {
     if (!_isEnabled || _steps.isEmpty) return;
 
     final step = _steps.first;
     final dist = _metersApart(position, step.endLocation);
 
-    // Banner shows distance to the next REAL maneuver, skipping over any
-    // intermediate straight/continue steps.
     _distanceToNextTurnMeters = _distanceToNextRealManeuver(position);
 
-    // Off-route detection — check if driver has strayed > 100 m from the
-    // calculated polyline. Announce once; the ViewModel will recalculate and
-    // call refreshSteps which then announces the updated route.
+    // Off-route detection.
     if (_polylinePoints.isNotEmpty) {
       final distToRoute = _minDistanceToPolyline(position);
       if (distToRoute > 100 && !_deviationSpoken) {
@@ -226,7 +215,7 @@ class VoiceNavigationService {
       if (distToRoute < 50) _deviationSpoken = false;
     }
 
-    // Always announce arrival at the end of the route regardless of step type.
+    // Arrival at the final waypoint of the current leg.
     if (_steps.length == 1 && dist <= 15 && !_isArrivedAtDestinationSpoken) {
       _isArrivedAtDestinationSpoken = true;
       _is15mSpoken = true;
@@ -236,18 +225,15 @@ class VoiceNavigationService {
       return;
     }
 
-    // Look ahead through any straight/null steps to find the next real turn.
-    // This is the same look-ahead used by the navigation banner (_distanceToNextTurnMeters),
-    // applied now to voice so announcements fire even when the current step is straight.
+    // Look ahead to the next genuine turn, skipping silent maneuvers.
     final upcomingTurn = nextManeuverStep;
     final int distToTurn = _distanceToNextTurnMeters;
 
-    // Initial announcement fallback (fires if beginNewRoute ran before first tick).
+    // Initial fallback — fires if beginNewRoute ran before the first GPS tick.
     if (!_startAnnounced) {
       _startAnnounced = true;
       if (upcomingTurn != null) {
         await _speak('In ${_formatDistance(distToTurn)}, ${upcomingTurn.instruction}.');
-        if (distToTurn <= 300) _is300mSpoken = true;
         if (distToTurn <= 50) _is50mSpoken = true;
         if (distToTurn <= 15) _is15mSpoken = true;
       }
@@ -256,41 +242,47 @@ class VoiceNavigationService {
 
     if (upcomingTurn == null) return;
 
-    // At-turn cue — spoken right as the driver reaches the maneuver point.
+    // 15 m — action cue: speak the turn instruction now.
     if (distToTurn <= 15 && !_is15mSpoken) {
       _is15mSpoken = true;
       await _speak(upcomingTurn.instruction);
       return;
     }
 
+    // 50 m — advance warning: one cue before the turn.
     if (distToTurn <= 50 && !_is50mSpoken) {
       _is50mSpoken = true;
-      await _speak('Now, ${upcomingTurn.instruction}.');
-      return;
-    }
-
-    if (distToTurn <= 300 && !_is300mSpoken) {
-      _is300mSpoken = true;
       await _speak('In ${_formatDistance(distToTurn)}, ${upcomingTurn.instruction}.');
     }
   }
 
-  /// Speak a final arrival message when the trip is completed.
+  /// Speaks the final arrival announcement when the driver taps "End Trip".
   Future<void> announceArrival() async {
     if (!_isEnabled) return;
     await _speak('You have arrived at your destination.');
     _steps = [];
   }
 
-  /// True when off-route was detected and we're waiting for a fresh route.
-  /// DriverHomeViewModel reads this to force an immediate Directions API call
-  /// rather than waiting for the driver to move 30 m.
+  /// True when off-route was detected and we need a fresh route immediately.
+  /// DriverHomeViewModel reads this to bypass the 30m recalculation throttle.
   bool get needsRouteRefresh => _announceNextRefresh;
 
   void toggle() {
     _isEnabled = !_isEnabled;
     if (!_isEnabled) _tts.stop();
     debugPrint('VoiceNavigation: ${_isEnabled ? "enabled" : "disabled"}');
+  }
+
+  /// Silences voice without changing the user-facing toggle state.
+  /// Used when an external nav app (Waze) is opened.
+  void mute() {
+    _tts.stop();
+    _isEnabled = false;
+  }
+
+  /// Re-enables voice. Paired with [mute].
+  void unmute() {
+    _isEnabled = true;
   }
 
   Future<void> testSpeak() async {
@@ -300,7 +292,7 @@ class VoiceNavigationService {
     );
   }
 
-  /// Speak any one-off status announcement (e.g. ride accepted, arrived, trip started).
+  /// Speak any one-off status announcement (ride accepted, trip started, etc.).
   Future<void> announce(String text) => _speak(text);
 
   Future<void> dispose() async {
@@ -326,10 +318,6 @@ class VoiceNavigationService {
     return '$milesStr ${milesStr == '1.0' ? 'mile' : 'miles'}';
   }
 
-  /// Returns the shortest distance (metres) from [position] to the polyline,
-  /// measured perpendicularly to each segment rather than to individual points.
-  /// Point-distance gives large false readings on long straight segments
-  /// (e.g. highways), triggering bogus off-route "Recalculating" announcements.
   double _minDistanceToPolyline(LatLng position) {
     if (_polylinePoints.isEmpty) return 0;
     double min = double.infinity;
@@ -337,19 +325,15 @@ class VoiceNavigationService {
       final d = _distanceToSegment(position, _polylinePoints[i], _polylinePoints[i + 1]);
       if (d < min) min = d;
     }
-    // Fall back to the last point when only one point exists.
     if (min == double.infinity) return _metersApart(position, _polylinePoints.first);
     return min;
   }
 
-  /// Perpendicular (or endpoint) distance from [p] to the segment [a]→[b].
-  /// Uses a planar Cartesian approximation which is accurate enough for the
-  /// short polyline segments produced by the Directions API (< 500 m each).
   double _distanceToSegment(LatLng p, LatLng a, LatLng b) {
     final dx = b.longitude - a.longitude;
     final dy = b.latitude - a.latitude;
     final len2 = dx * dx + dy * dy;
-    if (len2 == 0) return _metersApart(p, a); // degenerate segment (same point)
+    if (len2 == 0) return _metersApart(p, a);
     final t = ((p.longitude - a.longitude) * dx + (p.latitude - a.latitude) * dy) / len2;
     final closest = LatLng(
       a.latitude + t.clamp(0.0, 1.0) * dy,
@@ -358,19 +342,17 @@ class VoiceNavigationService {
     return _metersApart(p, closest);
   }
 
-  // Returns metres from [position] to the nearest upcoming step that has a
-  // real maneuver (turn, fork, ramp, roundabout, etc.), summing through any
-  // intermediate straight/continue steps. Used to keep the banner accurate
-  // even when the driver is currently on a straight segment.
+  /// Metres from [position] to the nearest step with a real maneuver,
+  /// accumulating through silent steps (straight, null, slight turns).
   int _distanceToNextRealManeuver(LatLng position) {
     if (_steps.isEmpty) return 0;
     double dist = _metersApart(position, _steps.first.endLocation);
     final String? m = _steps.first.maneuver;
-    if (m != null && m != 'straight') return dist.round();
+    if (m != null && !_silentManeuvers.contains(m)) return dist.round();
     for (int i = 1; i < _steps.length; i++) {
       final s = _steps[i];
       final String? sm = s.maneuver;
-      if (sm != null && sm != 'straight') return dist.round();
+      if (sm != null && !_silentManeuvers.contains(sm)) return dist.round();
       dist += s.distanceMeters;
     }
     return dist.round();

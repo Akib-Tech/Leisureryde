@@ -13,16 +13,47 @@ class NavigationBanner extends StatelessWidget {
   /// the direction icon and instruction text instead.
   final RouteStep? upcomingTurnStep;
 
+  /// When true the banner shows "Recalculating..." instead of the instruction.
+  final bool isRecalculating;
+
   const NavigationBanner({
     super.key,
     required this.step,
     required this.distanceMeters,
     this.upcomingTurnStep,
+    this.isRecalculating = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (step == null) return const SizedBox.shrink();
+    // Show recalculating state even when step is null.
+    if (step == null && !isRecalculating) return const SizedBox.shrink();
+
+    final topPad = MediaQuery.of(context).padding.top;
+
+    // "Recalculating..." — shown immediately after off-route is detected.
+    if (isRecalculating) {
+      return Container(
+        color: const Color(0xFF1A237E),
+        padding: EdgeInsets.fromLTRB(20, topPad + 10, 20, 14),
+        child: Row(
+          children: [
+            const Icon(Icons.sync, color: Colors.white, size: 42),
+            const SizedBox(width: 18),
+            const Expanded(
+              child: Text(
+                'Recalculating...',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     // Use the upcoming turn step for icon + instruction when the current step
     // is a straight/head segment (maneuver == null OR 'straight'). Google can
@@ -34,8 +65,6 @@ class NavigationBanner extends StatelessWidget {
     final displayStep = (currentStepIsNonTurn && upcomingTurnStep != null)
         ? upcomingTurnStep!
         : step!;
-
-    final topPad = MediaQuery.of(context).padding.top;
 
     return Container(
       color: const Color(0xFF1A237E),

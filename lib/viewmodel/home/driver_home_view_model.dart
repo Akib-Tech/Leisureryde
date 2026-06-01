@@ -84,6 +84,35 @@ class DriverHomeViewModel extends ChangeNotifier {
 
   bool get voiceEnabled => _voiceNav.isEnabled;
 
+  // True while a Directions API reroute call is in-flight (off-route detected).
+  // Drives the "Recalculating..." state in the navigation banner.
+  bool _isRecalculating = false;
+  bool get isRecalculating => _isRecalculating;
+
+  // Signals that the upcoming _drawRouteForActiveRide() call was triggered by
+  // an off-route deviation — voice should announce the new first turn.
+  bool _pendingReroute = false;
+
+  // True while the driver has Waze (or another external nav app) open.
+  bool _mutedByWaze = false;
+  bool get mutedByWaze => _mutedByWaze;
+
+  /// Mutes in-app voice while an external navigation app is open.
+  void muteVoiceForExternalApp() {
+    _mutedByWaze = true;
+    _voiceNav.mute();
+    notifyListeners();
+  }
+
+  /// Restores in-app voice when the driver returns from the external app.
+  Future<void> restoreVoiceAfterExternalApp() async {
+    if (!_mutedByWaze) return;
+    _mutedByWaze = false;
+    _voiceNav.unmute();
+    await _voiceNav.reinitialize();
+    notifyListeners();
+  }
+
   /// The current maneuver step — used to drive the on-screen navigation banner.
   RouteStep? get currentNavStep => _voiceNav.currentStep;
 
@@ -427,7 +456,12 @@ class DriverHomeViewModel extends ChangeNotifier {
       // needsRouteRefresh. Force an immediate Directions API call instead of
       // waiting for the driver to move another 30 m — otherwise the driver
       // hears "Recalculating" but the updated route announcement never fires.
-      if (_voiceNav.needsRouteRefresh) _lastRouteCalcPosition = null;
+      if (_voiceNav.needsRouteRefresh) {
+        _lastRouteCalcPosition = null;
+        _pendingReroute = true;
+        _isRecalculating = true;
+        notifyListeners(); // show "Recalculating..." banner immediately
+      }
 
       // Only recalculate the route when the driver has moved > 30 m to avoid
       // hammering the Directions API on every GPS tick.
@@ -435,6 +469,10 @@ class DriverHomeViewModel extends ChangeNotifier {
           _metersApart(_lastRouteCalcPosition!, newPos) > 30) {
         _lastRouteCalcPosition = newPos;
         await _drawRouteForActiveRide();
+        if (_isRecalculating) {
+          _isRecalculating = false;
+          notifyListeners();
+        }
       }
     });
   }
@@ -509,15 +547,19 @@ class DriverHomeViewModel extends ChangeNotifier {
       // say "pickup location" vs "destination" as appropriate.
       _voiceNav.setLegContext(_activeRide!.status != RideStatus.ongoing);
 
-      // Feed steps to the voice service.  Only call beginNewRoute() when the
-      // ride or its status has genuinely changed; otherwise refreshSteps() so
-      // announcement flags are preserved across the 30 m recalculations.
+      // Feed steps to the voice service.
+      //   • New leg (new ride or status change) → beginNewRoute()
+      //   • Off-route reroute → beginNewRoute(isRerouting: true) so the
+      //     driver hears the new first turn on both pickup and destination legs
+      //   • Normal 30 m recalculation → refreshSteps() to preserve flags
       final isNewLeg = _lastVoiceRideId != _activeRide!.id ||
           _lastVoiceStatus != _activeRide!.status;
-      if (isNewLeg) {
+      final isReroute = _pendingReroute;
+      _pendingReroute = false;
+      if (isNewLeg || isReroute) {
         _lastVoiceRideId = _activeRide!.id;
         _lastVoiceStatus = _activeRide!.status;
-        await _voiceNav.beginNewRoute(result.steps);
+        await _voiceNav.beginNewRoute(result.steps, isRerouting: isReroute && !isNewLeg);
       } else {
         await _voiceNav.refreshSteps(result.steps);
       }

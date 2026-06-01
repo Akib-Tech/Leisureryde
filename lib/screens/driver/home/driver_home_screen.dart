@@ -41,8 +41,12 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
     if (state == AppLifecycleState.resumed && mounted) {
       final vm = _vm;
       if (vm == null) return;
-      // Re-init TTS first — Android may have killed the engine while backgrounded.
-      vm.reinitializeVoice();
+      // Restore voice if the driver was in Waze; otherwise just re-init TTS.
+      if (vm.mutedByWaze) {
+        vm.restoreVoiceAfterExternalApp();
+      } else {
+        vm.reinitializeVoice();
+      }
       if (vm.mapViewModel.currentPosition == null) {
         vm.requestLocationPermission();
       } else {
@@ -174,6 +178,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
                       step: viewModel.currentNavStep,
                       distanceMeters: viewModel.distanceToNextTurnMeters,
                       upcomingTurnStep: viewModel.nextNavManeuverStep,
+                      isRecalculating: viewModel.isRecalculating,
                     ),
                   )
                 else

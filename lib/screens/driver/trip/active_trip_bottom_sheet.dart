@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:leisureryde/screens/shared/timer/timer.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../models/ride_request_model.dart';
 import '../../../viewmodel/home/driver_home_view_model.dart';
 import '../../../viewmodel/ride/active_trip_driver_view_model.dart';
@@ -344,6 +345,30 @@ class _ActiveTripDriverBottomSheetState
                           if (stateButton != null) stateButton,
                           const SizedBox(height: 12),
 
+                          // Waze navigation button — shown while navigating
+                          // to pickup (accepted) or destination (ongoing).
+                          if (vm.rideRequest!.status == RideStatus.accepted ||
+                              vm.rideRequest!.status == RideStatus.ongoing)
+                            Consumer<DriverHomeViewModel>(
+                              builder: (ctx, driverVm, _) => OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF00B4D8),
+                                  side: const BorderSide(color: Color(0xFF00B4D8)),
+                                  minimumSize: const Size(double.infinity, 54),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                ),
+                                onPressed: () => _openWaze(ctx, driverVm, vm.rideRequest!),
+                                icon: const Icon(Icons.navigation_outlined),
+                                label: const Text(
+                                  "Navigate with Waze",
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+
+                          const SizedBox(height: 12),
+
                           OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Colors.red,
@@ -384,5 +409,30 @@ class _ActiveTripDriverBottomSheetState
       child: Text(label,
           style: const TextStyle(fontWeight: FontWeight.bold)),
     );
+  }
+
+  Future<void> _openWaze(
+    BuildContext ctx,
+    DriverHomeViewModel driverVm,
+    RideRequest ride,
+  ) async {
+    final dest = ride.status == RideStatus.accepted
+        ? ride.pickupLocation
+        : ride.destinationLocation;
+
+    final wazeUri = Uri.parse(
+      'waze://?ll=${dest.latitude},${dest.longitude}&navigate=yes',
+    );
+    final fallbackUri = Uri.parse(
+      'https://waze.com/ul?ll=${dest.latitude},${dest.longitude}&navigate=yes',
+    );
+
+    driverVm.muteVoiceForExternalApp();
+
+    if (await canLaunchUrl(wazeUri)) {
+      await launchUrl(wazeUri);
+    } else {
+      await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
+    }
   }
 }
