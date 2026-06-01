@@ -431,19 +431,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ],
             ),
           ),
-          if (viewModel.recentDestinations.isNotEmpty) ...[
-            const Divider(height: 1, indent: 16, endIndent: 16),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text("Recent", style: theme.textTheme.titleSmall?.copyWith(color: theme.textTheme.bodySmall?.color?.withOpacity(0.7))),
-            ),
-            ...viewModel.recentDestinations.map((dest) => ListTile(
-              leading: const Icon(Icons.history),
-              title: Text(dest.address.split(',')[0], style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: Text(dest.address, maxLines: 1, overflow: TextOverflow.ellipsis),
-              onTap: () => viewModel.selectRecentDestination(dest),
-            )),
-          ]
         ],
       ),
     );
