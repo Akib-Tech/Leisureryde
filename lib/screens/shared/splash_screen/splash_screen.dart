@@ -78,6 +78,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   Widget build(BuildContext context) {
     return Scaffold(
       body: EntryPage(),
-    );;
+    );
   }
 }
