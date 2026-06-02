@@ -157,7 +157,7 @@ class _ActiveTripDriverBottomSheetState
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                    passenger.fullName,
+                                    passenger.firstName,
                                     style: const TextStyle(
                                         fontWeight: FontWeight.bold),
                                     overflow: TextOverflow.ellipsis,
@@ -269,7 +269,7 @@ class _ActiveTripDriverBottomSheetState
                                   : null,
                             ),
                             title: Text(
-                              passenger.fullName,
+                              passenger.firstName,
                               style: TextStyle(color: Colors.grey[900]),
                             ),
                             subtitle: Column(
@@ -281,9 +281,6 @@ class _ActiveTripDriverBottomSheetState
                                   const SizedBox(width: 4),
                                   Text(passenger.rating.toStringAsFixed(1)),
                                 ]),
-                                Text(passenger.email,
-                                    style:
-                                        TextStyle(color: Colors.grey[600])),
                               ],
                             ),
                             trailing: Row(

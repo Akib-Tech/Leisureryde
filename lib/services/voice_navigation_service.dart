@@ -10,8 +10,8 @@ import 'dart:io' show Platform;
 /// Manages turn-by-turn voice announcements during an active trip.
 ///
 /// Announcement schedule (per turn):
-///   • 50 m  — "Now, turn left onto Oak Street."   (advance warning)
-///   • 15 m  — "Turn left onto Oak Street."         (action cue)
+///   • 120 m  — "Now, turn left onto Oak Street."   (advance warning)
+///   • 80 m  — "Turn left onto Oak Street."         (action cue)
 ///   • arrival — "You have arrived at …"
 ///
 /// Maneuvers treated as silent (no voice, visual banner only):
@@ -33,8 +33,8 @@ class VoiceNavigationService {
   // route recalculations advance us to a different maneuver.
   LatLng? _trackedEndLocation;
 
-  bool _is50mSpoken = false;
-  bool _is15mSpoken = false;
+  bool _is120mSpoken = false;
+  bool _is80mSpoken = false;
   bool _isArrivedAtDestinationSpoken = false;
 
   // Guards the initial departure announcement.
@@ -128,8 +128,8 @@ class VoiceNavigationService {
   Future<void> beginNewRoute(List<RouteStep> steps, {bool isRerouting = false}) async {
     _steps = steps;
     _startAnnounced = false;
-    _is50mSpoken = false;
-    _is15mSpoken = false;
+    _is120mSpoken = false;
+    _is80mSpoken = false;
     _isArrivedAtDestinationSpoken = false;
     _announceNextRefresh = false;
     _deviationSpoken = false;
@@ -141,7 +141,7 @@ class VoiceNavigationService {
     _startAnnounced = true;
 
     // Pre-suppress thresholds already covered at route start.
-    if (steps.first.distanceMeters <= 50) _is50mSpoken = true;
+    if (steps.first.distanceMeters <= 120) _is120mSpoken = true;
 
     // Speak the first upcoming real turn when:
     //   • destination leg (always), or
@@ -155,9 +155,9 @@ class VoiceNavigationService {
         distToFirstTurn += s.distanceMeters;
       }
       final firstTurn = nextManeuverStep;
-      // Only announce if the first real turn is further than 50 m —
-      // the 50m/15m cues handle it automatically when very close.
-      if (firstTurn != null && distToFirstTurn > 50) {
+      // Only announce if the first real turn is further than 120 m —
+      // the 120m/80m cues handle it automatically when very close.
+      if (firstTurn != null && distToFirstTurn > 120) {
         await _speak(
           'In ${_formatDistance(distToFirstTurn.round())}, ${firstTurn.instruction}.',
         );
@@ -178,23 +178,23 @@ class VoiceNavigationService {
 
     // Driver has passed the old maneuver — reset for the next one.
     if (_trackedEndLocation != null &&
-        _metersApart(_trackedEndLocation!, newTarget) > 50) {
-      _is50mSpoken = false;
-      _is15mSpoken = false;
+        _metersApart(_trackedEndLocation!, newTarget) > 120) {
+      _is120mSpoken = false;
+      _is80mSpoken = false;
       _trackedEndLocation = newTarget;
     }
 
     _steps = steps;
 
     // Off-route recalculation: clear the flag silently.
-    // The 50m/15m cues will announce the updated turn when the driver is close.
+    // The 120m/80m cues will announce the updated turn when the driver is close.
     if (_announceNextRefresh) {
       _announceNextRefresh = false;
     }
   }
 
-  /// Called on every driver GPS tick. Triggers voice announcements at 50 m and
-  /// 15 m from the next real maneuver, and detects off-route deviation.
+  /// Called on every driver GPS tick. Triggers voice announcements at 120 m and
+  ///  80m from the next real maneuver, and detects off-route deviation.
   Future<void> onPositionUpdate(LatLng position) async {
     if (!_isEnabled || _steps.isEmpty) return;
 
@@ -218,7 +218,7 @@ class VoiceNavigationService {
     // Arrival at the final waypoint of the current leg.
     if (_steps.length == 1 && dist <= 15 && !_isArrivedAtDestinationSpoken) {
       _isArrivedAtDestinationSpoken = true;
-      _is15mSpoken = true;
+      _is80mSpoken = true;
       await _speak(_isPickupLeg
           ? 'You have arrived at the pickup location.'
           : 'You have arrived at your destination.');
@@ -234,24 +234,24 @@ class VoiceNavigationService {
       _startAnnounced = true;
       if (upcomingTurn != null) {
         await _speak('In ${_formatDistance(distToTurn)}, ${upcomingTurn.instruction}.');
-        if (distToTurn <= 50) _is50mSpoken = true;
-        if (distToTurn <= 15) _is15mSpoken = true;
+        if (distToTurn <= 120) _is120mSpoken = true;
+        if (distToTurn <= 80) _is80mSpoken = true;
       }
       return;
     }
 
     if (upcomingTurn == null) return;
 
-    // 15 m — action cue: speak the turn instruction now.
-    if (distToTurn <= 15 && !_is15mSpoken) {
-      _is15mSpoken = true;
+    // 80 m — action cue: speak the turn instruction now.
+    if (distToTurn <= 80 && !_is80mSpoken) {
+      _is80mSpoken = true;
       await _speak(upcomingTurn.instruction);
       return;
     }
 
-    // 50 m — advance warning: one cue before the turn.
-    if (distToTurn <= 50 && !_is50mSpoken) {
-      _is50mSpoken = true;
+    // 120 m — advance warning: one cue before the turn.
+    if (distToTurn <= 120 && !_is120mSpoken) {
+      _is120mSpoken = true;
       await _speak('In ${_formatDistance(distToTurn)}, ${upcomingTurn.instruction}.');
     }
   }
