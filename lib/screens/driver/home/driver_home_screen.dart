@@ -21,6 +21,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
     with WidgetsBindingObserver {
   bool _showingCancelDialog = false;
   bool _isActiveSheetCollapsed = false;
+  int _mapRebuildKey = 0;
   DriverHomeViewModel? _vm;
 
   @override
@@ -53,6 +54,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
         // Force map tile redraw — fixes the blank/static map after backgrounding.
         vm.mapViewModel.refreshMap();
       }
+      setState(() => _mapRebuildKey++);
+    }
+
+    if (state == AppLifecycleState.inactive && mounted) {
+    setState(() => _mapRebuildKey++);
     }
   }
 
@@ -245,7 +251,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
       bottomPadding = 280; // height of the online/offline status card
     }
 
-    return GoogleMap(
+    return GoogleMap( 
+      key: ValueKey(_mapRebuildKey),
       initialCameraPosition: CameraPosition(
         target: viewModel.mapViewModel.currentPosition != null
             ? LatLng(

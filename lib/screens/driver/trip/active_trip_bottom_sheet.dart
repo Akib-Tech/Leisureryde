@@ -136,54 +136,82 @@ class _ActiveTripDriverBottomSheetState
                             ],
                           ),
                           if (_isCollapsed) ...[
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 16,
-                                  backgroundImage:
-                                      passenger.profileImageUrl.isNotEmpty
-                                          ? NetworkImage(
-                                              passenger.profileImageUrl)
-                                          : null,
-                                  child: passenger.profileImageUrl.isEmpty
-                                      ? Text(
-                                          passenger.firstName[0].toUpperCase(),
-                                          style: const TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold))
-                                      : null,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    passenger.firstName,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color:
-                                        t.primaryColor.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    vm.statusLabel,
-                                    style: TextStyle(
-                                      color: t.primaryColor,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                          ],
+  const SizedBox(height: 8),
+  Row(
+    children: [
+      CircleAvatar(
+        radius: 16,
+        backgroundImage: passenger.profileImageUrl.isNotEmpty
+            ? NetworkImage(passenger.profileImageUrl)
+            : null,
+        child: passenger.profileImageUrl.isEmpty
+            ? Text(
+                passenger.firstName[0].toUpperCase(),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              )
+            : null,
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              passenger.firstName,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                Icon(Icons.location_on, size: 12, color: t.primaryColor),
+                const SizedBox(width: 2),
+                Expanded(
+                  child: Text(
+                    vm.rideRequest!.destinationAddress,
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(width: 8),
+      if (vm.rideRequest!.status == RideStatus.ongoing)
+        Consumer<DriverHomeViewModel>(
+          builder: (_, driverVm, __) => TripEndTimer(
+            origin: vm.rideRequest!.pickupLocation,
+            destination: vm.userDestination,
+            liveRemainingSeconds: driverVm.remainingSeconds > 0
+                ? driverVm.remainingSeconds
+                : null,
+            liveRemainingDistanceMiles: driverVm.remainingDistanceMiles > 0
+                ? driverVm.remainingDistanceMiles
+                : null,
+          ),
+        )
+      else
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: t.primaryColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            vm.statusLabel,
+            style: TextStyle(
+              color: t.primaryColor,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+        ),
+    ],
+  ),
+  const SizedBox(height: 6),
+],
                         ],
                       ),
                     ),

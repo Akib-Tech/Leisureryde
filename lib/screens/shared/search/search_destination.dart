@@ -118,6 +118,8 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
     FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
 
+    final capturedActiveField = _activeField;
+
     final details = await _placesService.getPlaceDetails(suggestion.placeId);
     if (details == null) {
       if (mounted) {
@@ -129,11 +131,58 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
       return;
     }
 
-    if (_activeField == 'origin') {
+  final isValidCoordinate = details.location.latitude >= -90 &&
+      details.location.latitude <= 90 &&
+      details.location.longitude >= -180 &&
+      details.location.longitude <= 180 &&
+      !(details.location.latitude == 0 && details.location.longitude == 0);
+
+  if (!isValidCoordinate) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Invalid location returned. Please try a different address.")),
+      );
+    }
+    setState(() => _isLoading = false);
+    return;
+  }
+
+  if (capturedActiveField == 'destination' && _selectedOrigin != null) {
+    final isSameAsOrigin = (details.location.latitude - _selectedOrigin!.location.latitude).abs() < 0.0001 &&
+        (details.location.longitude - _selectedOrigin!.location.longitude).abs() < 0.0001;
+
+    if (isSameAsOrigin) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Destination cannot be the same as pickup location.")),
+        );
+      }
+      setState(() => _isLoading = false);
+      return;
+    }
+  }
+
+  if (capturedActiveField == 'origin' && _selectedDestination != null) {
+    final isSameAsDestination = (details.location.latitude - _selectedDestination!.location.latitude).abs() < 0.0001 &&
+        (details.location.longitude - _selectedDestination!.location.longitude).abs() < 0.0001;
+
+    if (isSameAsDestination) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Pickup cannot be the same as destination.")),
+        );
+      }
+      setState(() => _isLoading = false);
+      return;
+    }
+  }
+
+
+    if (capturedActiveField == 'origin') {
       _selectedOrigin = details;
       _originController.text = details.address;
       FocusScope.of(context).requestFocus(_destinationFocus);
-    } else if (_activeField == 'destination') {
+    } else if (capturedActiveField == 'destination') {
       _selectedDestination = details;
       _destinationController.text = details.address;
     }
