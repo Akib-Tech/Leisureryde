@@ -145,6 +145,7 @@ class _TripEndTimerState extends State<TripEndTimer> {
       ),
       child: Row(
         children: [
+          /*
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -158,33 +159,26 @@ class _TripEndTimerState extends State<TripEndTimer> {
             ),
           ),
           const SizedBox(width: 16),
+          */
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Estimated trip time',
-                  style: TextStyle(
+                  'Dur: ${_formatDuration(_totalSeconds)}',
+                 style:TextStyle(
                     fontSize: 13,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500,
-                  ),
+                    color: Colors.blue.shade700,
+                    fontWeight: FontWeight.w600,
+                  ) 
                 ),
+                const SizedBox(height: 2),
                 Text(
-                  _formatDuration(_totalSeconds),
+                  'Arrival: ${_formatArrivalTime(_totalSeconds)}',
                   style: const TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Arriving at ${_formatArrivalTime(_totalSeconds)}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.blue.shade700,
-                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],

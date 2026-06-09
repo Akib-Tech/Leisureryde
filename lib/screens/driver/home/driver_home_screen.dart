@@ -39,8 +39,9 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && mounted) {
       final vm = _vm;
+    if (state == AppLifecycleState.resumed && mounted) {
+
       if (vm == null) return;
       // Restore voice if the driver was in Waze; otherwise just re-init TTS.
       if (vm.mutedByWaze) {
@@ -55,11 +56,13 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
         vm.mapViewModel.refreshMap();
       }
       setState(() => _mapRebuildKey++);
+        vm.restoreVoiceAfterExternalApp();
     }
 
     if (state == AppLifecycleState.inactive && mounted) {
     setState(() => _mapRebuildKey++);
-    }
+    if (vm != null) vm.restoreVoiceAfterExternalApp();
+     }
   }
 
   void _onViewModelChanged() {

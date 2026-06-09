@@ -177,7 +177,7 @@ class _ActiveTripCardState extends State<ActiveTripCard>
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                    viewModel.driverProfile!.fullName,
+                                    viewModel.driverProfile!.firstName,
                                     style: const TextStyle(
                                         fontWeight: FontWeight.bold),
                                     overflow: TextOverflow.ellipsis,
@@ -256,7 +256,7 @@ class _ActiveTripCardState extends State<ActiveTripCard>
                                   : null,
                             ),
                             title: Text(
-                              viewModel.driverProfile!.fullName,
+                              viewModel.driverProfile!.firstName,
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold),
                             ),

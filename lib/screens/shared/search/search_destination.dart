@@ -114,6 +114,12 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
     });
   }
 
+
+  void _clearLocationDetails(){
+      _selectedOrigin = null;
+      _selectedDestination = null;
+  }
+
   Future<void> _onSuggestionTapped(PlaceSuggestion suggestion) async {
     FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
@@ -327,6 +333,7 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
               origin: _selectedOrigin!,
               destination: _selectedDestination!,
             );
+            _clearLocationDetails();
             Navigator.of(context).pop(result);
           },
           child: const Text('Confirm Route', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
