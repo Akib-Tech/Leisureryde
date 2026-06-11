@@ -11,6 +11,7 @@ import 'package:leisureryde/services/database_service.dart';
 import 'package:leisureryde/services/directions_service.dart';
 import 'package:leisureryde/services/fare_calculation_service.dart';
 import 'package:leisureryde/services/ride_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/driver_locator.dart';
 import '../../services/push_notifications_service.dart';
 import '../../services/voice_navigation_service.dart';
@@ -51,9 +52,10 @@ class DriverHomeViewModel extends ChangeNotifier {
   LatLng? _driverCurrentPosition; 
   LatLng? get driverCurrentPosition => _driverCurrentPosition;
 
-  // Last position at which we recalculated the route.
-  // Prevents hammering the Directions API on every GPS tick.
+  // Last position and time at which we recalculated the route.
+  // Both must satisfy their thresholds before a new Directions API call fires.
   LatLng? _lastRouteCalcPosition;
+  DateTime? _lastRouteCalcTime;
 
   // Live ETA values from the most-recent Directions API result.
   int _remainingSeconds = 0;
@@ -82,6 +84,11 @@ class DriverHomeViewModel extends ChangeNotifier {
   // recalculations on the same leg call refreshSteps() instead.
   String? _lastVoiceRideId;
   RideStatus? _lastVoiceStatus;
+
+  // Tracks the last ride+status for which Waze was launched, so we don't
+  // re-launch on every GPS tick or repeated status snapshots.
+  String? _lastWazeRideId;
+  RideStatus? _lastWazeStatus;
 
   bool get voiceEnabled => _voiceNav.isEnabled;
 
@@ -268,9 +275,10 @@ class DriverHomeViewModel extends ChangeNotifier {
   /// The doc subscription takes over from here and handles all status changes.
   void preSetActiveRide(RideRequest ride) {
     _activeRide = ride;
-    // Reset the route-calc throttle so _drawRouteForActiveRide fires on the
-    // very next GPS tick (or immediately below) rather than waiting 30 m.
+    // Reset both throttles so _drawRouteForActiveRide fires on the
+    // very next GPS tick (or immediately below) rather than waiting 150 m.
     _lastRouteCalcPosition = null;
+    _lastRouteCalcTime = null;
     // Seed the driver position from the map's device GPS so the initial
     // _drawRouteForActiveRide() call below doesn't bail out early when the
     // Realtime Database stream hasn't fired its first tick yet.
@@ -283,7 +291,7 @@ class DriverHomeViewModel extends ChangeNotifier {
     notifyListeners();
     _subscribeToActiveRideDoc(ride.id);
     // Draw the pickup route right away — the location listener won't redraw
-    // until the driver moves 30 m, which could be a long wait at a standstill.
+    // until the driver moves 150 m, which could be a long wait at a standstill.
     _drawRouteForActiveRide();
   }
 
@@ -423,6 +431,7 @@ class DriverHomeViewModel extends ChangeNotifier {
 
     _driverLocationSubscription?.cancel();
     _lastRouteCalcPosition = null;
+    _lastRouteCalcTime = null;
 
     _driverLocationSubscription = _databaseService
         .getDriverLocationStream(_driverProfile!.uid)
@@ -445,62 +454,61 @@ class DriverHomeViewModel extends ChangeNotifier {
         mapViewModel.followWithBearing(newPos, heading);
       }
 
-      // Voice navigation — checked on every GPS tick regardless of the
-      // route-recalculation threshold so announcements are timely.
+      /* IN-APP VOICE NAVIGATION + ROUTE RECALCULATION — navigation now handled
+         by Waze. Re-enable this block (and remove the Waze launch in
+         _drawRouteForActiveRide) to restore in-app turn-by-turn navigation.
+
       if (_activeRide != null) {
         await _voiceNav.onPositionUpdate(newPos);
-        // Notify so the navigation banner updates its distance counter.
         notifyListeners();
       }
 
-      // If the voice service detected an off-route deviation it sets
-      // needsRouteRefresh. Force an immediate Directions API call instead of
-      // waiting for the driver to move another 30 m — otherwise the driver
-      // hears "Recalculating" but the updated route announcement never fires.
       if (_voiceNav.needsRouteRefresh) {
         _lastRouteCalcPosition = null;
+        _lastRouteCalcTime = null;
         _pendingReroute = true;
         _isRecalculating = true;
-        notifyListeners(); // show "Recalculating..." banner immediately
+        notifyListeners();
       }
 
-      // Only recalculate the route when the driver has moved > 30 m to avoid
-      // hammering the Directions API on every GPS tick.
-      if (_lastRouteCalcPosition == null ||
-          _metersApart(_lastRouteCalcPosition!, newPos) > 30) {
+      final now = DateTime.now();
+      final movedEnough = _lastRouteCalcPosition == null ||
+          _metersApart(_lastRouteCalcPosition!, newPos) > 150;
+      final waitedLongEnough = _lastRouteCalcTime == null ||
+          now.difference(_lastRouteCalcTime!) >= const Duration(seconds: 30);
+
+      if (movedEnough && waitedLongEnough) {
         _lastRouteCalcPosition = newPos;
+        _lastRouteCalcTime = now;
         await _drawRouteForActiveRide();
         if (_isRecalculating) {
           _isRecalculating = false;
           notifyListeners();
         }
       }
+      */
+
+      // Keep the driver-position-dependent UI (ETA chip, status bar) current.
+      if (_activeRide != null) notifyListeners();
     });
   }
 
-  /// Draws the correct polyline into mapViewModel based on ride status:
+  /// Handles navigation setup when the ride status changes.
   ///
-  /// - accepted   → driver current position → passenger pickup (navigation active)
-  /// - enroute    → driver has arrived at pickup; clear route + skip voice so the
-  ///                "arrived at pickup" announcement is not repeated
-  /// - ongoing    → driver current position → passenger destination (navigation active)
-  /// - anything else → clear the route
+  /// - accepted  → places pickup marker; launches Waze to pickup (once)
+  /// - enroute   → driver is at pickup waiting; clears route, no Waze needed
+  /// - ongoing   → places destination marker; launches Waze to destination (once)
+  /// - anything else → clears route
   ///
-  /// Because this writes into mapViewModel (which the GoogleMap widget reads),
-  /// the polyline persists even when the driver navigates away and returns —
-  /// the data lives in mapViewModel, not in a widget that can be disposed.
+  /// Navigation is delegated to Waze. Re-enable the commented block below and
+  /// remove the Waze launch to restore in-app turn-by-turn navigation.
   Future<void> _drawRouteForActiveRide() async {
     if (_activeRide == null || _driverCurrentPosition == null) return;
 
     // enroute = driver is physically at the pickup, waiting for the passenger.
-    // No routing or voice navigation is needed:
-    //   • Calling the Directions API from origin≈destination wastes quota.
-    //   • beginNewRoute() would reset _isArrivedAtDestinationSpoken, causing a
-    //     second "arrived at pickup" announcement on the next GPS tick.
     if (_activeRide!.status == RideStatus.enroute) {
       mapViewModel.clearLiveRoute();
-      // Record the status so the accepted→ongoing transition correctly calls
-      // beginNewRoute() for the destination leg.
+      // Kept for the accepted→ongoing transition detection used by voice nav.
       _lastVoiceRideId = _activeRide!.id;
       _lastVoiceStatus = _activeRide!.status;
       return;
@@ -522,37 +530,35 @@ class DriverHomeViewModel extends ChangeNotifier {
         return;
     }
 
+    // Always keep the destination pin visible on the driver's map.
+    _updateDestinationMarker(routeDestination);
+
+    // Launch Waze once per ride leg (accepted → pickup, ongoing → destination).
+    final isNewLeg = _lastWazeRideId != _activeRide!.id ||
+        _lastWazeStatus != _activeRide!.status;
+    if (isNewLeg) {
+      _lastWazeRideId = _activeRide!.id;
+      _lastWazeStatus = _activeRide!.status;
+      await _launchWaze(routeDestination);
+    }
+
+    /* IN-APP NAVIGATION — commented out; navigation handled by Waze.
+       To restore: remove the Waze block above, uncomment everything below,
+       and re-enable the recalculation block in _listenToOwnLocation.
+
     final result = await _directionsService.getDirections(
       origin: _driverCurrentPosition!,
       destination: routeDestination,
     );
 
     if (result != null) {
-      // Write the polyline directly into mapViewModel.
-      // The GoogleMap widget in DriverHomeScreen reads mapViewModel.polylines,
-      // so this is what actually makes the line appear on screen.
       mapViewModel.setLiveRoutePolyline(result.polylinePoints);
-
-      // Also update the destination marker so the driver knows where to go.
       _updateDestinationMarker(routeDestination);
-
-      // Update live ETA — refreshed every time the driver moves 30 m.
       _remainingSeconds = result.durationValue ?? 0;
       _remainingDistanceMiles = ((result.distanceValue ?? 0) * 0.000621371);
-
-      // Feed the freshest polyline to the voice service for off-route detection
-      // before updating the steps.
       _voiceNav.setPolyline(result.polylinePoints);
-
-      // Tell the voice service which leg we are on so arrival announcements
-      // say "pickup location" vs "destination" as appropriate.
       _voiceNav.setLegContext(_activeRide!.status != RideStatus.ongoing);
 
-      // Feed steps to the voice service.
-      //   • New leg (new ride or status change) → beginNewRoute()
-      //   • Off-route reroute → beginNewRoute(isRerouting: true) so the
-      //     driver hears the new first turn on both pickup and destination legs
-      //   • Normal 30 m recalculation → refreshSteps() to preserve flags
       final isNewLeg = _lastVoiceRideId != _activeRide!.id ||
           _lastVoiceStatus != _activeRide!.status;
       final isReroute = _pendingReroute;
@@ -564,6 +570,23 @@ class DriverHomeViewModel extends ChangeNotifier {
       } else {
         await _voiceNav.refreshSteps(result.steps);
       }
+    }
+    */
+  }
+
+  /// Opens Waze and navigates to [destination].
+  /// Falls back to the Waze web URL if the app is not installed.
+  Future<void> _launchWaze(LatLng destination) async {
+    final wazeApp = Uri.parse(
+      'waze://?ll=${destination.latitude},${destination.longitude}&navigate=yes',
+    );
+    final wazeWeb = Uri.parse(
+      'https://waze.com/ul?ll=${destination.latitude},${destination.longitude}&navigate=yes',
+    );
+    if (await canLaunchUrl(wazeApp)) {
+      await launchUrl(wazeApp);
+    } else {
+      await launchUrl(wazeWeb, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -598,6 +621,9 @@ class DriverHomeViewModel extends ChangeNotifier {
     _activeRide = null;
     _driverCurrentPosition = null;
     _lastRouteCalcPosition = null;
+    _lastRouteCalcTime = null;
+    _lastWazeRideId = null;
+    _lastWazeStatus = null;
   }
 
   Future<void> refreshStats() async {

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -9,7 +8,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/driver_profile.dart';
 import '../../models/ride_request_model.dart';
 import '../../services/database_service.dart';
-import '../../services/directions_service.dart';
 import '../../services/ride_service.dart';
 import '../maps/maps_viewmodel.dart';
 
@@ -22,7 +20,6 @@ class ActiveTripViewModel extends ChangeNotifier {
 
   final RideService _rideService = locator<RideService>();
   final DatabaseService _databaseService = locator<DatabaseService>();
-  final DirectionsService _directionsService = locator<DirectionsService>();
 
   late StreamSubscription<DocumentSnapshot> _rideSubscription;
   StreamSubscription<DocumentSnapshot>? _driverLocationSubscription;
@@ -38,8 +35,6 @@ class ActiveTripViewModel extends ChangeNotifier {
 
   LatLng? _driverLocation;
   LatLng? get driverLocation => _driverLocation;
-
-  LatLng? _lastRouteRecalcPosition;
 
   LatLng? _destination;
   LatLng? get userDestination => _destination;
@@ -98,7 +93,7 @@ class ActiveTripViewModel extends ChangeNotifier {
         notifyListeners();
       }
 
-      // Recalculate and draw the polyline into the shared MapViewModel.
+      // Manage polyline visibility based on the updated ride status.
       await _updateLiveRoute();
     });
   }
@@ -108,7 +103,7 @@ class ActiveTripViewModel extends ChangeNotifier {
 
     _driverLocationSubscription = _databaseService
         .getDriverLocationStream(driverId)
-        .listen((snapshot) async {
+        .listen((snapshot) {
       if (!snapshot.exists) return;
 
       final data = snapshot.data() as Map<String, dynamic>;
@@ -118,81 +113,43 @@ class ActiveTripViewModel extends ChangeNotifier {
 
       if (latitude == null || longitude == null) return;
 
-      final newPos = LatLng(latitude, longitude);
-      _driverLocation = newPos;
-
+      _driverLocation = LatLng(latitude, longitude);
       mapViewModel.updateDriverPosition(_driverLocation!, heading: heading);
-
-      // Only recalculate the route when the driver has moved > 50 m to avoid
-      // hammering the Directions API on every GPS tick.
-      if (_lastRouteRecalcPosition == null ||
-          _metersApart(_lastRouteRecalcPosition!, newPos) > 50) {
-        _lastRouteRecalcPosition = newPos;
-        await _updateLiveRoute();
-      } else {
-        notifyListeners();
-      }
+      notifyListeners();
     });
   }
 
-  /// Calculates the route from driver to the correct destination based on
-  /// the current ride status, then writes it into the shared MapViewModel.
+  /// Manages the map polylines on the passenger side based on ride status.
   ///
-  /// - accepted / enroute  → driver to passenger pickup
-  /// - ongoing             → driver to passenger destination
-  /// - anything else       → clear the live route polyline
+  /// - accepted / enroute  → booking polyline stays; driver marker is live
+  /// - ongoing             → clears pre-booking polyline; driver marker is live
+  /// - anything else       → clears all live route polylines
+  ///
+  /// The Directions API is NOT called here — the booking polyline was already
+  /// fetched once during route selection and that single call is sufficient
+  /// for the passenger view. Removing per-tick API calls eliminates the bulk
+  /// of Directions API charges during long rides.
   Future<void> _updateLiveRoute() async {
-    if (_rideRequest == null || _driverLocation == null) return;
-
-    LatLng routeOrigin;
-    LatLng routeDestination;
+    if (_rideRequest == null) return;
 
     switch (_rideRequest!.status) {
-      case RideStatus.accepted:
-      case RideStatus.enroute:
-        routeOrigin = _driverLocation!;
-        routeDestination = _rideRequest!.pickupLocation;
-        break;
-
       case RideStatus.ongoing:
-        routeOrigin = _driverLocation!;
-        routeDestination = _rideRequest!.destinationLocation;
+        // Trip is underway — remove the pre-booking polyline; the driver
+        // marker position is sufficient for the passenger view.
         mapViewModel.clearBookingRoute();
         break;
 
+      case RideStatus.accepted:
+      case RideStatus.enroute:
+        // Booking polyline already visible; nothing to change.
+        break;
+
       default:
-      // Terminal or unknown status — clear the live polyline.
         mapViewModel.clearLiveRoute();
-        notifyListeners();
-        return;
-    }
-
-    final result = await _directionsService.getDirections(
-      origin: routeOrigin,
-      destination: routeDestination,
-    );
-
-    if (result != null) {
-      // Write the live polyline directly into the shared MapViewModel.
-      // The GoogleMap widget will re-render automatically because
-      // MapViewModel calls notifyListeners().
-      mapViewModel.setLiveRoutePolyline(result.polylinePoints);
+        break;
     }
 
     notifyListeners();
-  }
-
-  double _metersApart(LatLng a, LatLng b) {
-    const r = 6371000.0;
-    final lat1 = a.latitude * math.pi / 180;
-    final lat2 = b.latitude * math.pi / 180;
-    final dLat = (b.latitude - a.latitude) * math.pi / 180;
-    final dLon = (b.longitude - a.longitude) * math.pi / 180;
-    final sinLat = math.sin(dLat / 2);
-    final sinLon = math.sin(dLon / 2);
-    final aa = sinLat * sinLat +
-        math.cos(lat1) * math.cos(lat2) * sinLon * sinLon;
-    return r * 2 * math.atan2(math.sqrt(aa), math.sqrt(1 - aa));
   }
 
   Future<void> makePhoneCall() async {

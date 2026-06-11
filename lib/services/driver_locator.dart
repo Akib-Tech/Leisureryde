@@ -17,11 +17,11 @@ class DriverLocationUpdater {
     if (!perm) return;
 
     // Navigation accuracy for ride-sharing: high precision, update every 3 s,
-    // only when the driver has moved at least 5 m (avoids pointless Firestore writes).
+    // only when the driver has moved at least 15 m (avoids pointless Firestore writes).
     await location.changeSettings(
       accuracy: LocationAccuracy.navigation,
       interval: 3000,
-      distanceFilter: 5,
+      distanceFilter: 15,
     );
 
     _locationSub = location.onLocationChanged.listen((loc) {
