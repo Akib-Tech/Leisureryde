@@ -3,7 +3,7 @@ import 'package:leisureryde/screens/shared/auth/login_screen.dart';
 import 'package:leisureryde/screens/shared/auth/signup_screen.dart';
 import 'package:leisureryde/widgets/carousel.dart';
 import '../../../widgets/button.dart';
-
+import 'package:leisureryde/screens/shared/splash_screen/track_notification.dart';
 class WelcomePage extends StatefulWidget{
   const WelcomePage({super.key});
 
@@ -59,6 +59,13 @@ class _WelcomePageState extends State<WelcomePage> {
                               () {
                             Navigator.push(context, MaterialPageRoute(
                                 builder: (c) => LoginScreen()));
+                          }),
+                          const SizedBox(height: 14),
+                      buildActionButton(
+                          "TEST NOTIFICATION", black, gold,
+                              () {
+                            Navigator.push(context, MaterialPageRoute(
+                                builder: (c) => NotificationDiagnosticsScreen()));
                           }),
                     ],
                   ),
