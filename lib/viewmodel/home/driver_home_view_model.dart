@@ -577,11 +577,14 @@ class DriverHomeViewModel extends ChangeNotifier {
   /// Opens Waze and navigates to [destination].
   /// Falls back to the Waze web URL if the app is not installed.
   Future<void> _launchWaze(LatLng destination) async {
+    final fromParam = _driverCurrentPosition != null
+      ? '&from=ll.${_driverCurrentPosition?.latitude},${_driverCurrentPosition?.longitude}'
+      : '';
     final wazeApp = Uri.parse(
-      'waze://?ll=${destination.latitude},${destination.longitude}&navigate=yes',
+      'waze://?ll=${destination.latitude},${destination.longitude}&navigate=yes$fromParam',
     );
     final wazeWeb = Uri.parse(
-      'https://waze.com/ul?ll=${destination.latitude},${destination.longitude}&navigate=yes',
+      'https://waze.com/ul?ll=${destination.latitude},${destination.longitude}&navigate=yes$fromParam',
     );
     if (await canLaunchUrl(wazeApp)) {
       await launchUrl(wazeApp);

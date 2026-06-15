@@ -409,7 +409,7 @@ class HomeViewModel extends ChangeNotifier {
         status: RideStatus.pending,
         passengerName: _userProfile!.fullName,
         passengerRating: _userProfile!.rating,
-        pickupLocation: LatLng(mapViewModel.currentPosition!.latitude, mapViewModel.currentPosition!.longitude),
+        pickupLocation: directionsResult.startLocation,
         destinationLocation: directionsResult.endLocation,
         pickupAddress: directionsResult.startAddress,
         destinationAddress: directionsResult.endAddress,

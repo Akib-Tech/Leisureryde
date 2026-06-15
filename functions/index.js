@@ -38,7 +38,12 @@ exports.notifyDriversOfNewRide = onDocumentCreated("rideRequests/{rideId}",
       // iOS still gets a visible alert via the apns.payload.aps.alert field.
       const message = {
         topic: "online_drivers",
-        android: {priority: "high"},
+        android: {
+          notification: {
+            sound: "ridenotification",
+          },
+          priority: "high",
+        },
         apns: {
           headers: {
             "apns-push-type": "alert",
@@ -50,7 +55,7 @@ exports.notifyDriversOfNewRide = onDocumentCreated("rideRequests/{rideId}",
                 title: "New Ride Request!",
                 body: `Pickup from: ${rideRequest.pickupAddress}`,
               },
-              sound: "default",
+              sound: "ridenotification.wav",
             },
           },
         },

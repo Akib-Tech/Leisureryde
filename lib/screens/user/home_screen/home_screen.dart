@@ -425,9 +425,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             child: Row(
               children: [
-                _buildQuickAction(context, icon: Icons.home, label: "Home", onTap: () => viewModel.selectSavedPlace(context, 'Home')),
+                _buildQuickAction(context, icon: Icons.home, label: "Home", onTap: () => {}),
                 const SizedBox(width: 24),
-                _buildQuickAction(context, icon: Icons.work, label: "Work", onTap: () => viewModel.selectSavedPlace(context, 'Work')),
+                _buildQuickAction(context, icon: Icons.work, label: "Work", onTap: () =>{}),
               ],
             ),
           ),
