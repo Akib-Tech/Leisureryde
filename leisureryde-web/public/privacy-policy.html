@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — LeisureRyde</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FAF8F4;
+    --surface: #FFFFFF;
+    --primary: #1B4332;
+    --primary-light: #2D6A4F;
+    --accent: #C8770A;
+    --text: #2B362F;
+    --muted: #6B7568;
+    --border: #E4DFD3;
+    --max-width: 720px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    line-height: 1.65;
+    font-size: 16px;
+  }
+
+  .top-bar {
+    background: var(--primary);
+    padding: 14px 24px;
+  }
+
+  .top-bar-inner {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-mark {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+
+  .top-bar span {
+    color: #F4EFE3;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+  }
+
+  .wrap {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: clamp(32px, 5vw, 44px);
+    color: var(--primary);
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+
+  .effective-date {
+    color: var(--muted);
+    font-size: 14px;
+    margin: 0 0 40px;
+  }
+
+  .route-divider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 48px 0 32px;
+    color: var(--accent);
+  }
+
+  .route-divider svg { flex-shrink: 0; }
+
+  .route-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 22px;
+    color: var(--primary);
+    margin: 0;
+  }
+
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--primary-light);
+    margin: 28px 0 8px;
+  }
+
+  p { margin: 0 0 16px; }
+
+  ul { margin: 0 0 16px; padding-left: 20px; }
+  li { margin-bottom: 8px; }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 24px;
+    font-size: 14.5px;
+  }
+
+  .data-table th {
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 10px 12px;
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  .data-table td {
+    border: 1px solid var(--border);
+    padding: 10px 12px;
+    vertical-align: top;
+  }
+
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 4px;
+    padding: 16px 18px;
+    margin: 20px 0;
+    font-size: 14.5px;
+    color: var(--text);
+  }
+
+  .callout strong { color: var(--primary); }
+
+  a { color: var(--primary-light); text-decoration: underline; text-decoration-color: var(--border); }
+  a:hover { text-decoration-color: var(--primary-light); }
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-bottom: 40px;
+  }
+
+  .toc-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 0 0 12px;
+  }
+
+  .toc ol {
+    margin: 0;
+    padding-left: 20px;
+    columns: 2;
+    font-size: 14.5px;
+  }
+
+  .toc li { margin-bottom: 6px; }
+
+  footer {
+    border-top: 1px solid var(--border);
+    margin-top: 64px;
+    padding-top: 24px;
+    color: var(--muted);
+    font-size: 13.5px;
+  }
+
+  @media (max-width: 520px) {
+    .toc ol { columns: 1; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="top-bar-inner">
+    <svg class="logo-mark" viewBox="0 0 24 24" fill="none">
+      <circle cx="6" cy="18" r="2.2" fill="#F4EFE3"/>
+      <circle cx="18" cy="6" r="2.2" fill="#F4EFE3"/>
+      <path d="M6 18 L18 6" stroke="#F4EFE3" stroke-width="1.6" stroke-dasharray="2.4 3"/>
+    </svg>
+    <span>LeisureRyde</span>
+  </div>
+</div>
+
+<div class="wrap">
+  <h1>Privacy Policy</h1>
+  <p class="effective-date">Effective date: <strong>2nd February, 2026</strong> · Last updated: <strong>18th July,2026</strong></p>
+
+  <div class="toc">
+    <p class="toc-title">On this page</p>
+    <ol>
+      <li><a href="#who-we-are">Who we are</a></li>
+      <li><a href="#info-we-collect">Information we collect</a></li>
+      <li><a href="#how-we-use">How we use your information</a></li>
+      <li><a href="#how-we-share">How we share information</a></li>
+      <li><a href="#location">Location data</a></li>
+      <li><a href="#payments">Payments</a></li>
+      <li><a href="#retention">Data retention</a></li>
+      <li><a href="#your-rights">Your rights and choices</a></li>
+      <li><a href="#security">Security</a></li>
+      <li><a href="#children">Children's privacy</a></li>
+      <li><a href="#changes">Changes to this policy</a></li>
+      <li><a href="#contact">Contact us</a></li>
+    </ol>
+  </div>
+
+  <p>LeisureRyde ("we") operates the LeisureRyde mobile application, which connects riders with independent drivers for on-demand transportation. This Privacy Policy explains what information we collect, how we use it, and the choices you have.</p>
+
+  <div class="route-divider"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="3" r="2" fill="currentColor"/><path d="M3 13 L13 3" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.8 2.2"/></svg><h2 id="who-we-are">Who we are</h2></div>
+
+  <p><strong>Leisure Ryde Enterprises, LLC</strong>, registered at <strong>1027 Park Hollow Way
+    Lawrenceville, GA 30043
+    United States</strong>, is the data controller responsible for your personal information under this policy.</p>
+
+  <div class="route-divider"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="3" r="2" fill="currentColor"/><path d="M3 13 L13 3" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.8 2.2"/></svg><h2 id="info-we-collect">Information we collect</h2></div>
+
+  <p>We collect the following categories of information when you use LeisureRyde as a rider or driver:</p>
+
+  <table class="data-table">
+    <tr><th>Category</th><th>Examples</th><th>Collected from</th></tr>
+    <tr><td>Account information</td><td>Name, email address, phone number, profile photo, Vehicle and driving documents, account details for drivers</td><td>Riders &amp; drivers, at sign-up</td></tr>
+    <tr><td>Location data</td><td>Precise GPS location; continuous background location for active drivers</td><td>Riders (on-demand) &amp; drivers (while online)</td></tr>
+    <tr><td>Trip information</td><td>Pickup and drop-off addresses, fare, distance, ride history, ratings</td><td>Generated during each trip</td></tr>
+    <tr><td>Messages</td><td>In-app chat messages between a matched rider and driver</td><td>Riders &amp; drivers</td></tr>
+    <tr><td>Payment information</td><td>Transaction amount and status (card details are handled directly by our payment processor, Stripe, and are not stored on our servers)</td><td>Riders, at checkout</td></tr>
+    <tr><td>Device information</td><td>Push notification token, device type, app version</td><td>Automatically, from your device</td></tr>
+  </table>
+
+  <div class="route-divider"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="3" r="2" fill="currentColor"/><path d="M3 13 L13 3" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.8 2.2"/></svg><h2 id="how-we-use">How we use your information</h2></div>
+
+  <ul>
+    <li>To match riders with available drivers and facilitate trips</li>
+    <li>To calculate fares and process payments</li>
+    <li>To show real-time driver and rider location during an active trip</li>
+    <li>To enable in-app communication between a matched rider and driver</li>
+    <li>To send trip status notifications (e.g. "Your driver has arrived")</li>
+    <li>To maintain ride history and support customer service requests</li>
+    <li>To detect fraud and maintain the safety of our platform</li>
+  </ul>
+
+  <div class="route-divider"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="3" r="2" fill="currentColor"/><path d="M3 13 L13 3" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.8 2.2"/></svg><h2 id="how-we-share">How we share information</h2></div>
+
+  <p>We share limited information as needed to operate the service:</p>
+  <ul>
+    <li><strong>Between matched riders and drivers</strong> — name, photo, rating, phone number (for calling), live location, and chat messages, only once a trip is matched.</li>
+    <li><strong>Service providers</strong> — Firebase (Google) for authentication, data storage, and push notifications; Stripe for payment processing; Google Maps Platform for routing and geocoding. These providers process data on our behalf and are contractually restricted from using it for their own purposes.</li>
+    <li><strong>Legal compliance</strong> — if required by law, court order, or to protect the safety of our users.</li>
+  </ul>
+  <p>We do not sell your personal information to third parties.</p>
+
+  <div class="route-divider"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="3" r="2" fill="currentColor"/><path d="M3 13 L13 3" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.8 2.2"/></svg><h2 id="location">Location data</h2></div>
+
+  <p>Riders' location is collected when actively using the app to request a ride. Drivers' location is collected continuously while they are online and available for trips, including while the app is in the background, so that riders can see an accurate, real-time arrival estimate and the platform can match nearby drivers efficiently.</p>
+  <div class="callout">Drivers can stop all location collection at any time by switching to "Offline" in the app. Background location tracking ends immediately when a driver goes offline.</div>
+
+  <div class="route-divider"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="3" r="2" fill="currentColor"/><path d="M3 13 L13 3" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.8 2.2"/></svg><h2 id="payments">Payments</h2></div>
+
+  <p>All card payments are processed directly by Stripe, Inc. We do not receive or store full card numbers, expiry dates, or CVC codes. We retain a record of completed transactions (amount, date, trip reference) for accounting and fare dispute purposes.</p>
+
+  <div class="route-divider"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="3" r="2" fill="currentColor"/><path d="M3 13 L13 3" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.8 2.2"/></svg><h2 id="retention">Data retention</h2></div>
+
+  <p>We retain account and trip data for as long as your account is active. After you delete your account, we delete associated personal data within <strong>40</strong> days, except where we are required to retain certain records (such as completed transaction records) for tax, accounting, or legal compliance purposes, in which case we retain only what is legally necessary and for no longer than required.</p>
+
+  <div class="route-divider"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="3" r="2" fill="currentColor"/><path d="M3 13 L13 3" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.8 2.2"/></svg><h2 id="your-rights">Your rights and choices</h2></div>
+
+  <p>Depending on where you live, you may have the right to access, correct, or delete your personal data, or to object to certain processing. You can:</p>
+  <ul>
+    <li>Edit your profile information directly within the app</li>
+    <li>Delete your account and associated data at any time from <strong>Account &gt; Delete Account</strong> within the app</li>
+    <li>Request account deletion without the app installed via our <a href="delete-account.html">Account Deletion page</a></li>
+    <li>Contact us at the email below for any other privacy request</li>
+  </ul>
+
+  <div class="route-divider"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="3" r="2" fill="currentColor"/><path d="M3 13 L13 3" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.8 2.2"/></svg><h2 id="security">Security</h2></div>
+
+  <p>All data transmitted between the app and our servers is encrypted in transit (TLS/HTTPS). Data stored in our backend (Firebase Firestore) is encrypted at rest by our infrastructure provider. No method of transmission or storage is 100% secure, and we cannot guarantee absolute security.</p>
+
+  <div class="route-divider"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="3" r="2" fill="currentColor"/><path d="M3 13 L13 3" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.8 2.2"/></svg><h2 id="children">Children's privacy</h2></div>
+
+  <p>LeisureRyde is intended for users aged 18 and over. We do not knowingly collect personal information from anyone under 18. If you believe a minor has provided us with personal information, please contact us so we can remove it.</p>
+
+  <div class="route-divider"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="3" r="2" fill="currentColor"/><path d="M3 13 L13 3" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.8 2.2"/></svg><h2 id="changes">Changes to this policy</h2></div>
+
+  <p>We may update this Privacy Policy from time to time. We will notify you of material changes by updating the "Last updated" date above, and where appropriate, through an in-app notice.</p>
+
+  <div class="route-divider"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="13" r="2" fill="currentColor"/><circle cx="13" cy="3" r="2" fill="currentColor"/><path d="M3 13 L13 3" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.8 2.2"/></svg><h2 id="contact">Contact us</h2></div>
+
+  <p>If you have questions about this Privacy Policy or wish to exercise your data rights, contact us at:</p>
+  <p><strong>Email:</strong> <a href="mailto:ceo@leisureryde.com">ceo@leisureryde.com</a><br>
+  <strong>Postal address:</strong> 1027 Park Hollow Way
+  Lawrenceville, GA 30043
+  United States</p>
+
+  <footer>
+    © <span id="year"></span> LeisureRyde. All rights reserved.
+  </footer>
+</div>
+
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delete Your Account — LeisureRyde</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FAF8F4;
+    --surface: #FFFFFF;
+    --primary: #1B4332;
+    --primary-light: #2D6A4F;
+    --accent: #C8770A;
+    --text: #2B362F;
+    --muted: #6B7568;
+    --border: #E4DFD3;
+    --max-width: 640px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    line-height: 1.65;
+    font-size: 16px;
+  }
+
+  .top-bar {
+    background: var(--primary);
+    padding: 14px 24px;
+  }
+
+  .top-bar-inner {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-mark { width: 22px; height: 22px; flex-shrink: 0; }
+
+  .top-bar span {
+    color: #F4EFE3;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+  }
+
+  .wrap {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: clamp(30px, 5vw, 40px);
+    color: var(--primary);
+    margin: 0 0 12px;
+    letter-spacing: -0.01em;
+  }
+
+  .intro {
+    color: var(--muted);
+    font-size: 16px;
+    margin-bottom: 40px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 28px 24px;
+    margin-bottom: 24px;
+  }
+
+  .step-row {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .step-marker {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #F4EFE3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    font-family: 'Fraunces', serif;
+  }
+
+  .step-content h3 {
+    margin: 2px 0 6px;
+    font-size: 17px;
+    color: var(--primary);
+  }
+
+  .step-content p { margin: 0; color: var(--text); }
+
+  .step-divider {
+    width: 1px;
+    background: var(--border);
+    margin: 4px 0 4px 14px;
+    flex-shrink: 0;
+  }
+
+  .email-button {
+    display: inline-block;
+    margin-top: 8px;
+    background: var(--accent);
+    color: #FFFFFF;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 15px;
+    padding: 12px 22px;
+    border-radius: 8px;
+    transition: opacity 0.15s ease;
+  }
+
+  .email-button:hover { opacity: 0.88; }
+  .email-button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+  h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 20px;
+    color: var(--primary);
+    margin: 0 0 12px;
+  }
+
+  ul { margin: 0; padding-left: 20px; }
+  li { margin-bottom: 8px; }
+
+  .timeline-note {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: #F1ECE0;
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-size: 14.5px;
+    color: var(--text);
+    margin-top: 16px;
+  }
+
+  .timeline-note svg { flex-shrink: 0; margin-top: 2px; }
+
+  a.inline-link { color: var(--primary-light); text-decoration: underline; text-decoration-color: var(--border); }
+  a.inline-link:hover { text-decoration-color: var(--primary-light); }
+
+  footer {
+    border-top: 1px solid var(--border);
+    margin-top: 48px;
+    padding-top: 24px;
+    color: var(--muted);
+    font-size: 13.5px;
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="top-bar-inner">
+    <svg class="logo-mark" viewBox="0 0 24 24" fill="none">
+      <circle cx="6" cy="18" r="2.2" fill="#F4EFE3"/>
+      <circle cx="18" cy="6" r="2.2" fill="#F4EFE3"/>
+      <path d="M6 18 L18 6" stroke="#F4EFE3" stroke-width="1.6" stroke-dasharray="2.4 3"/>
+    </svg>
+    <span>LeisureRyde</span>
+  </div>
+</div>
+
+<div class="wrap">
+  <h1>Delete your account</h1>
+  <p class="intro">You can delete your LeisureRyde account and all associated data directly in the app, or request deletion here without reinstalling it.</p>
+
+  <div class="card">
+    <div class="step-row">
+      <div class="step-marker">1</div>
+      <div class="step-content">
+        <h3>Send a deletion request</h3>
+        <p>Email us from the address linked to your account, with the subject line "Delete my account." Include the phone number you signed up with so we can locate your account.</p>
+        <a class="email-button" href="mailto:ceo@leisureryde.com?subject=Delete%20my%20account">Email ceo@leisureryde.com</a>
+      </div>
+    </div>
+    <div class="step-divider" style="height: 28px;"></div>
+    <div class="step-row">
+      <div class="step-marker">2</div>
+      <div class="step-content">
+        <h3>We verify it's you</h3>
+        <p>We may reply asking you to confirm details on file, such as your registered email or the last four digits of a recent trip's fare, to make sure no one else can delete your account.</p>
+      </div>
+    </div>
+    <div class="step-divider" style="height: 28px;"></div>
+    <div class="step-row">
+      <div class="step-marker">3</div>
+      <div class="step-content">
+        <h3>Your data is deleted</h3>
+        <p>Once verified, we permanently delete your account and associated personal data, as described below.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="timeline-note">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="#C8770A" stroke-width="1.4"/><path d="M9 5v5l3 2" stroke="#C8770A" stroke-width="1.4" stroke-linecap="round"/></svg>
+    <span>We process deletion requests within <strong>40</strong> business days of verifying your identity.</span>
+  </div>
+
+  <div class="card" style="margin-top: 28px;">
+    <h2>What gets deleted</h2>
+    <ul>
+      <li>Your profile — name, email, phone number, photo</li>
+      <li>Your ride history, including pickup/drop-off addresses</li>
+      <li>In-app chat messages with drivers or riders</li>
+      <li>Push notification tokens and device identifiers</li>
+      <li>Your saved places and payment method references</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>What we may retain</h2>
+    <p>We retain a limited record of completed transactions (date, amount, trip reference) for as long as required by tax and accounting law, even after account deletion. This data is kept only for that legal purpose and is not used for any other reason.</p>
+  </div>
+
+  <p style="margin-top:32px; color: var(--muted); font-size: 14.5px;">
+    Prefer to do this in-app instead? Open LeisureRyde and go to <strong>Account → Delete Account</strong>. For details on what we collect and why, see our <a class="inline-link" href="privacy-policy.html">Privacy Policy</a>.
+  </p>
+
+  <footer>
+    © <span id="year"></span> LeisureRyde. All rights reserved.
+  </footer>
+</div>
+
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+</script>
+
+</body>
+</html>
