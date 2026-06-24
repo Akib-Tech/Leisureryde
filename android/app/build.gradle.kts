@@ -83,3 +83,7 @@ dependencies {
     implementation("androidx.window:window:1.0.0")
     implementation("androidx.window:window-java:1.0.0")
 }
+
+configurations.all {
+    exclude(group = "com.google.android.gms", module = "play-services-safetynet")
+}

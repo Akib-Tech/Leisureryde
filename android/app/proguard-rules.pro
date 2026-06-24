@@ -35,3 +35,5 @@
 -dontwarn com.google.android.play.core.tasks.OnFailureListener
 -dontwarn com.google.android.play.core.tasks.OnSuccessListener
 -dontwarn com.google.android.play.core.tasks.Task
+-keep class com.google.firebase.appcheck.safetynet.** { *; }
+-dontwarn com.google.android.gms.safetynet.**

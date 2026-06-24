@@ -703,7 +703,19 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
       ],
     );
   }
-
+/*
+   Widget _backgroundLocationPermission(BuildContext context){
+      return Card(
+        child:Column(
+          children: [
+            Text("Leisure ryde App collects location data to enable users identify online drivers location during ride booking,even when your app is closed or not in use."),
+            Row(children: [
+            ],)
+          ],
+        )
+      );
+  }
+*/
   Widget _buildStatItem(
       BuildContext context, {
         required IconData icon,
@@ -731,4 +743,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
       ],
     );
   }
+
+ 
 }
