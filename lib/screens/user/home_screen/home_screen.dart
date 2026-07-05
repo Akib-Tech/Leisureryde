@@ -262,7 +262,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
         zoom: 15.0,
       ),
-      onMapCreated: viewModel.mapViewModel.onMapCreated,
+      onMapCreated: (controller){print("Map has been created");},
       onCameraMoveStarted: viewModel.mapViewModel.onCameraMoveStarted,
       onCameraIdle: viewModel.mapViewModel.onCameraIdle,
       myLocationEnabled: true,
