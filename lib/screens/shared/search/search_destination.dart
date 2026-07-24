@@ -22,8 +22,10 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
 
   final _originController = TextEditingController();
   final _destinationController = TextEditingController();
+  final _stopOverController = TextEditingController();
   final _originFocus = FocusNode();
   final _destinationFocus = FocusNode();
+  final _selectStopOverFocus = FocusNode();
 
   Timer? _debounce;
   List<PlaceSuggestion> _suggestions = [];
@@ -31,6 +33,9 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
 
   PlaceDetails? _selectedOrigin;
   PlaceDetails? _selectedDestination;
+  PlaceDetails? _selectedStopOver;
+  final List<PlaceDetails> _selectedStopOvers = [];
+  bool _isStopOver = false;
   String? _activeField;
 
   @override
@@ -43,14 +48,17 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
 
     _originFocus.addListener(() => _activeField = 'origin');
     _destinationFocus.addListener(() => _activeField = 'destination');
+    _selectStopOverFocus.addListener(() => _activeField = 'stopOver');
   }
 
   @override
   void dispose() {
     _originController.dispose();
     _destinationController.dispose();
+    _stopOverController.dispose();
     _originFocus.dispose();
     _destinationFocus.dispose();
+    _selectStopOverFocus.dispose();
     _debounce?.cancel();
     super.dispose();
   }
@@ -116,8 +124,9 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
 
 
   void _clearLocationDetails(){
-      _selectedOrigin = null;
-      _selectedDestination = null;
+     _selectedOrigin = null;
+     _selectedDestination = null;
+     _selectedStopOver = null;
   }
 
   Future<void> _onSuggestionTapped(PlaceSuggestion suggestion) async {
@@ -125,6 +134,7 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
     setState(() => _isLoading = true);
 
     final capturedActiveField = _activeField;
+
 
     final details = await _placesService.getPlaceDetails(suggestion.placeId);
     if (details == null) {
@@ -188,9 +198,16 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
       _selectedOrigin = details;
       _originController.text = details.address;
       FocusScope.of(context).requestFocus(_destinationFocus);
-    } else if (capturedActiveField == 'destination') {
+    } 
+    
+     if (capturedActiveField == 'destination') {
       _selectedDestination = details;
       _destinationController.text = details.address;
+    }
+
+      if (capturedActiveField == 'stopOver') {
+      _selectedStopOver = details;
+      _stopOverController.text = details.address;
     }
 
     setState(() {
@@ -230,8 +247,8 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: _useCurrentLocation,
         backgroundColor: theme.primaryColor,
-        child: const Icon(Icons.my_location, color: Colors.white),
         tooltip: 'Use my current location',
+         child: const Icon(Icons.my_location, color: Colors.white),
       ),
 
       body: Column(
@@ -239,7 +256,8 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             color: theme.cardColor,
-            child: Row(
+            child: Column(children: [
+               Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Column(
@@ -289,8 +307,44 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
                 ),
               ],
             ),
+         
+                Column(
+  children: [
+    if (_isStopOver) ...[
+      SizedBox(height: 10,),
+      showStopsWidget(
+        onSearchChanged: _onSearchChanged, 
+        selectStopOverFocus: _selectStopOverFocus,
+        stopOverController: _stopOverController),
+    ] ,addStopsButton(theme:theme, isStopOver: (){
+
+      if(_stopOverController.text.isNotEmpty && _selectedStopOver != null){
+         setState((){
+           _selectedStopOvers.add(_selectedStopOver!);
+         });
+         _stopOverController.text ="";
+         _selectedStopOver = null;
+         
+      }
+
+
+        setState(() {
+         _isStopOver ?
+          _isStopOver = false :
+           _isStopOver = true
+           ;
+        });
+      }),
+  ],
           ),
 
+
+
+
+            ],)
+          ),
+          
+        
           if (_isLoading) const LinearProgressIndicator(),
 
           Expanded(
@@ -329,12 +383,29 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
           onPressed: !canConfirm
               ? null
               : () {
-            final result = RouteSelectionResult(
+                
+           
+        final result = RouteSelectionResult(
               origin: _selectedOrigin!,
               destination: _selectedDestination!,
+              stopOvers : _selectedStopOvers,
+
             );
+
+              debugPrint("========== ROUTE ==========");
+  debugPrint("Origin: ${result.origin.address}");
+
+  for (int i = 0; i < result.stopOvers!.length; i++) {
+    debugPrint("Stop ${i + 1}: ${result.stopOvers?[i].address}");
+  }
+
+  debugPrint("Destination: ${result.destination.address}");
+  debugPrint("===========================");
+
+            
             _clearLocationDetails();
             Navigator.of(context).pop(result);
+            
           },
           child: const Text('Confirm Route', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         ),
@@ -343,6 +414,51 @@ class _SearchDestinationScreenState extends State<SearchDestinationScreen> {
   }
 }
 
+//
+Widget addStopsButton({ThemeData? theme, VoidCallback? isStopOver}){
+  return  Row(
+    mainAxisAlignment: MainAxisAlignment.end,
+    children: [
+      Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: theme?.primaryColor,
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          onPressed: isStopOver,
+          child: const Text('Add Stop Overs', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        ),
+      )
+    ],
+  );
+}
+
+//Stop Over Widgets
+
+Widget showStopsWidget({
+  TextEditingController? stopOverController,
+  FocusNode? selectStopOverFocus,
+  void Function(String)? onSearchChanged,
+  String? selectedStops,
+  ThemeData? theme,
+  }){
+  return Container(
+    padding: EdgeInsets.symmetric(horizontal: 28),
+    child: TextField(
+                     controller: stopOverController,
+                        focusNode: selectStopOverFocus,
+                        onChanged: onSearchChanged,
+                        textInputAction: TextInputAction.next,
+                        decoration: InputDecoration(
+                          hintText: selectedStops == null ? 'Choose Stop Overs' : 'Add Stop',
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+                        ),
+                      )
+  );
+}
 // DashedLine helper (unchanged)
 class DashedLine extends StatelessWidget {
   final double height;

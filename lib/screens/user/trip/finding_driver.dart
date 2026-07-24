@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:provider/provider.dart';
+import 'package:leisureryde/viewmodel/home/home_view_model.dart';
 
 class FindingDriverCard extends StatefulWidget {
   const FindingDriverCard({
@@ -11,28 +13,81 @@ class FindingDriverCard extends StatefulWidget {
 }
 
 class _FindingDriverCardState extends State<FindingDriverCard> {
-  // --- REMOVED ---
-  // The HomeViewModel is now the single source of truth for the ride status,
-  // so this card doesn't need its own listener or state.
-  // final RideService _rideService = locator<RideService>();
-  // StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _sub;
-  // bool _driverAccepted = false;
-
-  @override
-  void initState() {
-    super.initState();
-
-
-  }
-
-  // --- REMOVED ---
-  // The listener logic is now centralized in the HomeViewModel.
-  // void _listenToRideStatus() { ... }
-
-  @override
-  void dispose() {
-    // _sub?.cancel(); // No longer needed
-    super.dispose();
+  Future<void> _showCancelRideSheet(BuildContext context) async {
+    final homeVm = context.read<HomeViewModel>();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 45,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const CircleAvatar(
+                  radius: 28,
+                  backgroundColor: Color(0xffffebee),
+                  child: Icon(Icons.warning_amber_rounded,
+                      color: Colors.red, size: 32),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  "Cancel Ride?",
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  "Your booking will be cancelled.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey.shade700, height: 1.4),
+                ),
+                const SizedBox(height: 30),
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(50),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text("Keep Ride"),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await homeVm.cancelRide();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(50),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text("Yes, Cancel Ride"),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -68,10 +123,6 @@ class _FindingDriverCardState extends State<FindingDriverCard> {
           SpinKitPulse(color: theme.primaryColor, size: 90),
           const SizedBox(height: 24),
           Text(
-            // --- SIMPLIFIED ---
-            // The card's only job is finding a driver. When one is found,
-            // the HomeViewModel will change the step and this card will be
-            // replaced by the ActiveTripCard.
             "Finding your driver...",
             style: theme.textTheme.titleLarge?.copyWith(
               color: theme.primaryColor,
@@ -82,9 +133,24 @@ class _FindingDriverCardState extends State<FindingDriverCard> {
           Text(
             "Please wait while we match you to a nearby driver.",
             style: theme.textTheme.bodyMedium?.copyWith(
-                color:
-                theme.textTheme.bodySmall?.color?.withOpacity(0.8)),
+                color: theme.textTheme.bodySmall?.color?.withOpacity(0.8)),
             textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _showCancelRideSheet(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(50),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              icon: const Icon(Icons.close),
+              label: const Text("Cancel Ride"),
+            ),
           ),
         ],
       ),

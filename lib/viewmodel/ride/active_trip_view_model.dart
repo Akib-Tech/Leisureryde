@@ -98,6 +98,24 @@ class ActiveTripViewModel extends ChangeNotifier {
     });
   }
 
+Future<bool> advanceToNextWaypoint(String? rideId) async {
+ if (_rideRequest == null) return false;
+
+    final success = await _rideService.advanceToNextWaypoint(rideId!);
+
+    if (success) {
+      // Update local object safely
+      final currentIndex = _rideRequest!.currentWaypointIndex ;
+      _rideRequest = _rideRequest!.copyWith(
+        currentWaypointIndex: currentIndex + 1,
+      );
+      notifyListeners();
+
+    }
+    return success;
+    }
+
+
   void _listenToDriverLocation(String driverId) {
     _driverLocationSubscription?.cancel();
 
@@ -159,8 +177,9 @@ class ActiveTripViewModel extends ChangeNotifier {
   }
 
   Future<void> cancelTrip() async {
+    print("Ride ID: $rideId");
     if (rideId == null || rideId!.isEmpty) return;
-    await _rideService.cancelRide(rideId!, cancelledBy: 'user');
+    await _rideService.cancelRide(rideId!, cancelledBy: "user");
   }
 
   @override

@@ -1,7 +1,15 @@
 // lib/screens/user/home/home_screen.dart
+// ignore_for_file: deprecated_member_use, duplicate_ignore, avoid_print
+
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart' as fm;
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart' as ll;
+import 'package:leisureryde/screens/user/trip/schedule_trip_card.dart';
 import 'package:provider/provider.dart';
+// google_maps_flutter is still used for the LatLng/Marker/Polyline data types
+// MapViewModel produces; only the GoogleMap widget itself is swapped out
+// below (no active Maps SDK billing — see OsmMapView).
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../app/service_locator.dart';
@@ -11,7 +19,9 @@ import '../../../models/user_profile.dart';
 import '../../../services/place_service.dart'; // For PlaceDetails
 import '../../../viewmodel/home/home_view_model.dart'; // Your HomeViewModel
 import '../../../widgets/custom_loading_indicator.dart';
+import '../../../widgets/osm_map_view.dart';
 import '../../../widgets/rating_dialog.dart';
+import '../../../widgets/tip_dialog.dart';
 import '../../shared/search/search_destination.dart';
 import '../trip/active_trip_screen.dart';
 import '../trip/finding_driver.dart'; // Your FindingDriverCard
@@ -26,9 +36,11 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _didScheduleInitialRefresh = false;
   bool _showingCancelDialog = false;
+  bool _showingTipDialog = false;
   bool _showingRatingDialog = false;
   bool _isActiveTripCardCollapsed = false;
   HomeViewModel? _vm;
+  final fm.MapController _osmMapController = fm.MapController();
 
   @override
   void initState() {
@@ -89,6 +101,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ],
           ),
         ).then((_) => _showingCancelDialog = false);
+      });
+    }
+
+    if (vm.showTipDialog && !_showingTipDialog) {
+      _showingTipDialog = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => TipDialog(
+            driverName: vm.ratingDriverName,
+            onSubmit: (tipAmount) {
+              Navigator.of(context).pop();
+              vm.submitTip(tipAmount);
+              _showingTipDialog = false;
+            },
+            onSkip: () {
+              Navigator.of(context).pop();
+              vm.dismissTipDialog();
+              _showingTipDialog = false;
+            },
+          ),
+        ).then((_) => _showingTipDialog = false);
       });
     }
 
@@ -188,7 +224,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     right: 16,
                     child: FloatingActionButton.small(
                       heroTag: 'user_recenter',
-                      onPressed: viewModel.mapViewModel.recenterCamera,
+                      onPressed: () {
+                        viewModel.mapViewModel.recenterCamera();
+                        final pos = viewModel.mapViewModel.driverPosition ??
+                            (viewModel.mapViewModel.currentPosition != null
+                                ? LatLng(
+                                    viewModel.mapViewModel.currentPosition!.latitude,
+                                    viewModel.mapViewModel.currentPosition!.longitude,
+                                  )
+                                : null);
+                        if (pos != null) {
+                          _osmMapController.move(
+                            ll.LatLng(pos.latitude, pos.longitude),
+                            _osmMapController.zoom,
+                          );
+                        }
+                      },
                       backgroundColor: Colors.white,
                       child: const Icon(Icons.my_location,
                           color: Colors.black87),
@@ -238,6 +289,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       case HomeStep.routePreview:
         bottomPadding = 280;
         break;
+      case HomeStep.rideTypeSelection:
+        bottomPadding = 330;
+        break;
       case HomeStep.vehicleSelection:
         bottomPadding = 420;
         break;
@@ -252,27 +306,57 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         // more visible area; expand it when open so content is not hidden.
         bottomPadding = _isActiveTripCardCollapsed ? 90 : 380;
         break;
+      case HomeStep.scheduledRide:
+       bottomPadding = 380; // Approximate height for payment card
+        break;
     }
 
-    return GoogleMap(
-      initialCameraPosition: CameraPosition(
-        target: LatLng(
-          viewModel.mapViewModel.currentPosition!.latitude,
-          viewModel.mapViewModel.currentPosition!.longitude,
-        ),
-        zoom: 15.0,
+    // GoogleMap is commented out — no active Google Maps / Apple Maps SDK
+    // billing, so it rendered as a blank/white screen. OsmMapView (OpenStreetMap
+    // tiles via flutter_map) below is a drop-in visual replacement fed the same
+    // MapViewModel markers/polylines/currentPosition; nothing else changed.
+    //
+    // return GoogleMap(
+    //   initialCameraPosition: CameraPosition(
+    //     target: LatLng(
+    //       viewModel.mapViewModel.currentPosition!.latitude,
+    //       viewModel.mapViewModel.currentPosition!.longitude,
+    //     ),
+    //     zoom: 15.0,
+    //   ),
+    //   onMapCreated: (controller){print("Map has been created");},
+    //   onCameraMoveStarted: viewModel.mapViewModel.onCameraMoveStarted,
+    //   onCameraIdle: viewModel.mapViewModel.onCameraIdle,
+    //   myLocationEnabled: true,
+    //   myLocationButtonEnabled: false,
+    //   zoomControlsEnabled: false,
+    //   markers: {
+    //     ...viewModel.mapViewModel.markers,
+    //     ...viewModel.driverMarkers.values
+    //   },
+    //   polylines: viewModel.mapViewModel.polylines,
+    //   padding: EdgeInsets.only(
+    //     top: MediaQuery.of(context).padding.top + 80,
+    //     bottom: bottomPadding,
+    //   ),
+    // );
+
+    // OsmMapView fills the full Stack area itself (matching GoogleMap's
+    // edge-to-edge canvas) — `padding` is passed through so it can bias the
+    // initial camera framing instead of literally shrinking the widget,
+    // which previously left blank scaffold-colored bars above/below the map.
+    return OsmMapView(
+      mapController: _osmMapController,
+      currentPosition: LatLng(
+        viewModel.mapViewModel.currentPosition!.latitude,
+        viewModel.mapViewModel.currentPosition!.longitude,
       ),
-      onMapCreated: (controller){print("Map has been created");},
-      onCameraMoveStarted: viewModel.mapViewModel.onCameraMoveStarted,
-      onCameraIdle: viewModel.mapViewModel.onCameraIdle,
-      myLocationEnabled: true,
-      myLocationButtonEnabled: false,
-      zoomControlsEnabled: false,
       markers: {
         ...viewModel.mapViewModel.markers,
-        ...viewModel.driverMarkers.values
+        ...viewModel.driverMarkers.values,
       },
       polylines: viewModel.mapViewModel.polylines,
+      onUserGestureStart: viewModel.mapViewModel.onCameraMoveStarted,
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 80,
         bottom: bottomPadding,
@@ -295,6 +379,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
+                // ignore: deprecated_member_use
                 color: Colors.black.withOpacity(0.1),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
@@ -345,12 +430,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return _buildWhereToCardContent(context, viewModel);
       case HomeStep.routePreview:
         return _buildRouteInfoCardContent(context, viewModel);
+      case HomeStep.rideTypeSelection:
+        return _buildRideTypeCard(context, viewModel);
       case HomeStep.vehicleSelection:
         return _buildRideSelectionCardContent(context, viewModel);
       case HomeStep.payment:
         return _buildPaymentCardContent(context, viewModel);
       case HomeStep.findingDriver:
         return const FindingDriverCard(key: ValueKey(HomeStep.findingDriver));
+      case HomeStep.scheduledRide:
+        return ScheduledTripCard(rideId: viewModel.currentRideId!,);
       case HomeStep.activeTrip:
         debugPrint("Page already in active trip mode");
         return ActiveTripCard(
@@ -399,7 +488,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 MaterialPageRoute(builder: (_) => SearchDestinationScreen(initialPickup: initialPickup)),
               );
               if (result != null) {
-                viewModel.selectRoute(result.origin, result.destination);
+                viewModel.selectRoute(result.origin, result.destination,stopOverPoints: result.stopOvers);
               }
             },
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -517,7 +606,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                _buildRouteAddressRow(theme, directions.startAddress, directions.endAddress),
+                _buildRouteAddressRow(theme, directions.startAddress, directions.endAddress, stopOvers:directions.waypointAddresses ),
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -529,7 +618,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        onPressed: viewModel.proceedToVehicleSelection,
+                        onPressed: viewModel.proceedToRideTypeSelection,
                         child: const Text("Choose Your Ride", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       ),
                     ),
@@ -575,8 +664,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(width: 48),
               ],
             ),
-            const SizedBox(height: 4),
-            _buildRouteAddressRow(theme, directions.startAddress, directions.endAddress),
             const Divider(height: 24),
             _buildVehicleOption(context, icon: Icons.directions_car, title: "Leisure Comfort", subtitle: "Affordable, everyday rides", price: fare.leisureComfort, isSelected: viewModel.selectedVehicle == 'Leisure Comfort', onTap: () => viewModel.selectVehicle('Leisure Comfort')),
             const Divider(),
@@ -677,9 +764,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(height: 8),
                 _buildPaymentDetailRow(theme, "Vehicle Type", viewModel.selectedVehicle!),
                 const SizedBox(height: 12),
-                _buildRouteAddressRow(theme, directions.startAddress, directions.endAddress),
-                const SizedBox(height: 20),
-                ListTile(
+              ListTile(
                   leading: Icon(Icons.credit_card, color: theme.primaryColor),
                   title: const Text("Payment Method"),
                   subtitle: const Text("Visa **** 1234"), // Replace with actual selected method
@@ -723,8 +808,82 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildRouteAddressRow(ThemeData theme, String pickupAddress, String destinationAddress) {
-    return Row(
+  Widget _buildRouteAddressRow(
+    ThemeData theme,
+   String pickupAddress, 
+   String destinationAddress,
+    { List<String> stopOvers = const [],}
+    ) {
+final addresses = [
+    pickupAddress,
+    ...stopOvers,
+    destinationAddress,
+  ];
+
+
+  return Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Column(
+        children: List.generate(addresses.length * 2 - 1, (index) {
+          if (index.isOdd) {
+            return Container(
+              width: 2,
+              height: 22,
+              color: Colors.grey.shade300,
+            );
+          }
+
+          final addressIndex = index ~/ 2;
+
+          if (addressIndex == 0) {
+            return const Icon(
+              Icons.radio_button_checked,
+              color: Colors.green,
+              size: 18,
+            );
+          }
+
+          if (addressIndex == addresses.length - 1) {
+            return Icon(
+              Icons.location_on,
+              color: theme.primaryColor,
+              size: 18,
+            );
+          }
+
+          return const Icon(
+            Icons.stop_circle,
+            color: Colors.orange,
+            size: 18,
+          );
+        }),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: List.generate(addresses.length, (index) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 24),
+              child: Text(
+                addresses[index],
+                style: index == addresses.length - 1
+                    ? theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      )
+                    : theme.textTheme.bodyMedium,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            );
+          }),
+        ),
+      ),
+    ],
+  );
+
+  /*  return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Column(
@@ -757,6 +916,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
       ],
     );
+     */
   }
 
   Widget _buildPaymentDetailRow(ThemeData theme, String label, String value, {bool isSubtitle = false, bool isBold = false}) {
@@ -873,4 +1033,229 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
     );
   }
+
+
+  Widget _buildRideTypeCard(
+    BuildContext context,
+    HomeViewModel viewModel,
+) {
+  final theme = Theme.of(context);
+
+  return Card(
+    key: const ValueKey('RideTypeCard'),
+    margin: const EdgeInsets.all(16),
+    elevation: 10,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: viewModel.backToRoutePreview,
+              ),
+              Expanded(
+                child: Center(
+                  child: Text(
+                    "Ride Type",
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 48),
+            ],
+          ),
+
+          const Divider(height: 24),
+
+          _buildRideTypeOption(
+            context,
+            icon: Icons.flash_on_rounded,
+            title: "Ride Now",
+            subtitle: "Find a nearby driver immediately",
+            selected:
+                viewModel.selectedRideType == RideType.instant,
+            onTap: () {
+              viewModel.selectInstantRide();
+            },
+          ),
+
+          const SizedBox(height: 14),
+
+          _buildRideTypeOption(
+            context,
+            icon: Icons.schedule,
+            title: "Schedule Ride",
+            subtitle: viewModel.scheduledDateTime == null
+                ? "Book for later"
+                : viewModel.formattedSchedule,
+            selected:
+                viewModel.selectedRideType == RideType.scheduled,
+            onTap: () async {
+
+              final date = await showDatePicker(
+                context: context,
+                firstDate: DateTime.now(),
+                lastDate: DateTime.now().add(
+                  const Duration(days: 30),
+                ),
+                initialDate: DateTime.now(),
+              );
+
+              if (date == null) return;
+
+              final time = await showTimePicker(
+                // ignore: use_build_context_synchronously
+                context: context,
+                initialTime: TimeOfDay.now(),
+              );
+
+              if (time == null) return;
+
+              final schedule = DateTime(
+                date.year,
+                date.month,
+                date.day,
+                time.hour,
+                time.minute,
+              );
+
+              viewModel.selectScheduledRide(schedule);
+            },
+          ),
+
+          const SizedBox(height: 24),
+
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(
+                double.infinity,
+                54,
+              ),
+              backgroundColor: theme.primaryColor,
+              foregroundColor:
+                  theme.colorScheme.onPrimary,
+              shape: RoundedRectangleBorder(
+                borderRadius:
+                    BorderRadius.circular(12),
+              ),
+            ),
+            onPressed:
+                viewModel.selectedRideType == null
+                    ? null
+                    : viewModel.proceedToVehicleSelection,
+            child: const Text(
+              "Continue",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _buildRideTypeOption(
+  BuildContext context, {
+  required IconData icon,
+  required String title,
+  required String subtitle,
+  required bool selected,
+  required VoidCallback onTap,
+}) {
+  final theme = Theme.of(context);
+
+  return InkWell(
+    borderRadius: BorderRadius.circular(16),
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: selected
+            ? theme.primaryColor.withOpacity(.12)
+            : Colors.transparent,
+        border: Border.all(
+          color: selected
+              ? theme.primaryColor
+              : Colors.grey.shade300,
+          width: 1.3,
+        ),
+      ),
+      child: Row(
+        children: [
+
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: theme.primaryColor.withOpacity(.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              color: theme.primaryColor,
+            ),
+          ),
+
+          const SizedBox(width: 16),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+
+          AnimatedSwitcher(
+            duration:
+                const Duration(milliseconds: 200),
+            child: selected
+                ? Icon(
+                    Icons.check_circle,
+                    color: theme.primaryColor,
+                    key: const ValueKey(1),
+                  )
+                : const Icon(
+                    Icons.circle_outlined,
+                    key: ValueKey(2),
+                  ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+
+
 }

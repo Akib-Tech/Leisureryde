@@ -1,3 +1,7 @@
+// ignore_for_file: deprecated_member_use, duplicate_ignore
+
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:leisureryde/models/driver_profile.dart';
 import 'package:leisureryde/screens/admin/user_ride_history_screen.dart';
@@ -54,7 +58,8 @@ class _DriversListScreenState extends State<DriversListScreen> {
                             itemCount: viewModel.filteredDrivers.length,
                             itemBuilder: (context, index) {
                               final driver = viewModel.filteredDrivers[index];
-                              return _buildDriverCard(context, driver, viewModel);
+                              return _buildDriverCard(
+                                  context, driver, viewModel);
                             },
                           ),
                   ),
@@ -86,13 +91,15 @@ class _DriversListScreenState extends State<DriversListScreen> {
                 )
               : null,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
         ),
       ),
     );
   }
 
-  Widget _buildDriverCard(BuildContext context, DriverProfile driver, DriversViewModel viewModel) {
+  Widget _buildDriverCard(
+      BuildContext context, DriverProfile driver, DriversViewModel viewModel) {
     final theme = Theme.of(context);
     final stats = viewModel.stats[driver.uid];
     final trips = stats?.trips ?? driver.totalTrips;
@@ -113,9 +120,15 @@ class _DriversListScreenState extends State<DriversListScreen> {
               children: [
                 CircleAvatar(
                   radius: 28,
-                  backgroundImage: driver.profileImageUrl.isNotEmpty ? NetworkImage(driver.profileImageUrl) : null,
+                  backgroundImage: driver.profileImageUrl.isNotEmpty
+                      ? NetworkImage(driver.profileImageUrl)
+                      : null,
                   child: driver.profileImageUrl.isEmpty
-                      ? Text(driver.firstName.isNotEmpty ? driver.firstName[0].toUpperCase() : 'D', style: theme.textTheme.headlineSmall)
+                      ? Text(
+                          driver.firstName.isNotEmpty
+                              ? driver.firstName[0].toUpperCase()
+                              : 'D',
+                          style: theme.textTheme.headlineSmall)
                       : null,
                 ),
                 const SizedBox(width: 12),
@@ -123,8 +136,12 @@ class _DriversListScreenState extends State<DriversListScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(driver.fullName, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                      Text(driver.email, style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[600])),
+                      Text(driver.fullName,
+                          style: theme.textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.bold)),
+                      Text(driver.email,
+                          style: theme.textTheme.bodyMedium
+                              ?.copyWith(color: Colors.grey[600])),
                     ],
                   ),
                 ),
@@ -132,22 +149,35 @@ class _DriversListScreenState extends State<DriversListScreen> {
             ),
             const Divider(height: 24),
             _buildSectionHeader(context, "Account Details"),
-            _buildDetailRow(context, Icons.phone_outlined, "Phone", driver.phone.isNotEmpty ? driver.phone : "—"),
-            _buildDetailRow(context, Icons.cake_outlined, "Date of Birth", driver.dateOfBirth.isNotEmpty ? driver.dateOfBirth : "—"),
-            _buildDetailRow(context, Icons.wc_outlined, "Gender", driver.gender.isNotEmpty ? driver.gender : "—"),
+            _buildDetailRow(context, Icons.phone_outlined, "Phone",
+                driver.phone.isNotEmpty ? driver.phone : "—"),
+            _buildDetailRow(context, Icons.cake_outlined, "Date of Birth",
+                driver.dateOfBirth.isNotEmpty ? driver.dateOfBirth : "—"),
+            _buildDetailRow(context, Icons.wc_outlined, "Gender",
+                driver.gender.isNotEmpty ? driver.gender : "—"),
             const SizedBox(height: 8),
             _buildSectionHeader(context, "Vehicle"),
-            _buildDetailRow(context, Icons.directions_car_outlined, "Car Model", driver.carModel.isNotEmpty ? driver.carModel : "—"),
-            _buildDetailRow(context, Icons.confirmation_number_outlined, "Licence Plate", driver.licensePlate.isNotEmpty ? driver.licensePlate : "—"),
+            _buildDetailRow(context, Icons.directions_car_outlined, "Car Model",
+                driver.carModel.isNotEmpty ? driver.carModel : "—"),
+            _buildDetailRow(
+                context,
+                Icons.confirmation_number_outlined,
+                "Licence Plate",
+                driver.licensePlate.isNotEmpty ? driver.licensePlate : "—"),
             const SizedBox(height: 8),
             _buildSectionHeader(context, "Stats"),
             Row(
               children: [
-                Expanded(child: _buildStatChip(context, Icons.star, ratingStr, Colors.amber)),
+                Expanded(
+                    child: _buildStatChip(
+                        context, Icons.star, ratingStr, Colors.amber)),
                 const SizedBox(width: 8),
-                Expanded(child: _buildStatChip(context, Icons.local_taxi, "$trips trips", Colors.blue)),
+                Expanded(
+                    child: _buildStatChip(context, Icons.local_taxi,
+                        "$trips trips", Colors.blue)),
                 const SizedBox(width: 8),
-                Expanded(child: _buildStatChip(
+                Expanded(
+                    child: _buildStatChip(
                   context,
                   driver.isOnline ? Icons.circle : Icons.circle_outlined,
                   driver.isOnline ? "Online" : "Offline",
@@ -157,31 +187,51 @@ class _DriversListScreenState extends State<DriversListScreen> {
             ),
             const SizedBox(height: 8),
             _buildSectionHeader(context, "Bank Details"),
-            _buildDetailRow(context, Icons.person_outline, "Account Holder", driver.bankAccountName.isNotEmpty ? driver.bankAccountName : "—"),
-            _buildDetailRow(context, Icons.account_balance_outlined, "Bank Name", driver.bankName.isNotEmpty ? driver.bankName : "—"),
-            _buildDetailRow(context, Icons.numbers_outlined, "Account Number", driver.accountNumber.isNotEmpty ? driver.accountNumber : "—"),
-            _buildDetailRow(context, Icons.swap_horiz_outlined, "Routing / Sort Code", driver.bankCode.isNotEmpty ? driver.bankCode : "—"),
+            _buildDetailRow(
+                context,
+                Icons.person_outline,
+                "Account Holder",
+                driver.bankAccountName.isNotEmpty
+                    ? driver.bankAccountName
+                    : "—"),
+            _buildDetailRow(
+                context,
+                Icons.account_balance_outlined,
+                "Bank Name",
+                driver.bankName.isNotEmpty ? driver.bankName : "—"),
+            _buildDetailRow(context, Icons.numbers_outlined, "Account Number",
+                driver.accountNumber.isNotEmpty ? driver.accountNumber : "—"),
+            _buildDetailRow(
+                context,
+                Icons.swap_horiz_outlined,
+                "Routing / Sort Code",
+                driver.bankCode.isNotEmpty ? driver.bankCode : "—"),
             const Divider(height: 24),
             _buildSectionHeader(context, "Documents"),
             _buildDocumentLink(context, "Driver's License", driver.licenseUrl),
-            _buildDocumentLink(context, "Vehicle Registration", driver.vehicleRegistrationUrl),
-            _buildDocumentLink(context, "Proof of Insurance", driver.proofOfInsuranceUrl),
+            _buildDocumentLink(
+                context, "Vehicle Registration", driver.vehicleRegistrationUrl),
+            _buildDocumentLink(
+                context, "Proof of Insurance", driver.proofOfInsuranceUrl),
             const SizedBox(height: 8),
             _buildSectionHeader(context, "Admin Actions"),
-            _buildToggleRow(
-              context: context,
-              label: driver.isApproved ? "Restrict" : "Approve",
-              value: driver.isApproved,
-              onChanged: (v) => viewModel.updateDriverApproval(driver.uid, v),
-            ),
+           
             const SizedBox(height: 8),
+
+            _buildApprovalSection(
+  context: context,
+  driver: driver,
+  viewModel: viewModel,
+),
+const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton.icon(
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => UserRideHistoryScreen(driverId: driver.uid, personName: driver.firstName),
+                    builder: (_) => UserRideHistoryScreen(
+                        driverId: driver.uid, personName: driver.firstName),
                   ),
                 ),
                 icon: const Icon(Icons.history),
@@ -197,37 +247,52 @@ class _DriversListScreenState extends State<DriversListScreen> {
   Widget _buildSectionHeader(BuildContext context, String title) {
     return Padding(
       padding: const EdgeInsets.only(top: 8.0, bottom: 4.0),
-      child: Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey[700], fontWeight: FontWeight.bold)),
+      child: Text(title,
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(color: Colors.grey[700], fontWeight: FontWeight.bold)),
     );
   }
 
-  Widget _buildDetailRow(BuildContext context, IconData icon, String label, String value) {
+  Widget _buildDetailRow(
+      BuildContext context, IconData icon, String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3.0),
       child: Row(
         children: [
           Icon(icon, size: 16, color: Colors.grey[600]),
           const SizedBox(width: 8),
-          Text("$label: ", style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+          Text("$label: ",
+              style: TextStyle(color: Colors.grey[700], fontSize: 13)),
           Expanded(
-            child: Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13), overflow: TextOverflow.ellipsis),
+            child: Text(value,
+                style:
+                    const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                overflow: TextOverflow.ellipsis),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatChip(BuildContext context, IconData icon, String label, Color color) {
+  Widget _buildStatChip(
+      BuildContext context, IconData icon, String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 4),
           Flexible(
-            child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color), overflow: TextOverflow.ellipsis),
+            child: Text(label,
+                style: TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w600, color: color),
+                overflow: TextOverflow.ellipsis),
           ),
         ],
       ),
@@ -245,20 +310,24 @@ class _DriversListScreenState extends State<DriversListScreen> {
             const SizedBox(width: 8),
             Text(title, style: TextStyle(color: Colors.grey[700])),
             const Spacer(),
-            Text("Not Uploaded", style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey[500])),
+            Text("Not Uploaded",
+                style: TextStyle(
+                    fontStyle: FontStyle.italic, color: Colors.grey[500])),
           ],
         ),
       );
     }
     return TextButton.icon(
-      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 0)),
+      style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 0)),
       onPressed: () async {
         final uri = Uri.parse(url);
         if (await canLaunchUrl(uri)) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
         } else {
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open document: $url')));
+            ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Could not open document: $url')));
           }
         }
       },
@@ -267,19 +336,85 @@ class _DriversListScreenState extends State<DriversListScreen> {
     );
   }
 
-  Widget _buildToggleRow({
+
+  Widget _buildApprovalSection({
     required BuildContext context,
-    required String label,
-    required bool value,
-    required Function(bool) onChanged,
-    Color? activeColor,
+    required DriverProfile driver,
+    required DriversViewModel viewModel,
+    Color? activeColor
   }) {
     final theme = Theme.of(context);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: theme.textTheme.titleMedium),
-        Switch(value: value, onChanged: onChanged, activeColor: activeColor ?? theme.primaryColor),
+        Text(
+          "Driver Category",
+          style: theme.textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: driver.vehicleCategory!.isEmpty ? "standard" : driver.vehicleCategory,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            hintText: "Select category",
+          ),
+          items: const [
+            DropdownMenuItem(
+              value: "standard",
+              child: Text("Leisure Comfort"),
+            ),
+            DropdownMenuItem(
+              value: "premium",
+              child: Text("Leisure Plus"),
+            ),
+            DropdownMenuItem(
+              value: "luxury",
+              child: Text("Leisure Exec"),
+            ),
+          ],
+          onChanged: (value) {
+            if (value != null) {
+              debugPrint("Category : $value");
+             viewModel.updateVehicleCategory(
+                driver.uid,
+                value,
+              );
+            }
+          },
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              driver.isApproved ? "Restrict" : "Approve",
+              style: theme.textTheme.titleMedium,
+            ),
+            Switch(
+              value: driver.isApproved,
+              onChanged: (value) {
+                if (value && (driver.vehicleCategory!.isEmpty)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        "Please select a driver category first.",
+                      ),
+                    ),
+                  );
+                  return;
+                }
+
+                viewModel.updateDriverApproval(
+                  driver.uid,
+                  value,
+                );
+              },
+              
+            activeColor: activeColor ?? theme.primaryColor
+            ),
+          ],
+        ),
       ],
     );
   }

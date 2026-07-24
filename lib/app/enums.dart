@@ -15,6 +15,7 @@ enum UserRole {
     }
   }
 
+  @override
   String toString() {
     return name; // 'user', 'driver', or 'admin'
   }

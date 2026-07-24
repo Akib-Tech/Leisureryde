@@ -42,8 +42,14 @@ class AdminService {
     await _db.collection('users').doc(uid).update({'isBlocked': isBlocked});
   }
 
-  Future<void> updateDriverApprovalStatus(String uid, bool isApproved) async {
-    await _db.collection('users').doc(uid).update({'isApproved': isApproved});
+  Future<void> updateDriverApprovalStatus(String uid, bool isApproved,) async {
+    await _db.collection('users').doc(uid).update(
+      {'isApproved': isApproved,});
+  }
+
+   Future<void> updateVehicleCategory(String uid,String vehicleCategory) async {
+    await _db.collection('users').doc(uid).update(
+      {'vehicleCategory': vehicleCategory,});
   }
 
   Future<List<RideRequest>> getRideRequests() async {

@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:leisureryde/app/service_locator.dart';
 import 'package:leisureryde/screens/admin/ride_history_screen.dart';

@@ -1,3 +1,5 @@
+// ignore_for_file: unused_field, unused_element, prefer_final_fields, avoid_types_as_parameter_names
+
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -23,13 +25,20 @@ class DriverHomeViewModel extends ChangeNotifier {
   final RideService _rideService = locator<RideService>();
   final DirectionsService _directionsService = locator<DirectionsService>();
 
-  RideRequest? _activeRide;
-  RideRequest? get activeRide => _activeRide;
+  // Multiple rides can be active at once if the driver accepts a new one
+  // while another is already in progress. _activeRides holds all of them,
+  // keyed by ride id; _selectedRideId is whichever one is currently shown
+  // in the bottom sheet and being navigated to.
+  final Map<String, RideRequest> _activeRides = {};
+  String? _selectedRideId;
 
-  bool get hasActiveTrip => _activeRide != null;
+  List<RideRequest> get activeRides => _activeRides.values.toList(growable: false);
+  RideRequest? get activeRide =>
+      _selectedRideId != null ? _activeRides[_selectedRideId] : null;
+  bool get hasActiveTrip => _activeRides.isNotEmpty;
 
   StreamSubscription<QuerySnapshot>? _activeRideSubscription;
-  StreamSubscription<DocumentSnapshot>? _activeRideDocSubscription;
+  final Map<String, StreamSubscription<DocumentSnapshot>> _activeRideDocSubscriptions = {};
   StreamSubscription<DocumentSnapshot>? _driverLocationSubscription;
 
   bool _rideCancelledByUser = false;
@@ -58,8 +67,8 @@ class DriverHomeViewModel extends ChangeNotifier {
   DateTime? _lastRouteCalcTime;
 
   // Live ETA values from the most-recent Directions API result.
-  int _remainingSeconds = 0;
-  double _remainingDistanceMiles = 0.0;
+  final int _remainingSeconds = 0;
+  final double _remainingDistanceMiles = 0.0;
 
   int get remainingSeconds => _remainingSeconds;
   double get remainingDistanceMiles => _remainingDistanceMiles;
@@ -85,10 +94,11 @@ class DriverHomeViewModel extends ChangeNotifier {
   String? _lastVoiceRideId;
   RideStatus? _lastVoiceStatus;
 
-  // Tracks the last ride+status for which Waze was launched, so we don't
-  // re-launch on every GPS tick or repeated status snapshots.
+  // Tracks the last ride+status+waypoint for which Waze was launched, so we
+  // re-launch whenever the leg changes (new ride, new status, or next waypoint).
   String? _lastWazeRideId;
   RideStatus? _lastWazeStatus;
+  int _lastWazeWaypointIndex = -1;
 
   bool get voiceEnabled => _voiceNav.isEnabled;
 
@@ -241,7 +251,8 @@ class DriverHomeViewModel extends ChangeNotifier {
 
     _pendingReqSub = _rideService.getRideRequestsStream().listen((rides) {
       _pendingRequestsCount = rides
-          .where((rideRequest) => rideRequest.status == RideStatus.pending)
+          .where((rideRequest) => rideRequest.status == RideStatus.pending ||
+      rideRequest.status == RideStatus.scheduled)
           .length;
 
 
@@ -269,12 +280,16 @@ class DriverHomeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Pre-populates the active ride immediately after the driver accepts from
+  /// Pre-populates an active ride immediately after the driver accepts from
   /// the ride-requests screen. This makes the ActiveTripDriverBottomSheet
   /// appear at once instead of waiting for the Firestore stream to fire.
   /// The doc subscription takes over from here and handles all status changes.
+  ///
+  /// If another ride is already active, this one joins _activeRides without
+  /// stealing focus — the currently selected/viewed ride does not change.
   void preSetActiveRide(RideRequest ride) {
-    _activeRide = ride;
+    _activeRides[ride.id] = ride;
+    _selectedRideId ??= ride.id;
     // Reset both throttles so _drawRouteForActiveRide fires on the
     // very next GPS tick (or immediately below) rather than waiting 150 m.
     _lastRouteCalcPosition = null;
@@ -292,6 +307,21 @@ class DriverHomeViewModel extends ChangeNotifier {
     _subscribeToActiveRideDoc(ride.id);
     // Draw the pickup route right away — the location listener won't redraw
     // until the driver moves 150 m, which could be a long wait at a standstill.
+    // Only do this for the ride actually being viewed.
+    if (_selectedRideId == ride.id) {
+      _drawRouteForActiveRide();
+    }
+  }
+
+  /// Switches which active ride is currently shown in the bottom sheet and
+  /// being navigated to. Does not affect the other active rides' Firestore
+  /// subscriptions — they keep updating in the background.
+  void selectActiveRide(String rideId) {
+    if (!_activeRides.containsKey(rideId) || _selectedRideId == rideId) return;
+    _selectedRideId = rideId;
+    _lastRouteCalcPosition = null;
+    _lastRouteCalcTime = null;
+    notifyListeners();
     _drawRouteForActiveRide();
   }
 
@@ -312,24 +342,23 @@ class DriverHomeViewModel extends ChangeNotifier {
     debugPrint("DriverHomeViewModel: Listening to active ride for driver: ${_driverProfile!.uid}");
 
     // Query stream discovers when a ride is assigned to this driver.
-    // A separate document subscription (below) tracks that ride's full lifecycle,
-    // including cancellation by the user — which the query misses because the
-    // cancelled status drops out of the 'whereIn' filter.
+    // Separate document subscriptions (below), one per ride, track each
+    // ride's full lifecycle, including cancellation by the user — which the
+    // query misses because the cancelled status drops out of the 'whereIn'
+    // filter.
     _activeRideSubscription = FirebaseFirestore.instance
         .collection('rideRequests')
         .where('driverId', isEqualTo: _driverProfile!.uid)
-        .where('status', whereIn: ['accepted', 'enroute', 'ongoing', 'pending'])
-        .limit(1)
+        .where('status', whereIn: ['accepted', 'enroute', 'ongoing'])
         .snapshots()
         .listen((snapshot) async {
-      if (snapshot.docs.isNotEmpty) {
-        final rideId = snapshot.docs.first.id;
+      for (final doc in snapshot.docs) {
         // Only attach a new doc listener when we see a genuinely new ride.
-        if (_activeRide?.id != rideId) {
-          _subscribeToActiveRideDoc(rideId);
+        if (!_activeRideDocSubscriptions.containsKey(doc.id)) {
+          _subscribeToActiveRideDoc(doc.id);
         }
       }
-      // When the query returns empty the doc subscription handles cleanup.
+      // When a ride drops out of the query the doc subscription handles cleanup.
     }, onError: (error) {
       debugPrint("DriverHomeViewModel: Active ride stream error: $error");
     });
@@ -339,20 +368,19 @@ class DriverHomeViewModel extends ChangeNotifier {
     _listenToOwnLocation();
   }
 
-  /// Document-level subscription for the active ride — catches ALL status
-  /// changes, including user cancellation that drops out of the query filter.
+  /// Document-level subscription for one active ride — catches ALL status
+  /// changes for that ride, including user cancellation that drops out of
+  /// the query filter. Keyed by ride id so multiple can run concurrently.
   void _subscribeToActiveRideDoc(String rideId) {
-    _activeRideDocSubscription?.cancel();
+    _activeRideDocSubscriptions[rideId]?.cancel();
 
-    _activeRideDocSubscription = FirebaseFirestore.instance
+    _activeRideDocSubscriptions[rideId] = FirebaseFirestore.instance
         .collection('rideRequests')
         .doc(rideId)
         .snapshots()
         .listen((snapshot) async {
       if (!snapshot.exists) {
-        _activeRide = null;
-        mapViewModel.clearRoute();
-        notifyListeners();
+        _removeActiveRide(rideId);
         return;
       }
 
@@ -360,13 +388,7 @@ class DriverHomeViewModel extends ChangeNotifier {
 
       if (ride.status == RideStatus.cancelled) {
         _rideCancelledByUser = true;
-        _activeRide = null;
-        _lastVoiceRideId = null;
-        _lastVoiceStatus = null;
-        _activeRideDocSubscription?.cancel();
-        _activeRideDocSubscription = null;
-        mapViewModel.clearRoute();
-        notifyListeners();
+        _removeActiveRide(rideId);
         return;
       }
 
@@ -374,19 +396,19 @@ class DriverHomeViewModel extends ChangeNotifier {
         if (ride.status == RideStatus.completed) {
           await _voiceNav.announceArrival();
         }
-        _activeRide = null;
-        _lastVoiceRideId = null;
-        _lastVoiceStatus = null;
-        _activeRideDocSubscription?.cancel();
-        _activeRideDocSubscription = null;
-        mapViewModel.clearRoute();
-        notifyListeners();
+        _removeActiveRide(rideId);
         return;
       }
 
-      final bool rideChanged =
-          _activeRide?.id != ride.id || _activeRide?.status != ride.status;
-      _activeRide = ride;
+      final bool rideChanged = _activeRides[rideId]?.status != ride.status;
+      _activeRides[rideId] = ride;
+      // On a cold start / relaunch, _selectedRideId starts out null — this is
+      // the only path that discovers an already-active ride via the query
+      // stream (preSetActiveRide only runs for a ride accepted this session).
+      // Without this, _activeRides is populated but `activeRide` (gated on
+      // _selectedRideId) stays null, so the UI falls back to showing no
+      // active trip even though one exists.
+      _selectedRideId ??= rideId;
 
       // Seed driver position from GPS fix if the Firestore watcher hasn't
       // fired yet (common on the first tick right after accepting a ride).
@@ -399,10 +421,38 @@ class DriverHomeViewModel extends ChangeNotifier {
       }
 
       notifyListeners();
-      if (rideChanged) await _drawRouteForActiveRide();
+      if (rideChanged && rideId == _selectedRideId) {
+        await _drawRouteForActiveRide();
+      }
     }, onError: (error) {
       debugPrint("DriverHomeViewModel: Ride doc stream error: $error");
     });
+  }
+
+  /// Removes a ride from the active set (cancelled/completed/deleted) and,
+  /// if it was the one currently being viewed, falls back to another active
+  /// ride rather than dropping the driver back to the home screen while
+  /// other trips are still in progress.
+  void _removeActiveRide(String rideId) {
+    _activeRides.remove(rideId);
+    _activeRideDocSubscriptions[rideId]?.cancel();
+    _activeRideDocSubscriptions.remove(rideId);
+    if (_lastWazeRideId == rideId) {
+      _lastWazeRideId = null;
+      _lastWazeStatus = null;
+    }
+
+    if (_selectedRideId == rideId) {
+      _lastVoiceRideId = null;
+      _lastVoiceStatus = null;
+      _lastWazeWaypointIndex = -1;
+      _selectedRideId = _activeRides.keys.isNotEmpty ? _activeRides.keys.first : null;
+      mapViewModel.clearRoute();
+      if (_selectedRideId != null) {
+        _drawRouteForActiveRide();
+      }
+    }
+    notifyListeners();
   }
 
   void acknowledgePassengerCancellation() {
@@ -450,7 +500,7 @@ class DriverHomeViewModel extends ChangeNotifier {
       _driverCurrentPosition = newPos;
 
       // Keep the camera centred on the driver and rotate the map to heading.
-      if (_activeRide != null) {
+      if (activeRide != null) {
         mapViewModel.followWithBearing(newPos, heading);
       }
 
@@ -458,7 +508,7 @@ class DriverHomeViewModel extends ChangeNotifier {
          by Waze. Re-enable this block (and remove the Waze launch in
          _drawRouteForActiveRide) to restore in-app turn-by-turn navigation.
 
-      if (_activeRide != null) {
+      if (activeRide != null) {
         await _voiceNav.onPositionUpdate(newPos);
         notifyListeners();
       }
@@ -489,40 +539,42 @@ class DriverHomeViewModel extends ChangeNotifier {
       */
 
       // Keep the driver-position-dependent UI (ETA chip, status bar) current.
-      if (_activeRide != null) notifyListeners();
+      if (activeRide != null) notifyListeners();
     });
   }
 
-  /// Handles navigation setup when the ride status changes.
+  /// Handles navigation setup when the selected ride's status changes.
   ///
   /// - accepted  → places pickup marker; launches Waze to pickup (once)
   /// - enroute   → driver is at pickup waiting; clears route, no Waze needed
   /// - ongoing   → places destination marker; launches Waze to destination (once)
   /// - anything else → clears route
   ///
-  /// Navigation is delegated to Waze. Re-enable the commented block below and
+  /// Navigation is delegated to Waze. Re-enable the commented block above and
   /// remove the Waze launch to restore in-app turn-by-turn navigation.
   Future<void> _drawRouteForActiveRide() async {
-    if (_activeRide == null || _driverCurrentPosition == null) return;
-
-    // enroute = driver is physically at the pickup, waiting for the passenger.
-    if (_activeRide!.status == RideStatus.enroute) {
-      mapViewModel.clearLiveRoute();
-      // Kept for the accepted→ongoing transition detection used by voice nav.
-      _lastVoiceRideId = _activeRide!.id;
-      _lastVoiceStatus = _activeRide!.status;
-      return;
-    }
+    final ride = activeRide;
+    if (ride == null || _driverCurrentPosition == null) return;
 
     LatLng routeDestination;
+    bool isHeadingToWaypoint = false;
 
-    switch (_activeRide!.status) {
+    switch (ride.status) {
       case RideStatus.accepted:
-        routeDestination = _activeRide!.pickupLocation;
+        routeDestination = ride.pickupLocation;
         break;
 
       case RideStatus.ongoing:
-        routeDestination = _activeRide!.destinationLocation;
+        // currentWaypointIndex tracks the last *completed* stop (starts at
+        // -1 = none completed yet), so the next leg targets index + 1.
+        final nextWaypointIndex = ride.currentWaypointIndex + 1;
+        if (ride.waypointsLocation.isNotEmpty &&
+            nextWaypointIndex < ride.waypointsAddresses.length) {
+          routeDestination = ride.waypointsLocation[nextWaypointIndex];
+          isHeadingToWaypoint = true;
+        } else {
+          routeDestination = ride.destinationLocation;
+        }
         break;
 
       default:
@@ -530,48 +582,18 @@ class DriverHomeViewModel extends ChangeNotifier {
         return;
     }
 
-    // Always keep the destination pin visible on the driver's map.
-    _updateDestinationMarker(routeDestination);
+    _updateDestinationMarker(routeDestination, ride, isHeadingToWaypoint);
 
-    // Launch Waze once per ride leg (accepted → pickup, ongoing → destination).
-    final isNewLeg = _lastWazeRideId != _activeRide!.id ||
-        _lastWazeStatus != _activeRide!.status;
+    final isNewLeg = _lastWazeRideId != ride.id ||
+        _lastWazeStatus != ride.status ||
+        _lastWazeWaypointIndex != ride.currentWaypointIndex;
+
     if (isNewLeg) {
-      _lastWazeRideId = _activeRide!.id;
-      _lastWazeStatus = _activeRide!.status;
+      _lastWazeRideId = ride.id;
+      _lastWazeStatus = ride.status;
+      _lastWazeWaypointIndex = ride.currentWaypointIndex;
       await _launchWaze(routeDestination);
     }
-
-    /* IN-APP NAVIGATION — commented out; navigation handled by Waze.
-       To restore: remove the Waze block above, uncomment everything below,
-       and re-enable the recalculation block in _listenToOwnLocation.
-
-    final result = await _directionsService.getDirections(
-      origin: _driverCurrentPosition!,
-      destination: routeDestination,
-    );
-
-    if (result != null) {
-      mapViewModel.setLiveRoutePolyline(result.polylinePoints);
-      _updateDestinationMarker(routeDestination);
-      _remainingSeconds = result.durationValue ?? 0;
-      _remainingDistanceMiles = ((result.distanceValue ?? 0) * 0.000621371);
-      _voiceNav.setPolyline(result.polylinePoints);
-      _voiceNav.setLegContext(_activeRide!.status != RideStatus.ongoing);
-
-      final isNewLeg = _lastVoiceRideId != _activeRide!.id ||
-          _lastVoiceStatus != _activeRide!.status;
-      final isReroute = _pendingReroute;
-      _pendingReroute = false;
-      if (isNewLeg || isReroute) {
-        _lastVoiceRideId = _activeRide!.id;
-        _lastVoiceStatus = _activeRide!.status;
-        await _voiceNav.beginNewRoute(result.steps, isRerouting: isReroute && !isNewLeg);
-      } else {
-        await _voiceNav.refreshSteps(result.steps);
-      }
-    }
-    */
   }
 
   /// Opens Waze and navigates to [destination].
@@ -593,22 +615,35 @@ class DriverHomeViewModel extends ChangeNotifier {
     }
   }
 
-  void _updateDestinationMarker(LatLng destination) {
+  void _updateDestinationMarker(
+    LatLng destination,
+    RideRequest ride,
+    bool isHeadingToWaypoint,
+  ) {
     mapViewModel.markers.removeWhere(
           (marker) => marker.markerId == const MarkerId('destination'),
     );
+
+    final String title;
+    final double hue;
+    if (ride.status != RideStatus.ongoing) {
+      title = 'Pickup';
+      hue = BitmapDescriptor.hueGreen;
+    } else if (isHeadingToWaypoint) {
+      final stopNumber = ride.currentWaypointIndex + 2; // 1-based, next stop
+      title = 'Stop $stopNumber of ${ride.waypointsAddresses.length}';
+      hue = BitmapDescriptor.hueOrange;
+    } else {
+      title = 'Destination';
+      hue = BitmapDescriptor.hueRed;
+    }
+
     mapViewModel.markers.add(
       Marker(
         markerId: const MarkerId('destination'),
         position: destination,
-        infoWindow: InfoWindow(
-          title: _activeRide!.status == RideStatus.ongoing ? 'Destination' : 'Pickup',
-        ),
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-          _activeRide!.status == RideStatus.ongoing
-              ? BitmapDescriptor.hueRed
-              : BitmapDescriptor.hueGreen,
-        ),
+        infoWindow: InfoWindow(title: title),
+        icon: BitmapDescriptor.defaultMarkerWithHue(hue),
       ),
     );
     mapViewModel.notifyListeners();
@@ -617,16 +652,20 @@ class DriverHomeViewModel extends ChangeNotifier {
   void _stopListeningToActiveRide() {
     _activeRideSubscription?.cancel();
     _activeRideSubscription = null;
-    _activeRideDocSubscription?.cancel();
-    _activeRideDocSubscription = null;
+    for (final sub in _activeRideDocSubscriptions.values) {
+      sub.cancel();
+    }
+    _activeRideDocSubscriptions.clear();
     _driverLocationSubscription?.cancel();
     _driverLocationSubscription = null;
-    _activeRide = null;
+    _activeRides.clear();
+    _selectedRideId = null;
     _driverCurrentPosition = null;
     _lastRouteCalcPosition = null;
     _lastRouteCalcTime = null;
     _lastWazeRideId = null;
     _lastWazeStatus = null;
+    _lastWazeWaypointIndex = -1;
   }
 
   Future<void> refreshStats() async {
@@ -684,7 +723,9 @@ class DriverHomeViewModel extends ChangeNotifier {
     _dailyStatsSub?.cancel();
     _pendingReqSub?.cancel();
     _activeRideSubscription?.cancel();
-    _activeRideDocSubscription?.cancel();
+    for (final sub in _activeRideDocSubscriptions.values) {
+      sub.cancel();
+    }
     _driverLocationSubscription?.cancel();
     _voiceNav.dispose();
     super.dispose();

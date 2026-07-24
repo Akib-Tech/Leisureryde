@@ -167,7 +167,7 @@ class MapViewModel extends ChangeNotifier {
 
   // ─── Directions / polylines ───────────────────────────────────────────────
 
-  Future<void> getDirections(LatLng origin, LatLng destination) async {
+  Future<void> getDirections(LatLng origin, LatLng destination, { List<LatLng>? waypoints }) async {
     clearRoute();
     notifyListeners();
 
@@ -175,6 +175,7 @@ class MapViewModel extends ChangeNotifier {
       final result = await _directionsService.getDirections(
         origin: origin,
         destination: destination,
+        waypoints: waypoints!
       );
 
       if (result != null) {

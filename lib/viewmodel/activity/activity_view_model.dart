@@ -25,6 +25,7 @@ class ActivityViewModel extends ChangeNotifier {
   StreamSubscription<List<RideRequest>>? _pastSub;
 
   ActivityViewModel() {
+    notifyListeners();
     _subscribeToRides();
   }
 

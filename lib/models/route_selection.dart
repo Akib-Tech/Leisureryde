@@ -11,10 +11,12 @@ class RouteSelectionResult {
   final int? distanceValue;     // e.g., 5000 meters
   final DateTime? eta;          // Estimated Time of Arrival
   final List<LatLng>? polylinePoints; // Points to draw the route
+  final List<PlaceDetails>? stopOvers;
 
   RouteSelectionResult({
     required this.origin,
     required this.destination,
+    this.stopOvers,
     this.duration,
     this.distance,
     this.durationValue,

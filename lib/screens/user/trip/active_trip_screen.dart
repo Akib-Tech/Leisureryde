@@ -10,6 +10,8 @@ import '../../../viewmodel/ride/active_trip_view_model.dart';
 import '../../../widgets/custom_loading_indicator.dart';
 import '../../shared/chat/chat_screen.dart';
 
+
+
 /// The user-facing active trip card shown at the bottom of HomeScreen.
 ///
 /// IMPORTANT: We pass the shared [MapViewModel] from [HomeViewModel] into
@@ -34,7 +36,6 @@ class _ActiveTripCardState extends State<ActiveTripCard>
   bool _isCollapsed = false;
   late final AnimationController _animCtrl;
   late final Animation<double> _heightFactor;
-
   @override
   void initState() {
     super.initState();
@@ -56,6 +57,110 @@ class _ActiveTripCardState extends State<ActiveTripCard>
       _animCtrl.forward();
     }
   }
+
+    Future<void> _showCancelRideSheet( BuildContext context, ActiveTripViewModel vm ) async {
+   
+   showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(24),
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+
+              Container(
+                width: 45,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              const CircleAvatar(
+                radius: 28,
+                backgroundColor: Color(0xffffebee),
+                child: Icon(
+                  Icons.warning_amber_rounded,
+                  color: Colors.red,
+                  size: 32,
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              const Text(
+                "Cancel Scheduled Ride?",
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              Text(
+                "Your scheduled booking will be cancelled and you'll need to create a new booking if you still need a ride.",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey.shade700,
+                  height: 1.4,
+                ),
+              ),
+
+              const SizedBox(height: 30),
+
+              OutlinedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: const Text("Keep Ride"),
+              ),
+
+              const SizedBox(height: 12),
+
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+
+                  await vm.cancelTrip();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: const Text("Yes, Cancel Ride"),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
 
   @override
   void dispose() {
@@ -326,7 +431,7 @@ class _ActiveTripCardState extends State<ActiveTripCard>
                                     color: theme.primaryColor, size: 16),
                               ],
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 18),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,6 +455,30 @@ class _ActiveTripCardState extends State<ActiveTripCard>
                             ),
                           ],
                         ),
+
+          const SizedBox(height: 20),
+
+SizedBox(
+  width: double.infinity,
+  child: ElevatedButton.icon(
+  onPressed:  () =>{
+   // debugPrint("You are doing well ${vm!.tripStatus}")
+     _showCancelRideSheet(context, viewModel)
+     },
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.red,
+      foregroundColor: Colors.white,
+      minimumSize: const Size.fromHeight(50),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+      ),
+    ),
+    icon: const Icon(Icons.close),
+    label: const Text("Cancel Ride"),
+  ),
+),
+
+
 
                         // Trip timer — shown to the user when the trip is ongoing
                         if (rideRequest.status == RideStatus.ongoing) ...[

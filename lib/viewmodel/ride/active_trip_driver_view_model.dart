@@ -88,11 +88,15 @@ class ActiveTripDriverViewModel extends ChangeNotifier {
   }
 
   Future<void> startTrip() async {
-    final destination = _ride?.destinationAddress ?? '';
+    // With waypoints, the first leg heads to the first stop, not the final
+    // destination — announce whichever the driver is actually heading to.
+    final waypoints = _ride?.waypointsAddresses ?? [];
+    final nextStop =
+        waypoints.isNotEmpty ? waypoints.first : (_ride?.destinationAddress ?? '');
     // Await so the TTS finishes before the status update triggers route
     // recalculation — otherwise a GPS tick could interrupt this announcement.
     await locator<VoiceNavigationService>().announce(
-        "Trip started. Heading to $destination.");
+        "Trip started. Heading to $nextStop.");
     await _updateStatus('ongoing');
   }
 
@@ -102,6 +106,7 @@ class ActiveTripDriverViewModel extends ChangeNotifier {
 
   Future<void> cancelRide() async {
     await _updateStatus('cancelled_by_driver');
+    await _updateStatus('pending');
   }
 
   Future<void> _updateStatus(String newStatus) async {
@@ -110,9 +115,27 @@ class ActiveTripDriverViewModel extends ChangeNotifier {
     try {
       await _rideService.updateRideStatus(rideId, newStatus);
     } catch (e) {
+      print(e.toString());
     }
     // Force UI refresh even if DB call fails or is slow
     //notifyListeners();
+  }
+
+  Future<bool> advanceToNextWaypoint() async {
+    if (rideRequest == null) return false;
+
+    final success = await _rideService.advanceToNextWaypoint(rideId);
+
+    if (success) {
+      // Update local model
+      final currentIndex = rideRequest!.currentWaypointIndex;
+      _ride = rideRequest!.copyWith(
+        currentWaypointIndex: currentIndex + 1,
+      );
+      notifyListeners();
+
+    }
+    return success;
   }
 
   Future<void> makeCall() async {

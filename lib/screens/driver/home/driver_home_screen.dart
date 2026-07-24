@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart' as fm;
+// google_maps_flutter is still used for the LatLng/Marker/Polyline data types
+// MapViewModel produces; only the GoogleMap widget itself is swapped out
+// below (no active Maps SDK billing — see OsmMapView).
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:latlong2/latlong.dart' as ll;
 import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -7,6 +12,7 @@ import '../../../models/ride_request_model.dart';
 import '../../../viewmodel/home/driver_home_view_model.dart';
 import '../../../widgets/custom_loading_indicator.dart';
 import '../../../widgets/navigation_banner.dart';
+import '../../../widgets/osm_map_view.dart';
 import '../ride_request/ride_requests_screen.dart';
 import '../trip/active_trip_bottom_sheet.dart';
 
@@ -23,6 +29,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
   bool _isActiveSheetCollapsed = false;
   int _mapRebuildKey = 0;
   DriverHomeViewModel? _vm;
+  final fm.MapController _osmMapController = fm.MapController();
 
   @override
   void initState() {
@@ -39,9 +46,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-      final vm = _vm;
+    final vm = _vm;
     if (state == AppLifecycleState.resumed && mounted) {
-
       if (vm == null) return;
       // Restore voice if the driver was in Waze; otherwise just re-init TTS.
       if (vm.mutedByWaze) {
@@ -52,17 +58,14 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
       if (vm.mapViewModel.currentPosition == null) {
         vm.requestLocationPermission();
       } else {
-        // Force map tile redraw — fixes the blank/static map after backgrounding.
         vm.mapViewModel.refreshMap();
       }
       setState(() => _mapRebuildKey++);
-        vm.restoreVoiceAfterExternalApp();
     }
 
     if (state == AppLifecycleState.inactive && mounted) {
-    setState(() => _mapRebuildKey++);
-    if (vm != null) vm.restoreVoiceAfterExternalApp();
-     }
+      setState(() => _mapRebuildKey++);
+    }
   }
 
   void _onViewModelChanged() {
@@ -105,6 +108,56 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
         ).then((_) => _showingCancelDialog = false);
       });
     }
+  }
+
+  /// Pushes RideRequestsScreen and handles the accepted-ride result, whether
+  /// this is the driver's first active ride or an additional one being
+  /// accepted while another trip is already in progress.
+  void _pushRideRequests(BuildContext context, DriverHomeViewModel viewModel) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const RideRequestsScreen(),
+      ),
+    ).then((result) {
+      // When the driver accepts a ride, RideRequestsScreen pops with the
+      // accepted RideRequest so we can show it immediately without waiting
+      // for Firestore. If a trip is already active, the currently viewed
+      // one stays selected — the new ride just joins the chip list.
+      if (result is RideRequest && mounted) {
+        final wasFirstRide = !viewModel.hasActiveTrip;
+        viewModel.preSetActiveRide(result);
+
+        if (wasFirstRide) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Ride accepted! Navigate to pickup."),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else {
+          showDialog<void>(
+            context: context,
+            builder: (_) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              title: const Text("Ride Accepted"),
+              content: const Text(
+                "This ride has been added to your active trips.",
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text("OK"),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+      viewModel.refreshStats();
+    });
   }
 
   @override
@@ -195,6 +248,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
                 if (viewModel.isOnline)
                   viewModel.activeRide != null
                       ? ActiveTripDriverBottomSheet(
+                         key: ValueKey(viewModel.activeRide!.id),
                           rideId: viewModel.activeRide!.id,
                           onCollapseChanged: (isCollapsed) {
                             setState(() => _isActiveSheetCollapsed = isCollapsed);
@@ -210,7 +264,22 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
                     right: 16,
                     child: FloatingActionButton.small(
                       heroTag: 'driver_recenter',
-                      onPressed: viewModel.mapViewModel.recenterCamera,
+                      onPressed: () {
+                        viewModel.mapViewModel.recenterCamera();
+                        final pos = viewModel.mapViewModel.driverPosition ??
+                            (viewModel.mapViewModel.currentPosition != null
+                                ? LatLng(
+                                    viewModel.mapViewModel.currentPosition!.latitude,
+                                    viewModel.mapViewModel.currentPosition!.longitude,
+                                  )
+                                : null);
+                        if (pos != null) {
+                          _osmMapController.move(
+                            ll.LatLng(pos.latitude, pos.longitude),
+                            _osmMapController.zoom,
+                          );
+                        }
+                      },
                       backgroundColor: Colors.white,
                       child: const Icon(Icons.my_location,
                           color: Colors.black87),
@@ -236,6 +305,20 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
                       ),
                     ),
                   ),
+                if (viewModel.activeRide != null)
+                  Positioned(
+                    bottom: _isActiveSheetCollapsed ? 228 : 548,
+                    right: 16,
+                    child: FloatingActionButton.small(
+                      heroTag: 'driver_more_requests',
+                      onPressed: () => _pushRideRequests(context, viewModel),
+                      backgroundColor: Colors.white,
+                      child: const Icon(Icons.add_road,
+                          color: Colors.black87),
+                    ),
+                  ),
+                if (viewModel.activeRide != null)
+                  _buildActiveRidesChips(context, viewModel),
               ],
             );
           },
@@ -254,27 +337,57 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
       bottomPadding = 280; // height of the online/offline status card
     }
 
-    return GoogleMap( 
+    // GoogleMap is commented out — no active Google Maps / Apple Maps SDK
+    // billing, so it rendered as a blank/white screen. OsmMapView (OpenStreetMap
+    // tiles via flutter_map) below is a drop-in visual replacement fed the same
+    // MapViewModel markers/polylines/currentPosition; nothing else changed.
+    //
+    // return GoogleMap(
+    //   key: ValueKey(_mapRebuildKey),
+    //   initialCameraPosition: CameraPosition(
+    //     target: viewModel.mapViewModel.currentPosition != null
+    //         ? LatLng(
+    //             viewModel.mapViewModel.currentPosition!.latitude,
+    //             viewModel.mapViewModel.currentPosition!.longitude,
+    //           )
+    //         : const LatLng(33.7490, -84.3880),
+    //     zoom: 15.0,
+    //   ),
+    //   onMapCreated: viewModel.mapViewModel.onMapCreated,
+    //   onCameraMoveStarted: viewModel.mapViewModel.onCameraMoveStarted,
+    //   onCameraIdle: viewModel.mapViewModel.onCameraIdle,
+    //   myLocationEnabled: true,
+    //   myLocationButtonEnabled: false,
+    //   zoomControlsEnabled: false,
+    //   compassEnabled: false,
+    //   mapToolbarEnabled: false,
+    //   markers: viewModel.mapViewModel.markers,
+    //   polylines: viewModel.mapViewModel.polylines,
+    //   padding: EdgeInsets.only(
+    //     // During navigation the banner is ~100 dp tall; normal header is ~160.
+    //     top: viewModel.activeRide != null
+    //         ? MediaQuery.of(context).padding.top + 100
+    //         : MediaQuery.of(context).padding.top + 160,
+    //     bottom: bottomPadding,
+    //   ),
+    // );
+
+    // OsmMapView fills the full Stack area itself (matching GoogleMap's
+    // edge-to-edge canvas) — `padding` is passed through so it can bias the
+    // initial camera framing instead of literally shrinking the widget,
+    // which previously left blank scaffold-colored bars above/below the map.
+    return OsmMapView(
       key: ValueKey(_mapRebuildKey),
-      initialCameraPosition: CameraPosition(
-        target: viewModel.mapViewModel.currentPosition != null
-            ? LatLng(
-                viewModel.mapViewModel.currentPosition!.latitude,
-                viewModel.mapViewModel.currentPosition!.longitude,
-              )
-            : const LatLng(33.7490, -84.3880),
-        zoom: 15.0,
-      ),
-      onMapCreated: viewModel.mapViewModel.onMapCreated,
-      onCameraMoveStarted: viewModel.mapViewModel.onCameraMoveStarted,
-      onCameraIdle: viewModel.mapViewModel.onCameraIdle,
-      myLocationEnabled: true,
-      myLocationButtonEnabled: false,
-      zoomControlsEnabled: false,
-      compassEnabled: false,
-      mapToolbarEnabled: false,
+      mapController: _osmMapController,
+      currentPosition: viewModel.mapViewModel.currentPosition != null
+          ? LatLng(
+              viewModel.mapViewModel.currentPosition!.latitude,
+              viewModel.mapViewModel.currentPosition!.longitude,
+            )
+          : null,
       markers: viewModel.mapViewModel.markers,
       polylines: viewModel.mapViewModel.polylines,
+      onUserGestureStart: viewModel.mapViewModel.onCameraMoveStarted,
       padding: EdgeInsets.only(
         // During navigation the banner is ~100 dp tall; normal header is ~160.
         top: viewModel.activeRide != null
@@ -437,7 +550,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
                               ? "You're Online"
                               : "You're Offline",
                           style: theme.textTheme.titleMedium?.copyWith(
-                            color: Colors.grey[600],
+                            color: Colors.black,
 
                             fontWeight: FontWeight.bold,
                           ),
@@ -448,7 +561,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
                               ? "Ready to accept ride requests"
                               : "Go online to start earning",
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.grey[600],
+                            color: Colors.black,
                           ),
                         ),
                       ],
@@ -663,29 +776,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const RideRequestsScreen(),
-                    ),
-                  ).then((result) {
-                    // When the driver accepts a ride, RideRequestsScreen pops
-                    // with the accepted RideRequest so we can show the active
-                    // trip sheet immediately without waiting for Firestore.
-                    if (result is RideRequest && mounted) {
-                      viewModel.preSetActiveRide(result);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("Ride accepted! Navigate to pickup."),
-                          backgroundColor: Colors.green,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                    viewModel.refreshStats();
-                  });
-                },
+                onPressed: () => _pushRideRequests(context, viewModel),
                 icon: const Icon(Icons.list_alt),
                 label: Text(
                   viewModel.pendingRequestsCount > 0
@@ -741,6 +832,45 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
           ),
         ),
       ],
+    );
+  }
+
+  /// Row of chips letting the driver switch which active ride is shown in
+  /// the bottom sheet / navigated to. Only appears once a second ride is
+  /// accepted — with a single active ride there's nothing to switch between.
+  Widget _buildActiveRidesChips(
+      BuildContext context, DriverHomeViewModel viewModel) {
+    final rides = viewModel.activeRides;
+    if (rides.length < 2) return const SizedBox.shrink();
+
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 108,
+      left: 0,
+      right: 0,
+      child: SizedBox(
+        height: 40,
+        child: ListView.separated(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          scrollDirection: Axis.horizontal,
+          itemCount: rides.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (context, index) {
+            final ride = rides[index];
+            final isSelected = ride.id == viewModel.activeRide?.id;
+            return ChoiceChip(
+              label: Text("Trip ${index + 1}"),
+              selected: isSelected,
+              onSelected: (_) => viewModel.selectActiveRide(ride.id),
+              selectedColor: Theme.of(context).primaryColor,
+              backgroundColor: Colors.white,
+              labelStyle: TextStyle(
+                color: isSelected ? Colors.white : Colors.black87,
+                fontWeight: FontWeight.bold,
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 

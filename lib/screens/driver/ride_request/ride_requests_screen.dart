@@ -1,6 +1,7 @@
 // In: lib/screens/driver/ride_requests_screen.dart (or your file path)
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:leisureryde/models/ride_request_model.dart';
 import 'package:leisureryde/services/fare_calculation_service.dart';
@@ -34,7 +35,7 @@ class RideRequestsScreen extends StatelessWidget {
                   return const CustomLoadingIndicator();
                 }
                 if (snapshot.hasError) {
-                  return const Center(child: Text('An error occurred. Please try again.'));
+                  return const Center(child: Text('An error occurred. Please try again..'));
                 }
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return const Center(
@@ -78,6 +79,37 @@ class _RideRequestCard extends StatelessWidget {
   final RideRequest request;
   final bool isDriverApproved;
 
+  bool get isScheduled =>
+    request.status == RideStatus.scheduled;
+
+bool get canAcceptScheduled {
+  if (!isScheduled) return true;
+
+  if (request.scheduledFor == null) return false;
+
+  return DateTime.now().isAfter(
+    request.scheduledFor!
+        .subtract(const Duration(minutes: 20)),
+  );
+}
+
+String get remainingTime {
+
+  if (request.scheduledFor == null)
+    return "";
+
+  final difference =
+      request.scheduledFor!
+          .difference(DateTime.now());
+
+  final hours = difference.inHours;
+
+  final minutes =
+      difference.inMinutes % 60;
+
+  return "${hours}h ${minutes}m";
+}
+
   const _RideRequestCard({
     required this.request,
     required this.isDriverApproved,
@@ -99,7 +131,7 @@ class _RideRequestCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top section: Passenger info and fare
+            // Top section: Passenger info, vehicle type, and fare
             Row(
               children: [
                 CircleAvatar(
@@ -115,20 +147,51 @@ class _RideRequestCard extends StatelessWidget {
                         request.passengerName,
                         style: theme.textTheme.titleMedium
                             ?.copyWith(fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
                       ),
+                      const SizedBox(height: 2),
                       Row(
                         children: [
-                          Icon(Icons.star, size: 16, color: theme.primaryColor),
-                          const SizedBox(width: 4),
-                          Text(request.passengerRating.toStringAsFixed(1)),
+                          Icon(Icons.star, size: 14, color: Colors.amber),
+                          const SizedBox(width: 3),
+                          Text(
+                            request.passengerRating.toStringAsFixed(1),
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: theme.primaryColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.directions_car,
+                                    size: 12, color: theme.primaryColor),
+                                const SizedBox(width: 3),
+                                Text(
+                                  request.vehicleType,
+                                  style: TextStyle(
+                                    color: theme.primaryColor,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
+                    horizontal: 12,
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
@@ -140,7 +203,7 @@ class _RideRequestCard extends StatelessWidget {
                     style: const TextStyle(
                       color: Colors.green,
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontSize: 15,
                     ),
                   ),
                 ),
@@ -148,27 +211,28 @@ class _RideRequestCard extends StatelessWidget {
             ),
             const Divider(height: 24),
 
-            // Route details
-            _buildRouteDetail(
-              icon: Icons.my_location,
-              title: "Pickup",
-              address: request.pickupAddress,
-              color: Colors.blue,
-            ),
+            // Pickup time
+            _buildPickupTimeRow(theme),
             const SizedBox(height: 12),
-            _buildRouteDetail(
-              icon: Icons.location_on,
-              title: "Destination",
-              address: request.destinationAddress,
-              color: Colors.red,
-            ),
+
+            // Route details
+            _buildRouteSection(request),
             const Divider(height: 24),
 
-            // Action buttons or Informational message
-            if (isDriverApproved)
-              _buildActionButtons(context, viewModel)
-            else
-              _buildApprovalMessage(),
+           if (!isDriverApproved)
+  _buildApprovalMessage()
+
+else if (request.status == RideStatus.pending)
+  _buildActionButtons(
+    context,
+    viewModel,
+  )
+
+else if (request.status == RideStatus.scheduled)
+  _buildScheduledSection(
+    context,
+    viewModel,
+  )
           ],
         ),
       ),
@@ -208,6 +272,77 @@ class _RideRequestCard extends StatelessWidget {
     );
   }
 
+  /// Shows when the passenger wants to be picked up.
+  /// Scheduled rides display the booked time + countdown; instant rides say "Now".
+  Widget _buildPickupTimeRow(ThemeData theme) {
+    if (request.scheduledFor != null) {
+      final formatted =
+          DateFormat("EEE, MMM d • h:mm a").format(request.scheduledFor!);
+      return Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.orange.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.orange.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.schedule, size: 16, color: Colors.orange),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                "Pickup: $formatted",
+                style: const TextStyle(
+                  color: Colors.orange,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (!canAcceptScheduled) ...[
+              const SizedBox(width: 8),
+              Text(
+                "in $remainingTime",
+                style: TextStyle(
+                  color: Colors.orange.shade700,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    // Instant ride
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.green.withOpacity(0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.bolt, size: 16, color: Colors.green),
+          const SizedBox(width: 8),
+          const Text(
+            "Pickup: Now",
+            style: TextStyle(
+              color: Colors.green,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildApprovalMessage() {
     return Container(
       width: double.infinity,
@@ -225,6 +360,42 @@ class _RideRequestCard extends StatelessWidget {
     );
   }
 
+  Widget _buildRouteSection(RideRequest request) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildRouteDetail(
+          icon: Icons.my_location,
+          title: "Pickup",
+          address: request.pickupAddress,
+          color: Colors.blue,
+        ),
+
+        if (request.waypointsAddresses.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          ...request.waypointsAddresses.map((wp) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _buildRouteDetail(
+                  icon: Icons.stop_circle,
+                  title: "",
+                  address: wp,
+                  color: Colors.orange,
+                ),
+              )),
+        ],
+
+        const SizedBox(height: 8),
+        _buildRouteDetail(
+          icon: Icons.location_on,
+          title: "Destination",
+          address:request.destinationAddress,
+          color: Colors.red,
+        ),
+      ],
+    );
+  }
+
+
   Widget _buildRouteDetail({
     required IconData icon,
     required String title,
@@ -241,13 +412,6 @@ class _RideRequestCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                title,
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 12,
-                ),
-              ),
-              Text(
                 address,
                 style: const TextStyle(fontWeight: FontWeight.w500),
                 maxLines: 2,
@@ -259,4 +423,52 @@ class _RideRequestCard extends StatelessWidget {
       ],
     );
   }
+
+  Widget _buildScheduledSection(
+    BuildContext context,
+    RideRequestsViewModel viewModel,
+) {
+
+   return _buildActionButtons(
+      context,
+      viewModel,
+    );
+  }
+
+  /*return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.blue.shade50,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(
+      children: [
+
+        const Icon(
+          Icons.schedule,
+          color: Colors.blue,
+        ),
+
+        const SizedBox(height: 8),
+
+        Text(
+          "Scheduled Ride",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+
+        const SizedBox(height: 6),
+
+        Text(
+          "Available in $remainingTime",
+        ),
+
+      ],
+    ),
+  );
+  }
+  */
+
 }

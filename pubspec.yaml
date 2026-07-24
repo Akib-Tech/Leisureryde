@@ -43,6 +43,8 @@ dependencies:
   geolocator: ^14.0.2
   geocoding: ^4.0.0
   google_maps_flutter: ^2.13.1
+  flutter_map: ^4.0.0
+  latlong2: ^0.8.2
   shared_preferences: ^2.5.3
   random_string: ^2.3.1
   firebase_core: ^3.15.2

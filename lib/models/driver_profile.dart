@@ -11,6 +11,7 @@ class DriverProfile extends UserProfile {
   final String carModel;
   final String licensePlate;
   final Timestamp? lastWentOnlineAt;
+  final String? vehicleCategory;
 
   final String vehicleRegistrationUrl;
   final String proofOfInsuranceUrl;
@@ -33,6 +34,7 @@ class DriverProfile extends UserProfile {
     required this.isApproved,
     required this.isOnline,
     required super.rating,
+    this.vehicleCategory = '',
     this.totalTrips = 0,
     required this.carModel,
     required this.licensePlate,
@@ -59,6 +61,7 @@ class DriverProfile extends UserProfile {
       profileImageUrl: data['profileImageUrl'] ?? '',
       licenseUrl: data['licenseUrl'] ?? '',
       isApproved: data['isApproved'] ?? false,
+      vehicleCategory: data['vehicleCategory'] ?? '',
       isOnline: data['isOnline'] ?? false,
       rating: (data['rating'] ?? 0.0).toDouble(),
       isBlocked: data['isBlocked'] ?? false,
@@ -87,6 +90,7 @@ class DriverProfile extends UserProfile {
     String? phone,
     UserRole? role,
     String? profileImageUrl,
+    String? vehicleCategory,
     String? licenseUrl,
     bool? isApproved,
     bool? isOnline,
@@ -121,6 +125,7 @@ class DriverProfile extends UserProfile {
       carModel: carModel ?? this.carModel,
       licensePlate: licensePlate ?? this.licensePlate,
       lastWentOnlineAt: lastWentOnlineAt ?? this.lastWentOnlineAt,
+      vehicleCategory: vehicleCategory ?? this.vehicleCategory,
       isBlocked: isBlocked ?? this.isBlocked,
       vehicleRegistrationUrl: vehicleRegistrationUrl ?? this.vehicleRegistrationUrl,
       proofOfInsuranceUrl: proofOfInsuranceUrl ?? this.proofOfInsuranceUrl,

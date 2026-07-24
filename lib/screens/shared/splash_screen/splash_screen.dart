@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously, duplicate_ignore
+
 import 'package:flutter/material.dart';
 import 'package:leisureryde/app/service_locator.dart';
 import 'package:leisureryde/screens/shared/main_screen/main_screen.dart';
@@ -19,7 +21,6 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
@@ -28,7 +29,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_animationController);
 
     _initializeApp();
   }
@@ -56,6 +56,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
         if (role == UserRole.admin) {
           // Navigate to Admin Dashboard
+          // ignore: use_build_context_synchronously
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (_) => const AdminHomePage()),
           );

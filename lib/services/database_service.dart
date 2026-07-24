@@ -153,7 +153,7 @@ class DatabaseService {
     return _db
         .collection('rideRequests')
         .where('driverId', isEqualTo: driverId)
-        .where('status', isEqualTo: 'completed')
+        .where('status', isEqualTo: ['completed','cancelled'])
         .where('createdAt', isGreaterThanOrEqualTo: startOfDay)
         .snapshots()
         .map((snapshot) => snapshot.docs);
@@ -275,12 +275,25 @@ class DatabaseService {
         .map((snap) => snap.docs.map((d) => RideRequest.fromFirestore(d)).toList());
   }
 
+  // Every RideStatus that RideStatusX.isTerminal recognizes — keep in sync
+  // with that extension. 'cancelled_by_driver' and 'failed' were previously
+  // missing here, so a ride ending in either state fell out of the upcoming
+  // query (no longer pending/accepted/enroute/ongoing) without ever
+  // qualifying for this one either: it just vanished from Activity instead
+  // of moving into Past Rides.
+  static const _terminalRideStatuses = [
+    'completed',
+    'cancelled',
+    'cancelled_by_driver',
+    'failed',
+  ];
+
   Future<List<RideRequest>> getPastRides(String uid) async {
     try {
       final snapshot = await _db
           .collection('rideRequests')
           .where('userId', isEqualTo: uid)
-          .where('status', whereIn: ['completed', 'cancelled'])
+          .where('status', whereIn: _terminalRideStatuses)
           .orderBy('createdAt', descending: true)
           .limit(20) // Limit to the last 20 past rides for performance
           .get();
@@ -295,7 +308,7 @@ class DatabaseService {
     return _db
         .collection('rideRequests')
         .where('userId', isEqualTo: uid)
-        .where('status', whereIn: ['completed', 'cancelled'])
+        .where('status', whereIn: _terminalRideStatuses)
         .orderBy('createdAt', descending: true)
         .limit(20)
         .snapshots()
@@ -328,7 +341,7 @@ class DatabaseService {
       final query = _db
           .collection('rideRequests')
           .where('userId', isEqualTo: uid)
-          .where('status', whereIn: ['pending', 'accepted', 'enroute', 'ongoing'])
+          .where('status', whereIn: ['pending', 'accepted', 'enroute', 'ongoing','scheduled'])
           .orderBy('createdAt', descending: true)
           .limit(1);
 

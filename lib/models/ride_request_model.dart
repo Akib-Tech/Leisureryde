@@ -1,8 +1,11 @@
+// ignore_for_file: constant_identifier_names
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-
+import 'package:leisureryde/viewmodel/home/home_view_model.dart';
 
 enum RideStatus {
+  scheduled,
   pending,
   accepted,
   enroute,
@@ -14,7 +17,7 @@ enum RideStatus {
 
   static RideStatus fromString(String status) {
     return RideStatus.values.firstWhere(
-          (e) => e.name == status,
+      (e) => e.name == status,
       orElse: () => RideStatus.pending,
     );
   }
@@ -41,11 +44,14 @@ class RideRequest {
   final double passengerRating;
   final LatLng pickupLocation;
   final LatLng destinationLocation;
+  final List<LatLng> waypointsLocation;
+  final List<String> waypointsAddresses;
   final String pickupAddress;
   final String destinationAddress;
   final double fare;
   final double distance; // in miles
   final DateTime createdAt;
+  final int currentWaypointIndex;
 
   final String? driverId;
   final String? driverName;
@@ -54,6 +60,17 @@ class RideRequest {
   final String? amountPaid;
   final String? paymentId;
   final String? stripePaymentIntentId;
+
+  final RideType? rideType;
+  final DateTime? scheduledFor;
+
+  final int estimatedDistanceMeters;
+  final String estimatedDistanceText;
+
+  final int estimatedDurationSeconds;
+  final String estimatedDurationText;
+
+  final DateTime? estimatedArrivalTime;
 
   RideRequest({
     required this.id,
@@ -64,20 +81,100 @@ class RideRequest {
     required this.passengerRating,
     required this.pickupLocation,
     required this.destinationLocation,
+    required this.waypointsLocation,
+    required this.waypointsAddresses,
     required this.pickupAddress,
     required this.destinationAddress,
     required this.fare,
     required this.distance,
     required this.createdAt,
-
-     this.amountPaid,
-     this.paymentId,
-     this.stripePaymentIntentId,
+    this.rideType = RideType.instant,
+    this.scheduledFor,
+    required this.estimatedDistanceMeters,
+    required this.estimatedDistanceText,
+    required this.estimatedDurationSeconds,
+    required this.estimatedDurationText,
+    this.estimatedArrivalTime,
+    this.currentWaypointIndex = -1,
+    this.amountPaid,
+    this.paymentId,
+    this.stripePaymentIntentId,
     this.driverId,
     this.driverName,
     this.driverPhone,
     this.driverRating,
   });
+
+  RideRequest copyWith({
+    String? id,
+    String? userId,
+    String? vehicleType,
+    RideStatus? status,
+    RideType? rideType,
+    DateTime? scheduledFor,
+    String? passengerName,
+    double? passengerRating,
+    LatLng? pickupLocation,
+    LatLng? destinationLocation,
+    List<LatLng>? waypointsLocation,
+    String? pickupAddress,
+    String? destinationAddress,
+    List<String>? waypointsAddresses,
+    double? fare,
+    double? distance,
+    int? estimatedDistanceMeters,
+    String? estimatedDistanceText,
+    int? estimatedDurationSeconds,
+    String? estimatedDurationText,
+    DateTime? estimatedArrivalTime,
+    DateTime? createdAt,
+    String? driverId,
+    String? driverName,
+    String? driverPhone,
+    double? driverRating,
+    String? amountPaid,
+    String? paymentId,
+    String? stripePaymentIntentId,
+    int? currentWaypointIndex,
+  }) {
+    return RideRequest(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      vehicleType: vehicleType ?? this.vehicleType,
+      status: status ?? this.status,
+      rideType: rideType ?? this.rideType,
+      scheduledFor: scheduledFor ?? this.scheduledFor,
+      passengerName: passengerName ?? this.passengerName,
+      passengerRating: passengerRating ?? this.passengerRating,
+      pickupLocation: pickupLocation ?? this.pickupLocation,
+      destinationLocation: destinationLocation ?? this.destinationLocation,
+      waypointsLocation: waypointsLocation ?? this.waypointsLocation,
+      pickupAddress: pickupAddress ?? this.pickupAddress,
+      destinationAddress: destinationAddress ?? this.destinationAddress,
+      waypointsAddresses: waypointsAddresses ?? this.waypointsAddresses,
+      fare: fare ?? this.fare,
+      distance: distance ?? this.distance,
+      estimatedDistanceMeters:
+          estimatedDistanceMeters ?? this.estimatedDistanceMeters,
+      estimatedDistanceText:
+          estimatedDistanceText ?? this.estimatedDistanceText,
+      estimatedDurationSeconds:
+          estimatedDurationSeconds ?? this.estimatedDurationSeconds,
+      estimatedDurationText:
+          estimatedDurationText ?? this.estimatedDurationText,
+      estimatedArrivalTime: estimatedArrivalTime ?? this.estimatedArrivalTime,
+      createdAt: createdAt ?? this.createdAt,
+      driverId: driverId ?? this.driverId,
+      driverName: driverName ?? this.driverName,
+      driverPhone: driverPhone ?? this.driverPhone,
+      driverRating: driverRating ?? this.driverRating,
+      amountPaid: amountPaid ?? this.amountPaid,
+      paymentId: paymentId ?? this.paymentId,
+      stripePaymentIntentId:
+          stripePaymentIntentId ?? this.stripePaymentIntentId,
+      currentWaypointIndex: currentWaypointIndex ?? this.currentWaypointIndex,
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -86,20 +183,43 @@ class RideRequest {
       'status': status.name,
       'passengerName': passengerName,
       'passengerRating': passengerRating,
-      'pickup': {'latitude': pickupLocation.latitude, 'longitude': pickupLocation.longitude},
-      'destination': {'latitude': destinationLocation.latitude, 'longitude': destinationLocation.longitude},
+      'pickup': {
+        'latitude': pickupLocation.latitude,
+        'longitude': pickupLocation.longitude
+      },
+      'destination': {
+        'latitude': destinationLocation.latitude,
+        'longitude': destinationLocation.longitude
+      },
       'pickupAddress': pickupAddress,
       'destinationAddress': destinationAddress,
+      'waypointsLocation': waypointsLocation
+          .map((wp) => {'latitude': wp.latitude, 'longitude': wp.longitude})
+          .toList(),
+      'waypointsAddresses': waypointsAddresses,
+      'rideType': rideType!.name,
+      'scheduledFor':
+          scheduledFor != null ? Timestamp.fromDate(scheduledFor!) : null,
+      'estimatedDistanceMeters': estimatedDistanceMeters,
+      'estimatedDistanceText': estimatedDistanceText,
+      'estimatedDurationSeconds': estimatedDurationSeconds,
+      'estimatedDurationText': estimatedDurationText,
+      'estimatedArrivalTime': estimatedArrivalTime != null
+          ? Timestamp.fromDate(
+              estimatedArrivalTime!,
+            )
+          : null,
       'fare': fare,
       'distance': distance,
       'createdAt': Timestamp.fromDate(createdAt),
+      'currentWaypointIndex': currentWaypointIndex,
       'amountPaid': amountPaid,
       'paymentId': paymentId,
       'stripePaymentIntentId': stripePaymentIntentId,
       if (driverId != null) 'driverId': driverId,
       if (driverName != null) 'driverName': driverName,
       if (driverPhone != null) 'driverPhone': driverPhone,
-      if(driverRating!=null) 'driverRating': driverRating
+      if (driverRating != null) 'driverRating': driverRating
     };
   }
 
@@ -116,6 +236,24 @@ class RideRequest {
         (data['pickup']?['latitude'] as num?)?.toDouble() ?? 0.0,
         (data['pickup']?['longitude'] as num?)?.toDouble() ?? 0.0,
       ),
+      waypointsAddresses: List<String>.from(data['waypointsAddresses'] ?? []),
+      waypointsLocation: (data['waypointsLocation'] as List<dynamic>? ?? [])
+          .map((wp) => LatLng(
+                (wp['latitude'] as num?)?.toDouble() ?? 0.0,
+                (wp['longitude'] as num?)?.toDouble() ?? 0.0,
+              ))
+          .toList(),
+      rideType: RideType.values.firstWhere(
+        (e) => e.name == (data['rideType'] ?? 'instant'),
+        orElse: () => RideType.instant,
+      ),
+      scheduledFor: (data['scheduledFor'] as Timestamp?)?.toDate(),
+      estimatedDistanceMeters: (data['estimatedDistanceMeters'] ?? 0) as int,
+      estimatedDistanceText: (data['estimatedDistanceText'] ?? '') as String,
+      estimatedDurationSeconds: (data['estimatedDurationSeconds'] ?? 0) as int,
+      estimatedDurationText: (data['estimatedDurationText'] ?? '') as String,
+      estimatedArrivalTime:
+          (data['estimatedArrivalTime'] as Timestamp?)?.toDate(),
       destinationLocation: LatLng(
         (data['destination']?['latitude'] as num?)?.toDouble() ?? 0.0,
         (data['destination']?['longitude'] as num?)?.toDouble() ?? 0.0,
@@ -125,6 +263,8 @@ class RideRequest {
       fare: (data['fare'] as num?)?.toDouble() ?? 0.0,
       distance: (data['distance'] as num?)?.toDouble() ?? 0.0,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      currentWaypointIndex:
+          (data['currentWaypointIndex'] as num?)?.toInt() ?? -1,
       amountPaid: (data['amountPaid']),
       paymentId: data['paymentId'],
       stripePaymentIntentId: data['stripePaymentIntentId'],
@@ -135,6 +275,7 @@ class RideRequest {
     );
   }
 }
+
 class RideLocation {
   final String address;
   final double latitude;
@@ -164,7 +305,6 @@ class RideLocation {
     );
   }
 }
-
 
 // RideDestination is structurally identical to RideLocation.
 // You can define it in the same file for convenience.

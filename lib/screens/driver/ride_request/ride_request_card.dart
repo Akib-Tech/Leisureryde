@@ -69,6 +69,7 @@ class _RideRequestCardState extends State<RideRequestCard> {
             style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
+
           // Countdown Timer
           SizedBox(
             width: 80,
@@ -94,6 +95,7 @@ class _RideRequestCardState extends State<RideRequestCard> {
             ),
           ),
           const SizedBox(height: 16),
+
           // Route and Fare Info
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -112,20 +114,12 @@ class _RideRequestCardState extends State<RideRequestCard> {
             ],
           ),
           const Divider(height: 24),
-          _buildRouteDetail(
-            icon: Icons.my_location,
-            title: "Pickup",
-            address: widget.request.pickupAddress,
-            color: Colors.blue,
-          ),
-          const SizedBox(height: 12),
-          _buildRouteDetail(
-            icon: Icons.location_on,
-            title: "Destination",
-            address: widget.request.destinationAddress,
-            color: Colors.red,
-          ),
+
+          // === UPDATED ROUTE WITH WAYPOINTS ===
+          _buildRouteSection(),
+
           const SizedBox(height: 24),
+
           // Action Buttons
           Row(
             children: [
@@ -140,6 +134,41 @@ class _RideRequestCardState extends State<RideRequestCard> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildRouteSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildRouteDetail(
+          icon: Icons.my_location,
+          title: "Pickup",
+          address: widget.request.pickupAddress,
+          color: Colors.blue,
+        ),
+
+        if (widget.request.waypointsAddresses.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          ...widget.request.waypointsAddresses.map((wp) => Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: _buildRouteDetail(
+                  icon: Icons.stop_circle,
+                  title: "Via",
+                  address: wp,
+                  color: Colors.orange,
+                ),
+              )),
+        ],
+
+        const SizedBox(height: 12),
+        _buildRouteDetail(
+          icon: Icons.location_on,
+          title: "Destination",
+          address: widget.request.destinationAddress,
+          color: Colors.red,
+        ),
+      ],
     );
   }
 

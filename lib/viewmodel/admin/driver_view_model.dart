@@ -80,10 +80,21 @@ class DriversViewModel extends ChangeNotifier {
 
   Future<void> updateDriverApproval(String driverId, bool isApproved) async {
     try {
-      await _adminService.updateDriverApprovalStatus(driverId, isApproved);
+      await _adminService.updateDriverApprovalStatus(driverId, isApproved,);
       final index = _drivers.indexWhere((d) => d.uid == driverId);
       if (index != -1) {
-        _drivers[index] = _drivers[index].copyWith(isApproved: isApproved);
+        _drivers[index] = _drivers[index].copyWith(isApproved: isApproved, );
+        notifyListeners();
+      }
+    } catch (e) {}
+  }
+
+Future<void> updateVehicleCategory(String driverId, String vehicleCategory) async {
+    try {
+      await _adminService.updateVehicleCategory(driverId, vehicleCategory,);
+      final index = _drivers.indexWhere((d) => d.uid == driverId);
+      if (index != -1) {
+        _drivers[index] = _drivers[index].copyWith(vehicleCategory: vehicleCategory);
         notifyListeners();
       }
     } catch (e) {}

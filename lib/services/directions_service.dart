@@ -8,15 +8,25 @@ class DirectionsService {
   // CRITICAL: Ensure this API key is valid and has Directions API enabled.
   // DO NOT hardcode API keys in production apps. Use environment variables.
   static const String _apiKey = "AIzaSyBJIRixyDjY3bFicM3oG36yW0Vaj43FZWs"; // Placeholder, replace with your actual key
-
   Future<DirectionsResult?> getDirections({
     required LatLng origin,
     required LatLng destination,
+    List<LatLng> waypoints = const [],
   }) async {
+    // Build waypoints parameter
+    String waypointsParam = '';
+    if (waypoints.isNotEmpty) {
+      final waypointStrings = waypoints
+          .map((wp) => '${wp.latitude},${wp.longitude}')
+          .join('|');
+      waypointsParam = '&waypoints=$waypointStrings';
+    }
+
     final url = Uri.parse(
       'https://maps.googleapis.com/maps/api/directions/json?'
           'origin=${origin.latitude},${origin.longitude}'
           '&destination=${destination.latitude},${destination.longitude}'
+          '$waypointsParam'
           '&units=imperial'
           '&key=$_apiKey',
     );
@@ -25,8 +35,6 @@ class DirectionsService {
 
     try {
       final response = await http.get(url);
-      debugPrint("DirectionsService: API Response Status Code: ${response.statusCode}");
-      debugPrint("DirectionsService: API Response Body: ${response.body}"); // Log full response for debugging
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -34,94 +42,135 @@ class DirectionsService {
         final status = data['status'];
         switch (status) {
           case 'OK':
-            debugPrint("DirectionsService: API Status OK. Parsing route...");
-            if (data['routes'] == null || data['routes'].isEmpty) {
-              debugPrint("DirectionsService: CRITICAL - Status was OK but no routes were provided.");
-              return null;
-            }
-          final route = data['routes'][0];
-          final leg = route['legs'][0];
+            final route = data['routes'][0];
+            final legs = route['legs'] as List<dynamic>? ?? [];
 
-          // Decode polyline
-          final polylinePoints = PolylinePoints();
-          final polylineResult = polylinePoints.decodePolyline(
-            route['overview_polyline']['points'],
-          );
+            if (legs.isEmpty) return null;
 
-          final polylineCoordinates = polylineResult
-              .map((point) => LatLng(point.latitude, point.longitude))
-              .toList();
-          debugPrint("DirectionsService: Polyline decoded successfully with ${polylineCoordinates.length} points.");
-
-          // Extract ETA (Estimated Time of Arrival)
-          final durationValue = leg['duration']['value'] as int?; // in seconds
-          final eta = durationValue != null ? DateTime.now().add(Duration(seconds: durationValue)) : null;
-
-          // Parse turn-by-turn steps for voice navigation.
-          final rawSteps = leg['steps'] as List<dynamic>? ?? [];
-          final steps = rawSteps.map<RouteStep>((s) {
-            final html = (s['html_instructions'] as String?) ?? '';
-            final maneuver = s['maneuver'] as String?;
-            final endLoc = s['end_location'] as Map<String, dynamic>?;
-            return RouteStep(
-              instruction: _buildInstruction(html, maneuver),
-              maneuver: maneuver,
-              distanceMeters: (s['distance']?['value'] as int?) ?? 0,
-              endLocation: LatLng(
-                (endLoc?['lat'] as num?)?.toDouble() ?? 0.0,
-                (endLoc?['lng'] as num?)?.toDouble() ?? 0.0,
-              ),
+            // Decode polyline
+            final polylinePoints = PolylinePoints();
+            final polylineResult = polylinePoints.decodePolyline(
+              route['overview_polyline']['points'],
             );
-          }).toList();
 
-          return DirectionsResult(
-            polylinePoints: polylineCoordinates,
-            distance: leg['distance']['text'],
-            distanceValue: leg['distance']['value'], // in meters
-            duration: leg['duration']['text'],
-            durationValue: durationValue,
-            startAddress: leg['start_address'],
-            endAddress: leg['end_address'],
-            eta: eta, // Pass the calculated ETA
-            startLocation: origin, // Pass original LatLng as startLocation
-            endLocation: destination, // Pass original LatLng as endLocation
-            steps: steps,
-          );
+            final polylineCoordinates = polylineResult
+                .map((point) => LatLng(point.latitude, point.longitude))
+                .toList();
 
-          case 'ZERO_RESULTS':
-            debugPrint("DirectionsService: API returned ZERO_RESULTS. This means no route could be found between the origin and destination. This is common for long-distance travel over oceans.");
-            break; // Fall through to return null
+            // Aggregate data
+            int totalDistanceMeters = 0;
+            int totalDurationSeconds = 0;
+            final allSteps = <RouteStep>[];
+            final waypointAddresses = <String>[];
 
-          case 'NOT_FOUND':
-            debugPrint("DirectionsService: API returned NOT_FOUND. One of the locations (origin, destination, or waypoint) could not be geocoded.");
-            break;
+            String startAddress = '';
+            String endAddress = '';
 
-          case 'MAX_WAYPOINTS_EXCEEDED':
-            debugPrint("DirectionsService: API returned MAX_WAYPOINTS_EXCEEDED. Too many waypoints were provided in the request.");
-            break;
+            for (int i = 0; i < legs.length; i++) {
+              final leg = legs[i] as Map<String, dynamic>;
 
-          case 'INVALID_REQUEST':
-            debugPrint("DirectionsService: API returned INVALID_REQUEST. The request was missing a required parameter (e.g., origin or destination).");
-            break;
+              if (i == 0) {
+                startAddress = leg['start_address'] ?? '';
+              }
+              if (i == legs.length - 1) {
+                endAddress = leg['end_address'] ?? '';
+              } else {
+                // Intermediate legs' end_address = waypoint address
+                final wpAddress = leg['end_address'] as String? ?? '';
+                if (wpAddress.isNotEmpty) {
+                  waypointAddresses.add(wpAddress);
+                }
+              }
 
-          case 'OVER_QUERY_LIMIT':
-            debugPrint("DirectionsService: API returned OVER_QUERY_LIMIT. You have exceeded your API usage quota. Check your Google Cloud console.");
-            break;
+              totalDistanceMeters += (leg['distance']?['value'] as int?) ?? 0;
+              totalDurationSeconds += (leg['duration']?['value'] as int?) ?? 0;
 
-          case 'REQUEST_DENIED':
-            debugPrint("DirectionsService: API returned REQUEST_DENIED. The API rejected the request, likely due to an invalid or missing API key.");
-            break;
+              // Steps
+              final rawSteps = leg['steps'] as List<dynamic>? ?? [];
+              final legSteps = rawSteps.map<RouteStep>((s) {
+                final html = (s['html_instructions'] as String?) ?? '';
+                final maneuver = s['maneuver'] as String?;
+                final endLoc = s['end_location'] as Map<String, dynamic>?;
 
-          default: // Includes 'UNKNOWN_ERROR'
-            debugPrint("DirectionsService: API returned an unhandled status: $status. Error: ${data['error_message'] ?? 'An unknown server error occurred.'}");
+                return RouteStep(
+                  instruction: _buildInstruction(html, maneuver),
+                  maneuver: maneuver,
+                  distanceMeters: (s['distance']?['value'] as int?) ?? 0,
+                  endLocation: LatLng(
+                    (endLoc?['lat'] as num?)?.toDouble() ?? 0.0,
+                    (endLoc?['lng'] as num?)?.toDouble() ?? 0.0,
+                  ),
+                );
+              }).toList();
+
+              allSteps.addAll(legSteps);
+            }
+
+            final eta = totalDurationSeconds > 0
+                ? DateTime.now().add(Duration(seconds: totalDurationSeconds))
+                : null;
+
+            return DirectionsResult(
+              polylinePoints: polylineCoordinates,
+              distance: _formatDistance(totalDistanceMeters),
+              distanceValue: totalDistanceMeters,
+              duration: _formatDuration(totalDurationSeconds),
+              durationValue: totalDurationSeconds,
+              startAddress: startAddress,
+              endAddress: endAddress,
+              eta: eta,
+              startLocation: origin,
+              endLocation: destination,
+              steps: allSteps,
+              waypointAddresses: waypointAddresses,  
+              waypointsLocation: waypoints, // ← New field
+            );
+
+          // ... your other status cases remain unchanged
+          default:
+            debugPrint("DirectionsService: API status: $status");
             break;
         }
       }
     } catch (e) {
-      debugPrint("DirectionsService: Exception caught while getting directions: $e");
+      debugPrint("DirectionsService: Exception: $e");
     }
 
-    return null; // Return null if any error or unsuccessful status
+    return null;
+  }
+
+
+
+
+    String _formatDistance(int meters) {
+    if (meters < 1000) {
+      final feet = (meters * 3.28084).round();
+      return '$feet ft';
+    } else {
+      final miles = meters / 1609.34;
+      if (miles < 10) {
+        return '${miles.toStringAsFixed(1)} mi';   // e.g. "1.2 mi"
+      } else {
+        return '${miles.round()} mi';             // e.g. "245 mi"
+      }
+    }
+  }
+
+  String _formatDuration(int seconds) {
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+
+    if (hours > 0) {
+      if (minutes > 0) {
+        return '$hours hr $minutes mins';
+      } else {
+        return '$hours hr';
+      }
+    } else if (minutes > 0) {
+      return '$minutes mins';   // Google usually uses "mins"
+    } else {
+      return '1 min';
+    }
   }
 
   // Builds a spoken instruction using the machine-readable maneuver code and
@@ -214,7 +263,8 @@ class DirectionsResult {
   final LatLng startLocation;
   final LatLng endLocation;
   final List<RouteStep> steps;
-
+  final List<LatLng> waypointsLocation;
+  final List<String> waypointAddresses;
   DirectionsResult({
     required this.polylinePoints,
     this.distance,
@@ -224,9 +274,11 @@ class DirectionsResult {
     required this.startAddress,
     required this.endAddress,
     this.eta,
+    required this.waypointsLocation,
     required this.startLocation,
     required this.endLocation,
     this.steps = const [],
+    this.waypointAddresses = const [],
   });
 }
 

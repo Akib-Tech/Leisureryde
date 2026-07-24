@@ -61,7 +61,7 @@ class RideService {
   Stream<List<RideRequest>> getRideRequestsStream() {
     return _db
         .collection('rideRequests')
-        .where('status', isEqualTo: 'pending')
+        .where('status', whereIn: ['pending','scheduled'],)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map(
@@ -74,18 +74,50 @@ class RideService {
   // DRIVER ACTIONS
   // ============================================================
 
-  Future<void> acceptRide(String rideId, String driverId) async {
-
-   // try {
-      await _db.collection('rideRequests').doc(rideId).update({
-        'driverId': driverId,
-        'status': 'accepted',
-        'acceptedAt': FieldValue.serverTimestamp(),
-      });
-    /*} catch (e) {
-      rethrow;
-    }*/
+  Future<void> acceptRide(
+    String rideId,
+    String driverId, {
+    String? driverName,
+    String? driverPhone,
+  }) async {
+    await _db.collection('rideRequests').doc(rideId).update({
+      'driverId': driverId,
+      if (driverName != null) 'driverName': driverName,
+      if (driverPhone != null) 'driverPhone': driverPhone,
+      'status': 'accepted',
+      'acceptedAt': FieldValue.serverTimestamp(),
+    });
   }
+
+
+// ============================================================
+  // ADVANCE TO NEXT WAYPOINT (NEW)
+  // ============================================================
+  Future<bool> advanceToNextWaypoint(String rideId) async {
+    try {
+      final docRef = _db.collection('rideRequests').doc(rideId);
+      final doc = await docRef.get();
+
+      if (!doc.exists) return false;
+
+      final data = doc.data()!;
+      final currentIndex = (data['currentWaypointIndex'] as num?)?.toInt() ?? -1;
+
+      final nextIndex = currentIndex + 1;
+
+      await docRef.update({
+        'currentWaypointIndex': nextIndex,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      print("✅ Advanced to waypoint index: $nextIndex");
+      return true;
+    } catch (e) {
+      print("❌ Error advancing waypoint: $e");
+      return false;
+    }
+  }
+  
 
   Future<void> declineRide(String rideId) async {
     try {
@@ -111,7 +143,8 @@ class RideService {
         'cancelledAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      rethrow;
+      print("Error message: ${e.toString()}");
+      //rethrow;
     }
   }
 
@@ -134,13 +167,24 @@ class RideService {
 
       await _db.collection('rideRequests').doc(rideId).update(update);
     } catch (e) {
-      rethrow;
+      print("Error Message: ${e.toString()}");
+     // rethrow;
     }
   }
 
   // ============================================================
   // RATING
   // ============================================================
+
+  Future<void> submitTip({
+    required String rideId,
+    required double tipAmount,
+  }) async {
+    await _db.collection('rideRequests').doc(rideId).update({
+      'tipAmount': tipAmount,
+      'tippedAt': FieldValue.serverTimestamp(),
+    });
+  }
 
   /// Writes the driver rating to the ride document and updates the driver's
   /// rolling average rating in the users collection.

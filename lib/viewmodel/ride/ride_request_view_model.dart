@@ -31,10 +31,24 @@ class RideRequestsViewModel extends ChangeNotifier {
   Stream<List<RideRequest>> get rideRequestsStream =>
       _rideService.getRideRequestsStream();
 
+  Timer? _timer;
   // NEW: Constructor to trigger the profile fetch on creation
   RideRequestsViewModel() {
     _initialize();
+      _startTimer();
   }
+  void _startTimer() {
+  _timer = Timer.periodic(
+    const Duration(minutes: 1),
+    (_) => notifyListeners(),
+  );
+}
+
+@override
+void dispose() {
+  _timer?.cancel();
+  super.dispose();
+}
 
   // NEW: Initialization method to fetch the driver profile
   Future<void> _initialize() async {
@@ -59,8 +73,20 @@ class RideRequestsViewModel extends ChangeNotifier {
     final driverId = _authService.currentUser?.uid;
     if (driverId == null) return false;
 
+    // Ensure driver profile is loaded so we can attach name/phone to the ride.
+    if (_driverProfile == null) {
+      try {
+        _driverProfile = await _databaseService.getDriverProfile(driverId);
+      } catch (_) {}
+    }
+
     try {
-      await _rideService.acceptRide(rideId, driverId);
+      await _rideService.acceptRide(
+        rideId,
+        driverId,
+        driverName: _driverProfile?.fullName,
+        driverPhone: _driverProfile?.phone,
+      );
       return true;
     } catch (e) {
       if (context.mounted) {

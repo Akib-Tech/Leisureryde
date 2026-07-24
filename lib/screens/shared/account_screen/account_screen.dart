@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:leisureryde/models/driver_profile.dart' show DriverProfile;
 import 'package:leisureryde/models/saved_places.dart';
 import 'package:leisureryde/viewmodel/account/account_view_model.dart';
@@ -11,6 +12,8 @@ import '../../driver/vehicle/vehicle_info_screen.dart';
 import '../splash_screen/welcome_screen.dart';
 import 'edit_profile_screen.dart';
 import 'notications.dart';
+
+const _supportEmail = 'support@leisureryde.com';
 
 
 class AccountScreen extends StatefulWidget {
@@ -81,6 +84,8 @@ class _AccountScreenState extends State<AccountScreen> {
                 _buildSavedPlacesSection(context, viewModel),
                 const SizedBox(height: 24),
                 _buildSettingsSection(context, viewModel),
+                const SizedBox(height: 24),
+                _buildSupportSection(context, viewModel),
                 const SizedBox(height: 24),
                 _buildActionsSection(context, viewModel),
               ],
@@ -159,6 +164,51 @@ class _AccountScreenState extends State<AccountScreen> {
         ),
       ],
     );
+  }
+
+  Widget _buildSupportSection(BuildContext context, AccountViewModel viewModel) {
+    return _SettingsGroup(
+      title: 'Support',
+      children: [
+        _SettingsTile(
+          icon: Icons.email_outlined,
+          title: 'Contact Support',
+          onTap: () => _contactSupport(context, viewModel),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _contactSupport(
+      BuildContext context, AccountViewModel viewModel) async {
+    final user = viewModel.userProfile;
+    final role = viewModel.isDriver ? 'Driver' : 'Rider';
+    final body = StringBuffer('Hi LeisureRyde Support,\n\n\n\n');
+    if (user != null) {
+      body.write('---\n'
+          'Name: ${user.fullName}\n'
+          'Email: ${user.email}\n'
+          'Role: $role');
+    }
+
+    final emailUri = Uri(
+      scheme: 'mailto',
+      path: _supportEmail,
+      query: 'subject=${Uri.encodeComponent('LeisureRyde Support Request')}'
+          '&body=${Uri.encodeComponent(body.toString())}',
+    );
+
+    final launched =
+        await launchUrl(emailUri, mode: LaunchMode.externalApplication);
+
+    if (!launched && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open a mail app. Please email '
+              '$_supportEmail directly.'),
+        ),
+      );
+    }
   }
 
   // --- NO OTHER CHANGES ARE NEEDED BELOW THIS LINE ---

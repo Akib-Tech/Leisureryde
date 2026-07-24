@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:intl/intl.dart';
 import 'package:leisureryde/app/service_locator.dart';
 import 'package:leisureryde/models/ride_request_model.dart';
 import 'package:leisureryde/models/saved_places.dart';
@@ -22,12 +23,19 @@ import '../../screens/user/payment/stripe_checkout.dart';
 import '../payment/payment.dart';
 
 enum HomeStep {
+  scheduledRide,
   initial,
   routePreview,
+  rideTypeSelection,
   vehicleSelection,
   payment,
   findingDriver,
   activeTrip,
+}
+
+enum RideType {
+  instant,
+  scheduled,
 }
 
 class HomeViewModel extends ChangeNotifier {
@@ -48,6 +56,16 @@ class HomeViewModel extends ChangeNotifier {
   bool get isRequestingRide => _isRequestingRide;
 
   bool _isRefreshing = false;
+
+  String get formattedSchedule {
+    if (_scheduledDateTime == null) {
+      return "Book for later";
+    }
+
+    return DateFormat(
+      "EEE, MMM d • h:mm a",
+    ).format(_scheduledDateTime!);
+  }
 
   HomeStep _currentStep = HomeStep.initial;
   HomeStep get currentStep => _currentStep;
@@ -75,6 +93,18 @@ class HomeViewModel extends ChangeNotifier {
   bool get cancelledByDriver => _cancelledByDriver;
   String? _cancelledByDriverName;
   String? get cancelledByDriverName => _cancelledByDriverName;
+
+  //Ride Type and Selection
+
+  RideType? _selectedRideType;
+  RideType? get selectedRideType => _selectedRideType;
+
+  DateTime? _scheduledDateTime;
+  DateTime? get scheduledDateTime => _scheduledDateTime;
+
+  // Tip state — shown first after trip completes, before rating
+  bool _showTipDialog = false;
+  bool get showTipDialog => _showTipDialog;
 
   // Rating state — set after the trip completes
   bool _showRatingDialog = false;
@@ -206,7 +236,8 @@ class HomeViewModel extends ChangeNotifier {
   }
 
   void _onPaymentStateChanged() {
-    debugPrint("HomeViewModel: Detected PaymentState change -> ${_paymentViewModel.state}");
+    debugPrint(
+        "HomeViewModel: Detected PaymentState change -> ${_paymentViewModel.state}");
 
     switch (_paymentViewModel.state) {
       case PaymentState.success:
@@ -257,14 +288,15 @@ class HomeViewModel extends ChangeNotifier {
     if (uid == null) return;
 
     var place = _savedPlaces.firstWhere(
-          (savedPlace) => savedPlace.name == placeName,
+      (savedPlace) => savedPlace.name == placeName,
       orElse: () => SavedPlace.empty(),
     );
 
     if (place.id.isEmpty) {
       final newPlace = await Navigator.push<SavedPlace>(
         context,
-        MaterialPageRoute(builder: (_) => AddSavedPlaceScreen(placeType: placeName)),
+        MaterialPageRoute(
+            builder: (_) => AddSavedPlaceScreen(placeType: placeName)),
       );
       if (newPlace != null) {
         _savedPlaces = await _db.getSavedPlaces(uid);
@@ -275,7 +307,8 @@ class HomeViewModel extends ChangeNotifier {
     }
 
     final origin = PlaceDetails.fromCurrentPosition(
-      LatLng(mapViewModel.currentPosition!.latitude, mapViewModel.currentPosition!.longitude),
+      LatLng(mapViewModel.currentPosition!.latitude,
+          mapViewModel.currentPosition!.longitude),
     );
     final destination = PlaceDetails.fromSavedPlace(place);
     await selectRoute(origin, destination);
@@ -284,7 +317,8 @@ class HomeViewModel extends ChangeNotifier {
   Future<void> selectRecentDestination(RideDestination destination) async {
     if (mapViewModel.currentPosition == null) return;
     final origin = PlaceDetails.fromCurrentPosition(
-      LatLng(mapViewModel.currentPosition!.latitude, mapViewModel.currentPosition!.longitude),
+      LatLng(mapViewModel.currentPosition!.latitude,
+          mapViewModel.currentPosition!.longitude),
     );
     final placeDetails = PlaceDetails(
       name: destination.address.split(',').first,
@@ -294,13 +328,29 @@ class HomeViewModel extends ChangeNotifier {
     await selectRoute(origin, placeDetails);
   }
 
-  Future<void> selectRoute(PlaceDetails origin, PlaceDetails destination) async {
-    await mapViewModel.getDirections(origin.location, destination.location);
+  Future<void> selectRoute(PlaceDetails origin, PlaceDetails destination,
+      {List<PlaceDetails>? stopOverPoints}) async {
+    await mapViewModel.getDirections(
+      origin.location,
+      destination.location,
+      waypoints: stopOverPoints?.map((e) => e.location).toList(),
+    );
+
     if (mapViewModel.directionsResult != null) {
       _currentStep = HomeStep.routePreview;
     } else {
       _currentStep = HomeStep.initial;
     }
+    notifyListeners();
+  }
+
+  void backToRoutePreview() {
+    _currentStep = HomeStep.routePreview;
+    notifyListeners();
+  }
+
+  void proceedToRideTypeSelection() {
+    _currentStep = HomeStep.rideTypeSelection;
     notifyListeners();
   }
 
@@ -331,21 +381,28 @@ class HomeViewModel extends ChangeNotifier {
   }
 
   Future<void> proceedToPayment(BuildContext context) async {
-    if (_selectedVehicle == null || _userProfile == null || mapViewModel.directionsResult == null) return;
+    if (_selectedVehicle == null ||
+        _userProfile == null ||
+        mapViewModel.directionsResult == null) {
+      return;
+    }
 
     _currentStep = HomeStep.payment;
     notifyListeners();
 
     final directionsResult = mapViewModel.directionsResult!;
-    if (directionsResult.distanceValue == null || directionsResult.durationValue == null) {
+    if (directionsResult.distanceValue == null ||
+        directionsResult.durationValue == null) {
       _currentStep = HomeStep.routePreview;
       notifyListeners();
       return;
     }
 
-    final fares = fareService.calculateFare(directionsResult.distanceValue!, directionsResult.durationValue!);
+    final fares = fareService.calculateFare(
+        directionsResult.distanceValue!, directionsResult.durationValue!);
     final estimatedFare = fares.getFareForVehicle(_selectedVehicle!);
-    final bookingId = 'ride_${_userProfile!.uid}_${DateTime.now().millisecondsSinceEpoch}';
+    final bookingId =
+        'ride_${_userProfile!.uid}_${DateTime.now().millisecondsSinceEpoch}';
 
     final sessionData = await _paymentViewModel.initializePayment(
       amount: estimatedFare.toStringAsFixed(2),
@@ -353,7 +410,9 @@ class HomeViewModel extends ChangeNotifier {
       bookingId: bookingId,
     );
 
-    if (sessionData != null && sessionData['checkoutUrl'] != null && context.mounted) {
+    if (sessionData != null &&
+        sessionData['checkoutUrl'] != null &&
+        context.mounted) {
       final bool? paymentResult = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder: (_) => StripeCheckoutScreen(
@@ -366,8 +425,13 @@ class HomeViewModel extends ChangeNotifier {
         debugPrint("✅ Payment successful. Creating ride request...");
         _paymentViewModel.handlePaymentSuccess(sessionData['paymentId']);
 
-        _currentStep = HomeStep.findingDriver;
-        notifyListeners();
+       if (_selectedRideType == RideType.instant) {
+  _currentStep = HomeStep.findingDriver;
+} else {
+  _currentStep = HomeStep.scheduledRide;
+}
+
+notifyListeners();
 
         await _createRideRequestAfterPayment();
       } else {
@@ -378,11 +442,25 @@ class HomeViewModel extends ChangeNotifier {
       }
     } else if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_paymentViewModel.errorMessage ?? 'Failed to start payment.')),
+        SnackBar(
+            content: Text(
+                _paymentViewModel.errorMessage ?? 'Failed to start payment.')),
       );
       _currentStep = HomeStep.vehicleSelection;
       notifyListeners();
     }
+  }
+
+  void selectInstantRide() {
+    _selectedRideType = RideType.instant;
+    _scheduledDateTime = null;
+    notifyListeners();
+  }
+
+  void selectScheduledRide(DateTime dateTime) {
+    _selectedRideType = RideType.scheduled;
+    _scheduledDateTime = dateTime;
+    notifyListeners();
   }
 
   Future<void> _createRideRequestAfterPayment() async {
@@ -394,23 +472,36 @@ class HomeViewModel extends ChangeNotifier {
           _userProfile == null ||
           mapViewModel.directionsResult == null ||
           mapViewModel.currentPosition == null ||
-          _paymentViewModel.currentPaymentId == null) {
+          _paymentViewModel.currentPaymentId == null ||
+          _selectedRideType == null) {
         throw Exception("Missing critical data for ride request.");
       }
 
       final directionsResult = mapViewModel.directionsResult!;
-      final fares = fareService.calculateFare(directionsResult.distanceValue!, directionsResult.durationValue!);
+      final fares = fareService.calculateFare(
+          directionsResult.distanceValue!, directionsResult.durationValue!);
       final fare = fares.getFareForVehicle(_selectedVehicle!);
 
       final rideRequest = RideRequest(
         id: '',
         userId: _userProfile!.uid,
         vehicleType: _selectedVehicle!,
-        status: RideStatus.pending,
         passengerName: _userProfile!.fullName,
         passengerRating: _userProfile!.rating,
         pickupLocation: directionsResult.startLocation,
         destinationLocation: directionsResult.endLocation,
+        waypointsLocation: directionsResult.waypointsLocation,
+        waypointsAddresses: directionsResult.waypointAddresses,
+        rideType: _selectedRideType!,
+        scheduledFor: _scheduledDateTime,
+        status: _selectedRideType == RideType.instant
+            ? RideStatus.pending
+            : RideStatus.scheduled,
+        estimatedDistanceMeters: directionsResult.distanceValue!,
+        estimatedDistanceText: directionsResult.distance!,
+        estimatedDurationSeconds: directionsResult.durationValue!,
+        estimatedDurationText: directionsResult.duration!,
+        estimatedArrivalTime: directionsResult.eta,
         pickupAddress: directionsResult.startAddress,
         destinationAddress: directionsResult.endAddress,
         fare: fare,
@@ -445,7 +536,7 @@ class HomeViewModel extends ChangeNotifier {
     debugPrint("🎧 Attaching ride listener for rideId: $rideId");
 
     _rideListener = _rideService.getRideStream(rideId).listen(
-          (snapshot) {
+      (snapshot) {
         if (!snapshot.exists) {
           debugPrint("❌ Ride document no longer exists — resetting.");
           _resetRide();
@@ -456,7 +547,8 @@ class HomeViewModel extends ChangeNotifier {
         final rawStatus = data['status'] ?? 'pending';
         final status = RideStatus.fromString(rawStatus);
 
-        debugPrint("🔥 RIDE STATUS → Raw: '$rawStatus' | Enum: ${status.name} | Step: ${_currentStep.name}");
+        debugPrint(
+            "🔥 RIDE STATUS → Raw: '$rawStatus' | Enum: ${status.name} | Step: ${_currentStep.name}");
 
         if (status != _lastAnnouncedStatus) {
           _lastAnnouncedStatus = status;
@@ -466,18 +558,48 @@ class HomeViewModel extends ChangeNotifier {
         if (status.isTerminal) {
           debugPrint("🛑 Terminal status — resetting ride.");
           if (status == RideStatus.cancelled_by_driver) {
+            // Keep the listener alive and re-queue the ride so another driver
+            // can accept it. Do NOT call _resetRide() here — that would orphan
+            // the pending ride with no one tracking it.
             _cancelledByDriver = true;
             _cancelledByDriverName = data['driverName'] as String?;
+            _currentStep = HomeStep.findingDriver;
+            _refindDriver(rideId);
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!_isDisposed) notifyListeners();
+            });
+            return;
           } else if (status == RideStatus.completed) {
             final driverId = data['driverId'] as String?;
             if (driverId != null) {
               _ratingRideId = rideId;
               _ratingDriverId = driverId;
               _ratingDriverName = data['driverName'] as String?;
-              _showRatingDialog = true;
+              _showTipDialog = true; // tip first, then rating
             }
           }
           _resetRide();
+          return;
+        }
+
+        // Map pending/scheduled to the correct UI step.
+        if (status == RideStatus.pending) {
+          if (_currentStep != HomeStep.findingDriver) {
+            _currentStep = HomeStep.findingDriver;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!_isDisposed) notifyListeners();
+            });
+          }
+          return;
+        }
+
+        if (status == RideStatus.scheduled) {
+          if (_currentStep != HomeStep.scheduledRide) {
+            _currentStep = HomeStep.scheduledRide;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!_isDisposed) notifyListeners();
+            });
+          }
           return;
         }
 
@@ -548,7 +670,8 @@ class HomeViewModel extends ChangeNotifier {
     // Firestore hasn't been queried yet.
     if (activeRideId == null || activeRideId.isEmpty) {
       activeRideId = await _loadSavedRideId();
-      debugPrint("🔁 Firestore had no active ride. SharedPrefs fallback: $activeRideId");
+      debugPrint(
+          "🔁 Firestore had no active ride. SharedPrefs fallback: $activeRideId");
     }
 
     if (activeRideId != null && activeRideId.isNotEmpty) {
@@ -559,8 +682,9 @@ class HomeViewModel extends ChangeNotifier {
       await _saveRideId(activeRideId);
       _listenForRideStatus(activeRideId);
 
-      // Show FindingDriver while we wait for the listener to fire.
-      // The listener will immediately update to activeTrip if already accepted.
+      // Show FindingDriver while we wait for the first listener tick.
+      // The listener will immediately correct to activeTrip, scheduledRide, or
+      // findingDriver based on the actual Firestore status.
       if (_currentStep == HomeStep.initial) {
         _currentStep = HomeStep.findingDriver;
         notifyListeners();
@@ -570,7 +694,8 @@ class HomeViewModel extends ChangeNotifier {
     } else {
       // No active ride anywhere — make sure we're on the initial screen.
       // But only reset if we're not mid-booking (selecting route/vehicle/payment).
-      if (_currentStep == HomeStep.findingDriver || _currentStep == HomeStep.activeTrip) {
+      if (_currentStep == HomeStep.findingDriver ||
+          _currentStep == HomeStep.activeTrip) {
         _currentStep = HomeStep.initial;
         notifyListeners();
       }
@@ -618,15 +743,52 @@ class HomeViewModel extends ChangeNotifier {
 
   Future<BitmapDescriptor> getMarkerIcon(String path, int width) async {
     final ByteData data = await rootBundle.load(path);
-    final ui.Codec codec = await ui.instantiateImageCodec(data.buffer.asUint8List(), targetWidth: width);
+    final ui.Codec codec = await ui
+        .instantiateImageCodec(data.buffer.asUint8List(), targetWidth: width);
     final ui.FrameInfo frameInfo = await codec.getNextFrame();
-    final byteData = await frameInfo.image.toByteData(format: ui.ImageByteFormat.png);
+    final byteData =
+        await frameInfo.image.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
   }
 
   void acknowledgeDriverCancellation() {
     _cancelledByDriver = false;
     _cancelledByDriverName = null;
+    notifyListeners();
+  }
+
+void _refindDriver(rideId) async {
+    await _rideService.updateRideStatus(
+    rideId,
+     "pending"
+    );
+    notifyListeners();
+  }
+
+  /// Called when the user submits a tip or presses "No thanks".
+  /// Always transitions to the rating dialog afterward.
+  Future<void> submitTip(double tipAmount) async {
+    if (_ratingRideId != null && tipAmount > 0) {
+      try {
+        await _rideService.submitTip(
+            rideId: _ratingRideId!, tipAmount: tipAmount);
+      } catch (e) {
+        debugPrint("HomeViewModel: Failed to submit tip: $e");
+      }
+    }
+    _showTipDialog = false;
+    // Always follow with rating dialog
+    if (_ratingRideId != null) {
+      _showRatingDialog = true;
+    }
+    notifyListeners();
+  }
+
+  void dismissTipDialog() {
+    _showTipDialog = false;
+    if (_ratingRideId != null) {
+      _showRatingDialog = true;
+    }
     notifyListeners();
   }
 
@@ -670,6 +832,7 @@ class HomeViewModel extends ChangeNotifier {
     _currentStep = HomeStep.initial;
     _cancelledByDriver = false;
     _cancelledByDriverName = null;
+    _showTipDialog = false;
     _showRatingDialog = false;
     _ratingRideId = null;
     _ratingDriverId = null;

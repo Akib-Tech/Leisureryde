@@ -1,22 +1,47 @@
 // --- Imports ---
 const {onDocumentCreated, onDocumentUpdated} =
   require("firebase-functions/v2/firestore");
-const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
+const {onCall, onRequest, HttpsError} =
+  require("firebase-functions/v2/https");
 const {defineSecret} = require("firebase-functions/params");
-const admin = require("firebase-admin");
+
+const {initializeApp} = require("firebase-admin/app");
+const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getMessaging} = require("firebase-admin/messaging");
 const stripe = require("stripe");
 
-admin.initializeApp();
+initializeApp();
+const db = getFirestore();
 
-// Define the secret parameters your functions will use.
-const stripeSecretKey = defineSecret("STRIPE_SECRET_LIVE_KEY");
-const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_LIVE_KEY");
+// ====================== SECRETS ======================
+const stripeTestKey = defineSecret("STRIPE_SECRET_TEST_KEY");
+const stripeLiveKey = defineSecret("STRIPE_SECRET_LIVE_KEY");
+const webhookTestKey = defineSecret("STRIPE_WEBHOOK_TEST_KEY");
+const webhookLiveKey = defineSecret("STRIPE_WEBHOOK_LIVE_KEY");
 
-// Initialize Stripe with the secret key parameter's value.
-const stripeClient = () => stripe(stripeSecretKey.value());
+// ====================== TEST USERS ======================
+// Add your UID and any tester UIDs here
+const TEST_USERS = [
+  // ← Replace with your actual Firebase UID
+  "3thmMojTt4brj6JcxrrihVblA6n2",
+  "jgitF3Wn9zZa8Kue1nVItjkd7dg2"
+  // "another-tester-uid-2",
+];
+
+// ====================== HELPERS ======================
+const isTestUser = (userId) => TEST_USERS.includes(userId || "");
+
+const getStripeClient = (userId) => {
+  const useTest = isTestUser(userId);
+  const key = useTest ? stripeTestKey.value() : stripeLiveKey.value();
+
+  console.log(`🔑 Stripe Mode for user ${userId}: ${useTest ? "TEST" : "LIVE"}`);
+  return stripe(key);
+};
+
 
 // =============================================================================
-// FUNCTION 1: NOTIFY DRIVERS OF NEW RIDES (v2 Syntax)
+// FUNCTION 1: NOTIFY DRIVERS OF NEW RIDES
 // =============================================================================
 exports.notifyDriversOfNewRide = onDocumentCreated("rideRequests/{rideId}",
     (event) => {
@@ -28,20 +53,15 @@ exports.notifyDriversOfNewRide = onDocumentCreated("rideRequests/{rideId}",
       const rideRequest = snapshot.data();
       const rideId = event.params.rideId;
 
-      const logMessage = `New ride request: ${rideId}. ` +
-                       `Pickup: ${rideRequest.pickupAddress}`;
+      const logMessage =
+        `New ride request: ${rideId}. ` +
+        `Pickup: ${rideRequest.pickupAddress || "Unknown"}`;
       console.log(logMessage);
 
-      // No top-level 'notification' field on Android → treated as a data-only
-      // message, so onBackgroundMessage fires and can show a properly grouped
-      // local notification instead of the OS displaying each one separately.
-      // iOS still gets a visible alert via the apns.payload.aps.alert field.
       const message = {
         topic: "online_drivers",
         android: {
-          notification: {
-            sound: "ridenotification",
-          },
+          notification: {sound: "ridenotification"},
           priority: "high",
         },
         apns: {
@@ -53,7 +73,7 @@ exports.notifyDriversOfNewRide = onDocumentCreated("rideRequests/{rideId}",
             aps: {
               alert: {
                 title: "New Ride Request!",
-                body: `Pickup from: ${rideRequest.pickupAddress}`,
+                body: `Pickup from: ${rideRequest.pickupAddress || "Unknown"}`,
               },
               sound: "ridenotification.wav",
             },
@@ -64,24 +84,17 @@ exports.notifyDriversOfNewRide = onDocumentCreated("rideRequests/{rideId}",
           rideId: rideId,
           type: "ride_request",
           title: "New Ride Request!",
-          body: `Pickup from: ${rideRequest.pickupAddress}`,
+          body: `Pickup from: ${rideRequest.pickupAddress || "Unknown"}`,
         },
       };
 
-
-      return admin.messaging().send(message)
-          .then((response) => {
-            console.log("Successfully sent notification to topic:", response);
-            return {success: true};
-          })
-          .catch((error) => {
-            console.error("Error sending notification:", error);
-            return {error: error};
-          });
+      return getMessaging().send(message)
+          .then((response) => console.log("Notification sent successfully"))
+          .catch((error) => console.error("Notification error:", error));
     });
 
 // =============================================================================
-// FUNCTION 2: NOTIFY ON NEW CHAT MESSAGE (v2 Syntax)
+// FUNCTION 2: NOTIFY ON NEW CHAT MESSAGE
 // =============================================================================
 exports.notifyOnNewChatMessage = onDocumentCreated(
     "chats/{rideId}/messages/{messageId}",
@@ -91,10 +104,10 @@ exports.notifyOnNewChatMessage = onDocumentCreated(
 
       const msg = snapshot.data();
       const receiverId = msg.receiverId;
+      if (!receiverId) return;
+
       const senderName = msg.senderName || "Your driver/passenger";
       const text = msg.text || "New message";
-
-      if (!receiverId) return;
 
       const message = {
         topic: `user_${receiverId}`,
@@ -111,9 +124,7 @@ exports.notifyOnNewChatMessage = onDocumentCreated(
           },
         },
         apns: {
-          payload: {
-            aps: {sound: "default"},
-          },
+          payload: {aps: {sound: "default"}},
         },
         data: {
           click_action: "FLUTTER_NOTIFICATION_CLICK",
@@ -123,15 +134,15 @@ exports.notifyOnNewChatMessage = onDocumentCreated(
       };
 
       try {
-        const response = await admin.messaging().send(message);
-        console.log("Chat notification sent:", response);
+        await getMessaging().send(message);
+        console.log("Chat notification sent");
       } catch (error) {
-        console.error("Error sending chat notification:", error);
+        console.error("Chat notification error:", error);
       }
     });
 
 // =============================================================================
-// FUNCTION 3: NOTIFY PASSENGER OF RIDE STATUS CHANGES (v2 Syntax)
+// FUNCTION 3: NOTIFY PASSENGER OF RIDE STATUS CHANGES
 // =============================================================================
 exports.notifyPassengerOfRideStatusChange = onDocumentUpdated(
     "rideRequests/{rideId}",
@@ -163,12 +174,11 @@ exports.notifyPassengerOfRideStatusChange = onDocumentUpdated(
           body = "You have arrived. Thanks for riding with LeisureRyde!";
           break;
         case "cancelled_by_driver":
-          title = "Ride Cancelled";
-          body = "Your driver has cancelled the ride.";
-          break;
         case "cancelled":
           title = "Ride Cancelled";
-          body = "Your ride has been cancelled.";
+          body = after.status === "cancelled_by_driver" ?
+          "Your driver has cancelled the ride." :
+          "Your ride has been cancelled.";
           break;
         default:
           return;
@@ -191,10 +201,7 @@ exports.notifyPassengerOfRideStatusChange = onDocumentUpdated(
             "apns-priority": "10",
           },
           payload: {
-            aps: {
-              alert: {title, body},
-              sound: "default",
-            },
+            aps: {alert: {title, body}, sound: "default"},
           },
         },
         data: {
@@ -206,37 +213,43 @@ exports.notifyPassengerOfRideStatusChange = onDocumentUpdated(
       };
 
       try {
-        const response = await admin.messaging().send(message);
-        console.log(`Passenger notified — status: ${after.status}:`, response);
+        await getMessaging().send(message);
+        console.log(`Passenger notified — status: ${after.status}`);
       } catch (error) {
-        console.error("Error sending passenger notification:", error);
+        console.error("Passenger notification error:", error);
       }
     });
 
 // =============================================================================
-// FUNCTION 5: CREATE STRIPE CHECKOUT SESSION (v2 Syntax)
+// FUNCTION 5: CREATE STRIPE CHECKOUT SESSION (Per User Decision)
 // =============================================================================
 exports.createStripeCheckout = onCall(
-    {secrets: [stripeSecretKey]},
+    {secrets: [stripeTestKey, stripeLiveKey]},
     async (request) => {
       if (!request.auth) {
-        throw new HttpsError("unauthenticated",
-            "You must be logged in to make a payment.");
+        throw new HttpsError(
+            "unauthenticated",
+            "You must be logged in to make a payment.",
+        );
       }
 
       const userId = request.auth.uid;
-      const {amount, currency, bookingId} = request.data;
+      const {amount, currency, bookingId} = request.data || {};
 
       if (!amount || !currency || !bookingId) {
-        throw new HttpsError("invalid-argument",
-            "Missing required payment data.");
+        throw new HttpsError(
+            "invalid-argument",
+            "Missing required payment data.",
+        );
       }
 
-      const paymentRef = admin.firestore().collection("payments").doc();
+      const paymentRef = db.collection("payments").doc();
       const paymentId = paymentRef.id;
 
       try {
-        const session = await stripeClient().checkout.sessions.create({
+        const stripeClient = getStripeClient(userId);
+
+        const session = await stripeClient.checkout.sessions.create({
           payment_method_types: ["card"],
           mode: "payment",
           line_items: [{
@@ -261,7 +274,7 @@ exports.createStripeCheckout = onCall(
           amount: parseFloat(amount),
           currency: currency,
           status: "pending",
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
           stripeSessionId: session.id,
         });
 
@@ -273,31 +286,41 @@ exports.createStripeCheckout = onCall(
     });
 
 // =============================================================================
-// FUNCTION 6: STRIPE WEBHOOK LISTENER (v2 Syntax)
+// FUNCTION 6: STRIPE WEBHOOK LISTENER (Works for both Test & Live)
 // =============================================================================
 exports.stripeWebhook = onRequest(
-    {secrets: [stripeSecretKey, stripeWebhookSecret]},
+    {secrets: [stripeTestKey, stripeLiveKey, webhookTestKey, webhookLiveKey]},
     async (req, res) => {
       const sig = req.headers["stripe-signature"];
-      const endpointSecret = stripeWebhookSecret.value();
+
+      // Use the appropriate webhook secret based on current preference
+      const stripeClient = stripe(stripeTestKey.value());
 
       let event;
+
       try {
-        event = stripeClient().webhooks.constructEvent(
-            req.rawBody, sig, endpointSecret);
-      } catch (err) {
-        console.error("Webhook signature verification failed.", err.message);
-        res.status(400).send(`Webhook Error: ${err.message}`);
-        return;
+        event = stripeClient.webhooks.constructEvent(
+            req.rawBody, sig, webhookLiveKey.value(), // try live secret first
+        );
+      } catch (liveErr) {
+        try {
+          event = stripeClient.webhooks.constructEvent(
+              req.rawBody, sig, webhookTestKey.value(), // fall back to test
+          );
+        } catch (testErr) {
+          // both failed — genuinely invalid signature
+          res.status(400).send(`Webhook Error: ${testErr.message}`);
+          return;
+        }
       }
 
       if (event.type === "checkout.session.completed") {
         const session = event.data.object;
         const paymentId = session.metadata.payment_id;
 
-        await admin.firestore().collection("payments").doc(paymentId).update({
+        await db.collection("payments").doc(paymentId).update({
           status: "succeeded",
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
           stripePaymentIntentId: session.payment_intent,
         });
         console.log(`Updated payment ${paymentId} to 'succeeded'.`);
