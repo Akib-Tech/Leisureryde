@@ -24,7 +24,7 @@ const webhookLiveKey = defineSecret("STRIPE_WEBHOOK_LIVE_KEY");
 const TEST_USERS = [
   // ← Replace with your actual Firebase UID
   "3thmMojTt4brj6JcxrrihVblA6n2",
-  "jgitF3Wn9zZa8Kue1nVItjkd7dg2"
+  "jgitF3Wn9zZa8Kue1nVItjkd7dg2",
   // "another-tester-uid-2",
 ];
 
