@@ -234,16 +234,7 @@ class _AccountScreenState extends State<AccountScreen> {
                   style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey.shade500),
                 ),
               ],
-              if (user.gender.isNotEmpty || user.dateOfBirth.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  [
-                    if (user.gender.isNotEmpty) user.gender,
-                    if (user.dateOfBirth.isNotEmpty) user.dateOfBirth,
-                  ].join('  ·  '),
-                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey.shade500),
-                ),
-              ],
+              
               const SizedBox(height: 4),
               if (user is DriverProfile)
                 Row(
